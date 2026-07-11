@@ -287,8 +287,16 @@ function _getAllowedMenusBase(user) {
   if (role === 'managing_md') {
     return { dashboards: DASHBOARD_MENUS.map(m => m.key), manage: [] };
   }
+  // office: ดูได้ทุก dashboard + แก้ไขข้อมูลได้ ยกเว้น manage-users/manage-roles
+  if (role === 'office') {
+    return {
+      dashboards: DASHBOARD_MENUS.map(m => m.key),
+      manage: MANAGE_MENUS.filter(m => m.key !== 'manage-users' && m.key !== 'manage-roles').map(m => m.key),
+    };
+  }
   // role อื่นทั้งหมด: ไม่มีสิทธิ์เริ่มต้น — ใช้ role_permissions + user_permissions ที่โหลดมาตอน login
-  return { dashboards: [], manage: [] };
+  // role ที่ไม่รู้จัก: ให้ดู dashboard ได้ทั้งหมด admin ปรับเพิ่มทีหลังได้
+  return { dashboards: DASHBOARD_MENUS.map(m => m.key), manage: [] };
 }
 
 function menuLabel(key, list) {
@@ -1427,7 +1435,7 @@ function renderAppShell() {
 }
 
 function roleLabel(role) {
-  const map = { admin:'ผู้ดูแลระบบ', managing_md:'กรรมการผู้จัดการ', manager:'ผู้จัดการ', supervisor:'หัวหน้างาน', operator:'ผู้ควบคุมเครื่องจักร', clerk:'เสมียน' };
+  const map = { admin:'ผู้ดูแลระบบ', managing_md:'กรรมการผู้จัดการ', manager:'ผู้จัดการ', supervisor:'หัวหน้างาน', operator:'ผู้ควบคุมเครื่องจักร', excavator_operator:'ผู้ควบคุมรถขุด', office:'สำนักงาน', clerk:'เสมียน' };
   return map[role] || role;
 }
 
@@ -4244,7 +4252,7 @@ async function openUserForm(id) {
     const { data } = await db.from('roles').select('name, label').order('sort_order');
     rolesData = data || [];
   } catch (_) {}
-  const roles = rolesData.length ? rolesData.map(r => r.name) : ['admin','managing_md','manager','supervisor','operator','clerk'];
+  const roles = rolesData.length ? rolesData.map(r => r.name) : ['admin','managing_md','manager','supervisor','operator','excavator_operator','office','clerk'];
   const roleLabel = (name) => (rolesData.find(r => r.name === name) || {}).label || name;
   const depts = ['CDE','Propel','Sanon1','Sanon2','all'];
   const statuses = ['pending','active','inactive','rejected'];
