@@ -628,15 +628,32 @@ async function trySaveActiveForm() {
 // SECTION 8: PENDING APPROVAL COUNT (ข้อมูลจริง รวม 4 ตาราง production_*)
 // =====================================================================
 // คืนรายชื่อ department ที่ user คนนี้มีสิทธิ์อนุมัติ (admin = null หมายถึงทุกแผนก)
+// ใช้ user._extraManage จาก user_permissions — admin กำหนดสิทธิ์รายคนผ่าน UI
 function approvalDepartmentsForUser(user) {
   if (!user) return [];
   if (user.role === 'admin') return null; // null = ไม่กรอง เห็นทุกแผนก
-  if (user.role === 'manager' || user.role === 'supervisor') {
-    if (user.department === 'CDE' || user.department === 'Propel') return ['CDE','Propel'];
-    if (user.department === 'Sanon1' || user.department === 'Sanon2') return ['Sanon1','Sanon2'];
-    return [];
-  }
-  return [];
+
+  const manage = user._extraManage || [];
+  const depts = [];
+  if (manage.includes('approve-cde'))    depts.push('CDE');
+  if (manage.includes('approve-propel')) depts.push('Propel');
+  if (manage.includes('approve-sanon1')) depts.push('Sanon1');
+  if (manage.includes('approve-sanon2')) depts.push('Sanon2');
+  return depts.length ? depts : []; // [] = ไม่เห็นรายการอนุมัติโรงงานใดเลย
+}
+
+// คืน true ถ้า user มีสิทธิ์อนุมัติ loader
+function canApproveLoader(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return (user._extraManage || []).includes('approve-loader');
+}
+
+// คืน true ถ้า user มีสิทธิ์อนุมัติน้ำบาดาล
+function canApproveWater(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return (user._extraManage || []).includes('approve-water');
 }
 
 async function fetchPendingApprovalCount() {
@@ -654,25 +671,29 @@ async function fetchPendingApprovalCount() {
     ));
     let total = prodCounts.reduce((sum, r) => sum + (r.count || 0), 0);
 
-    // รถตักไฟฟ้า: มีคอลัมน์ factory_name ตรงๆ กรองได้ทันที
-    let loaderQuery = db.from('electric_loader').select('id', { count: 'exact', head: true }).eq('status', 'pending');
-    if (depts) loaderQuery = loaderQuery.in('factory_name', depts);
-    const loaderRes = await loaderQuery;
-    total += (loaderRes.count || 0);
+    // รถตักไฟฟ้า: กรองตาม canApproveLoader
+    if (canApproveLoader(currentUser)) {
+      let loaderQuery = db.from('electric_loader').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+      if (depts) loaderQuery = loaderQuery.in('factory_name', depts);
+      const loaderRes = await loaderQuery;
+      total += (loaderRes.count || 0);
+    }
 
-    // น้ำบาดาล: ไม่มีคอลัมน์ factory_name ตรง มีแค่ factory_id (FK) — กรองโดยหา factory ids ที่ตรงแผนกก่อน
-    if (depts) {
-      const { data: deptFactories } = await db.from('factories').select('id, name');
-      const matchIds = (deptFactories || [])
-        .filter(f => depts.some(d => normalizeFactoryName(f.name) === d))
-        .map(f => f.id);
-      if (matchIds.length) {
-        const { count } = await db.from('groundwater_usage').select('id', { count: 'exact', head: true }).eq('status', 'pending').in('factory_id', matchIds);
+    // น้ำบาดาล: กรองตาม canApproveWater
+    if (canApproveWater(currentUser)) {
+      if (depts) {
+        const { data: deptFactories } = await db.from('factories').select('id, name');
+        const matchIds = (deptFactories || [])
+          .filter(f => depts.some(d => normalizeFactoryName(f.name) === d))
+          .map(f => f.id);
+        if (matchIds.length) {
+          const { count } = await db.from('groundwater_usage').select('id', { count: 'exact', head: true }).eq('status', 'pending').in('factory_id', matchIds);
+          total += (count || 0);
+        }
+      } else {
+        const { count } = await db.from('groundwater_usage').select('id', { count: 'exact', head: true }).eq('status', 'pending');
         total += (count || 0);
       }
-    } else {
-      const { count } = await db.from('groundwater_usage').select('id', { count: 'exact', head: true }).eq('status', 'pending');
-      total += (count || 0);
     }
 
     pendingApprovalCount = total;
@@ -7066,13 +7087,13 @@ const APPROVAL_TABLE_MAP = {
 function isProductionApprovalKey(k) { return k === 'cde' || k === 'propel' || k === 'sanon1' || k === 'sanon2'; }
 
 function renderManageApprovals(container) {
-  // defensive guard: เฉพาะ admin/manager/supervisor เท่านั้น
-  if (!currentUser || !['admin','manager','supervisor'].includes(currentUser.role)) {
+  // defensive guard: ต้องมีสิทธิ์ approve อย่างน้อย 1 รายการ (กำหนดโดยแอดมินผ่าน user_permissions)
+  const plantKeys = getApprovalPlantKeysForUser();
+  if (!currentUser || plantKeys.length === 0) {
     container.innerHTML = errorBlock('คุณไม่มีสิทธิ์เข้าถึงหน้านี้');
     refreshIcons();
     return;
   }
-  const plantKeys = getApprovalPlantKeysForUser();
 
   container.innerHTML = `
     <div class="space-y-6 fade-in">
