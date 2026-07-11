@@ -276,27 +276,17 @@ function getAllowedMenus(user) {
 
 function _getAllowedMenusBase(user) {
   const { role } = user;
-  // admin: สิทธิ์เต็มทุกอย่าง
+  // admin: hardcode เต็มทุกอย่าง — เพื่อให้เข้าระบบได้เสมอแม้ DB มีปัญหา
   if (role === 'admin') {
     return {
       dashboards: DASHBOARD_MENUS.map(m => m.key),
       manage: MANAGE_MENUS.map(m => m.key),
     };
   }
-  // managing_md: ดูได้ทุก dashboard (ไม่มี manage) — system role ตายตัว
-  if (role === 'managing_md') {
-    return { dashboards: DASHBOARD_MENUS.map(m => m.key), manage: [] };
-  }
-  // office: ดูได้ทุก dashboard + แก้ไขข้อมูลได้ ยกเว้น manage-users/manage-roles
-  if (role === 'office') {
-    return {
-      dashboards: DASHBOARD_MENUS.map(m => m.key),
-      manage: MANAGE_MENUS.filter(m => m.key !== 'manage-users' && m.key !== 'manage-roles').map(m => m.key),
-    };
-  }
-  // role อื่นทั้งหมด: ไม่มีสิทธิ์เริ่มต้น — ใช้ role_permissions + user_permissions ที่โหลดมาตอน login
-  // role ที่ไม่รู้จัก: ให้ดู dashboard ได้ทั้งหมด admin ปรับเพิ่มทีหลังได้
-  return { dashboards: DASHBOARD_MENUS.map(m => m.key), manage: [] };
+  // ทุก role อื่น: สิทธิ์มาจาก role_permissions table ใน DB เท่านั้น
+  // admin กำหนดได้ผ่าน Admin UI → จัดการ Roles & Permissions
+  // เพิ่ม role ใหม่ในอนาคต → เพิ่ม record ใน role_permissions ผ่าน Admin UI ได้เลย ไม่ต้องแก้โค้ด
+  return { dashboards: [], manage: [] };
 }
 
 function menuLabel(key, list) {
@@ -7951,7 +7941,7 @@ async function loadPermissionMatrix(userId) {
 // saveCallback(dashArr, manageArr) — optional, ถ้าไม่ส่งจะ save ไปที่ user_permissions ของ userId
 function renderPermissionMatrix(block, userId, extraDash, extraManage, userRole, saveCallback) {
   const isRoleMode = !userId && typeof saveCallback === 'function';
-  const isAdminControlled = !isRoleMode && ['manager','supervisor','operator','clerk'].includes(userRole);
+  const isAdminControlled = !isRoleMode && ['manager','supervisor','operator','excavator_operator','office','clerk'].includes(userRole);
   const noteHtml = isRoleMode
     ? `<div class="mb-3 px-3 py-2 bg-primary-50 border border-primary-200 rounded-xl text-xs text-primary-700 flex items-center gap-2">
         <i data-lucide="users-round" class="w-4 h-4 flex-shrink-0"></i>
@@ -8641,6 +8631,19 @@ document.addEventListener('DOMContentLoaded', () => {
           const remaining = SESSION_TIMEOUT_SECONDS - elapsed;
           if (user.role === 'admin' || remaining > 0) {
             currentUser = user;
+            // re-fetch permissions จาก DB ทุกครั้งที่ restore session เพื่อให้สิทธิ์อัปเดตทันที
+            try {
+              const [permRes, rolePermRes] = await Promise.all([
+                db.from('user_permissions').select('extra_dashboards, extra_manage').eq('user_id', user.id).maybeSingle(),
+                db.from('role_permissions').select('extra_dashboards, extra_manage').eq('role_name', user.role).maybeSingle(),
+              ]);
+              const userDash   = (permRes.data    && permRes.data.extra_dashboards)     || [];
+              const userManage = (permRes.data    && permRes.data.extra_manage)         || [];
+              const roleDash   = (rolePermRes.data && rolePermRes.data.extra_dashboards) || [];
+              const roleManage = (rolePermRes.data && rolePermRes.data.extra_manage)     || [];
+              currentUser._extraDashboards = [...new Set([...roleDash, ...userDash])];
+              currentUser._extraManage     = [...new Set([...roleManage, ...userManage])];
+            } catch (_) {}
             await fetchPendingApprovalCount();
             startSessionTimer(user.role === 'admin' ? undefined : remaining);
             startApprovalCountPolling();
