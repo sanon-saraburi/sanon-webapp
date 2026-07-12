@@ -4959,6 +4959,7 @@ function renderManageProduction(container, plantKey) {
           </label>
           <button id="mp-${plantKey}-export-btn" class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="download" class="w-4 h-4"></i>Export Excel</button>
           <button id="mp-${plantKey}-refresh-btn" class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Refresh</button>
+          <button id="mp-${plantKey}-add-btn" class="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition"><i data-lucide="plus" class="w-4 h-4"></i>เพิ่มข้อมูล</button>
         </div>
       </div>
 
@@ -4972,14 +4973,6 @@ function renderManageProduction(container, plantKey) {
         </select>
         <select id="mp-${plantKey}-material" class="border border-secondary-200 rounded-xl px-3 py-2 text-sm"><option value="all">ทุกประเภทวัสดุ</option></select>
         <select id="mp-${plantKey}-rawmat" class="border border-secondary-200 rounded-xl px-3 py-2 text-sm"><option value="all">ทุกวัตถุดิบ</option></select>
-      </div>
-
-      <div class="bg-white rounded-2xl shadow-sm p-5">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-secondary-700">บันทึกข้อมูลผลผลิต</h3>
-          <button id="mp-${plantKey}-cancel-edit-btn" class="hidden text-xs text-amber-600 hover:underline">ยกเลิกแก้ไข</button>
-        </div>
-        <div id="mp-${plantKey}-form-block"></div>
       </div>
 
       <div>
@@ -4997,18 +4990,15 @@ function renderManageProduction(container, plantKey) {
     </div>`;
   refreshIcons();
 
-  renderProductionForm(container, plantKey);
-  loadProductionDistinctRawMaterialsAndLatest(plantKey).then(() => {
-    if (!st.editingId) renderProductionForm(container, plantKey);
-  });
+  loadProductionDistinctRawMaterialsAndLatest(plantKey);
 
+  document.getElementById(`mp-${plantKey}-add-btn`).addEventListener('click', () => openProductionForm(plantKey));
   document.getElementById(`mp-${plantKey}-search`).addEventListener('input', (e) => { st.search = e.target.value; renderProductionTables(plantKey); });
   document.getElementById(`mp-${plantKey}-month`).addEventListener('change', (e) => { st.month = Number(e.target.value); loadProductionData(plantKey); });
   document.getElementById(`mp-${plantKey}-year`).addEventListener('change', (e) => { st.year = Number(e.target.value); loadProductionData(plantKey); });
   document.getElementById(`mp-${plantKey}-export-btn`).addEventListener('click', () => exportProductionExcel(plantKey));
   document.getElementById(`mp-${plantKey}-import-input`).addEventListener('change', (e) => importProductionExcel(e, plantKey, false));
   document.getElementById(`mp-${plantKey}-import-final-input`).addEventListener('change', (e) => importProductionExcel(e, plantKey, true));
-  document.getElementById(`mp-${plantKey}-cancel-edit-btn`).addEventListener('click', () => { st.editingId = null; renderProductionForm(container, plantKey); });
 
   loadProductionMaterialsCache().then(() => {
     const matSel = document.getElementById(`mp-${plantKey}-material`);
@@ -5234,113 +5224,134 @@ function productionRowStatusForRole() {
   return managePerms.some(k => k.startsWith('approve-')) ? 'approved' : 'pending';
 }
 
-function renderProductionForm(container, plantKey, editingRow) {
+function openProductionForm(plantKey, editingRow) {
   const cfg = PRODUCTION_PLANT_CONFIG[plantKey];
   const st = getMProdState(plantKey);
-  const block = document.getElementById(`mp-${plantKey}-form-block`);
-  const cancelBtn = document.getElementById(`mp-${plantKey}-cancel-edit-btn`);
-  if (!block) return;
-  if (cancelBtn) cancelBtn.classList.toggle('hidden', !editingRow);
-
   const rawMatOptions = st.distinctRawMaterials || [];
   const curRawMat = editingRow ? (editingRow.raw_material || '') : '';
-  // auto-fill ชม.เริ่ม/นาทีเริ่ม/มิเตอร์เริ่ม จาก stop_hour/stop_minute/meter_stop ของแถวล่าสุด (เฉพาะตอนเปิดฟอร์ม "เพิ่ม" ใหม่ ไม่ใช่ edit)
   const latest = (!editingRow) ? st.latestRow : null;
-  const defaultStartHour = editingRow ? (editingRow.start_hour ?? '') : (latest ? (latest.stop_hour ?? '') : '');
+  const defaultStartHour   = editingRow ? (editingRow.start_hour   ?? '') : (latest ? (latest.stop_hour   ?? '') : '');
   const defaultStartMinute = editingRow ? (editingRow.start_minute ?? '') : (latest ? (latest.stop_minute ?? '') : '');
-  const defaultMeterStart = editingRow ? (editingRow.meter_start ?? '') : (latest ? (latest.meter_stop ?? '') : '');
-  const defaultMeterStop = editingRow ? (editingRow.meter_stop ?? '') : '';
+  const defaultMeterStart  = editingRow ? (editingRow.meter_start  ?? '') : (latest ? (latest.meter_stop  ?? '') : '');
+  const defaultMeterStop   = editingRow ? (editingRow.meter_stop   ?? '') : '';
   const initSilk = (() => {
     const ms = Number(defaultMeterStart) || 0;
-    const me = Number(defaultMeterStop) || 0;
+    const me = Number(defaultMeterStop)  || 0;
     return (me && ms) ? ((me - ms) * 0.35 * 1.8) : (editingRow ? (editingRow.silk_sediment_ton ?? '') : '');
   })();
 
-  block.innerHTML = `
-    <form id="mp-${plantKey}-form" class="space-y-3">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">วันเดือนปี *</label>
-          <input id="pf-date" required type="date" value="${editingRow ? editingRow.production_date : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+  // Mobile: reset zoom ให้พอดีหน้าจอก่อนเปิด modal
+  try {
+    window.scrollTo(0, 0);
+    if (window.innerWidth < 640) {
+      const vp = document.querySelector('meta[name="viewport"]');
+      if (vp) {
+        vp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0';
+        setTimeout(() => { vp.content = 'width=device-width, initial-scale=1.0'; }, 600);
+      }
+    }
+  } catch(_) {}
+
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="fixed inset-0 z-[9000] flex items-end sm:items-center justify-center sm:p-4 modal-backdrop fade-in" id="pf-modal-backdrop">
+      <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl shadow-2xl flex flex-col fade-in" style="border-radius:1.25rem 1.25rem 0 0; max-height:95dvh;">
+        <div class="px-4 py-3 border-b border-secondary-100 flex items-center justify-between flex-shrink-0">
+          <h3 class="font-semibold text-secondary-800">${editingRow ? 'แก้ไขข้อมูลผลผลิต' : 'เพิ่มข้อมูลผลผลิต'} — ${escapeHtml(cfg.title)}</h3>
+          <button id="pf-modal-close" class="p-1 text-secondary-400 hover:text-secondary-700"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">วัตถุดิบ (raw_material)</label>
-          <select id="pf-rawmat" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-            <option value="">-- เลือกวัตถุดิบ --</option>
-            ${rawMatOptions.map(v => `<option value="${escapeHtml(v)}" ${v===curRawMat?'selected':''}>${escapeHtml(v)}</option>`).join('')}
-            ${(curRawMat && !rawMatOptions.includes(curRawMat)) ? `<option value="${escapeHtml(curRawMat)}" selected>${escapeHtml(curRawMat)}</option>` : ''}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">ชื่อผู้บันทึกข้อมูล</label>
-          <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50 text-secondary-500">
+        <div class="overflow-y-auto flex-1 px-4 py-3">
+          <form id="pf-modal-form" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">วันเดือนปี *</label>
+                <input id="pf-date" required type="date" value="${editingRow ? editingRow.production_date : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">วัตถุดิบ (raw_material)</label>
+                <select id="pf-rawmat" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+                  <option value="">-- เลือกวัตถุดิบ --</option>
+                  ${rawMatOptions.map(v => `<option value="${escapeHtml(v)}" ${v===curRawMat?'selected':''}>${escapeHtml(v)}</option>`).join('')}
+                  ${(curRawMat && !rawMatOptions.includes(curRawMat)) ? `<option value="${escapeHtml(curRawMat)}" selected>${escapeHtml(curRawMat)}</option>` : ''}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">ชื่อผู้บันทึกข้อมูล</label>
+                <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50 text-secondary-500">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
+                <input id="pf-start-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีเริ่ม</label>
+                <input id="pf-start-minute" type="number" min="0" max="59" value="${defaultStartMinute}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (หยุด)' : 'ชม.หยุด'}</label>
+                <input id="pf-stop-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${editingRow ? (editingRow.stop_hour ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีหยุด</label>
+                <input id="pf-stop-minute" type="number" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+            </div>
+            ${cfg.hasFlowmeter ? `
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์เริ่ม</label>
+                <input id="pf-meter-start" type="number" step="any" value="${defaultMeterStart}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์หยุด</label>
+                <input id="pf-meter-stop" type="number" step="any" value="${defaultMeterStop}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+            </div>` : ''}
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">หินป้อน(ตัน)</label>
+                <input id="pf-feed-ton" type="number" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div class="sm:col-span-3 flex items-end">
+                <p class="text-xs text-secondary-500">Runtime และเฉลี่ย(ตัน/ชม.) คำนวณอัตโนมัติจากเวลาเริ่ม-หยุดเครื่องและหินป้อน${editingRow ? ` &mdash; ปัจจุบัน: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.` : ''}</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              ${cfg.productColumns.map(c => c.key === 'silk_sediment_ton' && cfg.hasFlowmeter ? `
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน) (คำนวณอัตโนมัติ)</label>
+                <input id="pf-prod-${c.key}" type="number" step="any" readonly value="${initSilk}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50">
+              </div>` : `
+              <div>
+                <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน)</label>
+                <input id="pf-prod-${c.key}" type="number" step="any" value="${editingRow ? (editingRow[c.key] ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              </div>`).join('')}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-secondary-500 mb-1">รายละเอียด Breakdown</label>
+              <textarea id="pf-breakdown" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.breakdown_detail || '') : ''}</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-secondary-500 mb-1">หมายเหตุ</label>
+              <textarea id="pf-note" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.note || '') : ''}</textarea>
+            </div>
+            <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl py-2.5 transition">${editingRow ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผลผลิต'}</button>
+          </form>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
-          <input id="pf-start-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีเริ่ม</label>
-          <input id="pf-start-minute" type="number" min="0" max="59" value="${defaultStartMinute}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (หยุด)' : 'ชม.หยุด'}</label>
-          <input id="pf-stop-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${editingRow ? (editingRow.stop_hour ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีหยุด</label>
-          <input id="pf-stop-minute" type="number" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-      </div>
-      ${cfg.hasFlowmeter ? `
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์เริ่ม</label>
-          <input id="pf-meter-start" type="number" step="any" value="${defaultMeterStart}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์หยุด</label>
-          <input id="pf-meter-stop" type="number" step="any" value="${defaultMeterStop}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-      </div>` : ''}
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">หินป้อน(ตัน)</label>
-          <input id="pf-feed-ton" type="number" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div class="sm:col-span-3 flex items-end">
-          <p class="text-xs text-secondary-500">Runtime และเฉลี่ย(ตัน/ชม.) คำนวณอัตโนมัติจากเวลาเริ่ม-หยุดเครื่องและหินป้อน${editingRow ? ` &mdash; ปัจจุบัน: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.` : ''}</p>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        ${cfg.productColumns.map(c => c.key === 'silk_sediment_ton' && cfg.hasFlowmeter ? `
-          <div>
-            <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน) (คำนวณอัตโนมัติ)</label>
-            <input id="pf-prod-${c.key}" type="number" step="any" readonly value="${initSilk}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50">
-          </div>` : `
-          <div>
-            <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน)</label>
-            <input id="pf-prod-${c.key}" type="number" step="any" value="${editingRow ? (editingRow[c.key] ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-          </div>`).join('')}
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-secondary-500 mb-1">รายละเอียด Breakdown</label>
-        <textarea id="pf-breakdown" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.breakdown_detail || '') : ''}</textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-secondary-500 mb-1">หมายเหตุ</label>
-        <textarea id="pf-note" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.note || '') : ''}</textarea>
-      </div>
-      <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl py-2.5 transition">${editingRow ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผลผลิต'}</button>
-    </form>`;
+    </div>`;
   refreshIcons();
+
+  const closePfModal = () => { root.innerHTML = ''; };
+  document.getElementById('pf-modal-close').addEventListener('click', closePfModal);
+  document.getElementById('pf-modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'pf-modal-backdrop') closePfModal(); });
 
   if (cfg.hasFlowmeter) {
     const recomputeSilk = () => {
       const ms = Number(document.getElementById('pf-meter-start').value) || 0;
-      const me = Number(document.getElementById('pf-meter-stop').value) || 0;
+      const me = Number(document.getElementById('pf-meter-stop').value)  || 0;
       const silkInput = document.getElementById('pf-prod-silk_sediment_ton');
       if (silkInput) silkInput.value = (ms || me) ? ((me - ms) * 0.35 * 1.8) : '';
     };
@@ -5348,30 +5359,29 @@ function renderProductionForm(container, plantKey, editingRow) {
     document.getElementById('pf-meter-stop').addEventListener('input', recomputeSilk);
   }
 
-  const form = document.getElementById(`mp-${plantKey}-form`);
-  form.addEventListener('submit', async (e) => {
+  document.getElementById('pf-modal-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const cfg2 = PRODUCTION_PLANT_CONFIG[plantKey];
+    const submitBtn = document.querySelector('#pf-modal-form button[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'กำลังบันทึก...'; }
     const payload = {
       production_date: document.getElementById('pf-date').value,
       raw_material: document.getElementById('pf-rawmat').value.trim() || null,
-      start_hour: numOrNull(document.getElementById('pf-start-hour').value),
+      start_hour:   numOrNull(document.getElementById('pf-start-hour').value),
       start_minute: numOrNull(document.getElementById('pf-start-minute').value),
-      stop_hour: numOrNull(document.getElementById('pf-stop-hour').value),
-      stop_minute: numOrNull(document.getElementById('pf-stop-minute').value),
-      feed_ton: numOrNull(document.getElementById('pf-feed-ton').value),
+      stop_hour:    numOrNull(document.getElementById('pf-stop-hour').value),
+      stop_minute:  numOrNull(document.getElementById('pf-stop-minute').value),
+      feed_ton:     numOrNull(document.getElementById('pf-feed-ton').value),
       breakdown_detail: document.getElementById('pf-breakdown').value.trim() || null,
-      note: document.getElementById('pf-note').value.trim() || null,
+      note:         document.getElementById('pf-note').value.trim() || null,
     };
     cfg2.productColumns.forEach(c => {
       payload[c.key] = numOrNull(document.getElementById(`pf-prod-${c.key}`).value);
     });
     if (cfg2.hasFlowmeter) {
-      // ห้าม insert/update flowmeter_total, flowmeter_result เด็ดขาด (เป็น generated column ใน DB)
       payload.meter_start = numOrNull(document.getElementById('pf-meter-start').value);
-      payload.meter_stop = numOrNull(document.getElementById('pf-meter-stop').value);
+      payload.meter_stop  = numOrNull(document.getElementById('pf-meter-stop').value);
     }
-
     try {
       if (editingRow) {
         const { error } = await db.from(cfg2.table).update(payload).eq('id', editingRow.id);
@@ -5384,13 +5394,13 @@ function renderProductionForm(container, plantKey, editingRow) {
         if (error) throw error;
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
       }
-      st.editingId = null;
-      renderProductionForm(container, plantKey);
+      closePfModal();
       loadProductionData(plantKey);
       fetchPendingApprovalCount();
     } catch (err) {
       console.error(err);
       showToast('เกิดข้อผิดพลาด: ' + (err.message || ''), 'error');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = editingRow ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผลผลิต'; }
     }
   });
 }
@@ -5401,11 +5411,7 @@ function startEditProductionRow(plantKey, id) {
   const st = getMProdState(plantKey);
   const row = st.rows.find(r => r.id === id);
   if (!row) return;
-  st.editingId = id;
-  const container = document.getElementById('page-content');
-  renderProductionForm(container, plantKey, row);
-  const block = document.getElementById(`mp-${plantKey}-form-block`);
-  if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openProductionForm(plantKey, row);
 }
 
 function confirmDeleteProductionRow(plantKey, id) {
