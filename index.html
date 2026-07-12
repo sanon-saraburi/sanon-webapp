@@ -10,9 +10,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundled.js" async></script>
-<script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
   tailwind.config = {
     theme: {
       extend: {
@@ -80,8 +78,10 @@
     /* modal content เต็มจอมือถือ */
     .modal-content { max-height: 92vh; overflow-y: auto; }
     /* Production form modal — ขยาย input/label บนมือถือ */
-    .pf-modal-body input, .pf-modal-body select, .pf-modal-body textarea { font-size:18px !important; padding:10px 12px !important; }
-    .pf-modal-body label { font-size:14px !important; margin-bottom:4px !important; font-weight:600; }
+    .pf-modal-body input[type="number"], .pf-modal-body input[type="text"], .pf-modal-body select { font-size:20px !important; padding:6px 8px !important; height:42px !important; }
+    .pf-modal-body input[type="date"] { font-size:18px !important; padding:6px 8px !important; height:42px !important; }
+    .pf-modal-body textarea { font-size:16px !important; padding:6px 8px !important; }
+    .pf-modal-body label { font-size:13px !important; margin-bottom:2px !important; font-weight:600; }
     /* ตาราง production — ใหญ่ขึ้นเฉพาะมือถือ */
     .prod-table { font-size: 16px !important; }
     /* ปุ่มต่างๆ ใน form */
@@ -2831,7 +2831,7 @@ async function loadSalesData() {
       fill: false,
     }));
     tableEl.innerHTML = `
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4">
         ${factories.map((fname, fi) => {
           const fColor = factoryLineColors[fi % factoryLineColors.length];
           const fTotal = byFactory[fname] || 0;
@@ -5123,12 +5123,12 @@ function renderProductionTables(plantKey) {
   if (t1) {
     t1.innerHTML = `
       <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
-        <table class="w-full text-sm prod-table">
+        <table class="w-full prod-table" style="font-size:11px;">
           <thead><tr class="text-left text-secondary-500 border-b border-secondary-100">
-            <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดข้อมูล</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">รวมเวลาเดินเครื่อง</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">เฉลี่ย(ตัน/ชม)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th>
-            ${cfg.productColumns.map(c => `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('')}
-            ${cfg.hasFlowmeter ? `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">มิเตอร์เริ่ม</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">มิเตอร์หยุด</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดรวมFlowmater</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดFlowmater</th>` : ''}
-            <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">สถานะ</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">จัดการ</th>
+            <th class="py-1 pr-1 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1 pr-1 font-semibold">ยอดข้อมูล</th><th class="py-1 pr-1 font-semibold">เวลาเดิน</th><th class="py-1 pr-1 font-semibold">เฉลี่ย<br>(ตัน/ชม)</th><th class="py-1 pr-1 font-semibold">ป้อน<br>(ตัน)</th>
+            ${cfg.productColumns.map(c => `<th class="py-1 pr-1 font-semibold">${escapeHtml(c.label)}</th>`).join('')}
+            ${cfg.hasFlowmeter ? `<th class="py-1 pr-1 font-semibold">มิตร.<br>เริ่ม</th><th class="py-1 pr-1 font-semibold">มิตร.<br>หยุด</th><th class="py-1 pr-1 font-semibold">FM<br>รวม</th><th class="py-1 pr-1 font-semibold">FM</th>` : ''}
+            <th class="py-1 pr-1 font-semibold">สถานะ</th><th class="py-1 pr-1 font-semibold">จัดการ</th>
           </tr></thead>
           <tbody>
             ${rows.length ? (() => {
@@ -5140,25 +5140,25 @@ function renderProductionTables(plantKey) {
                 const dayRec = st.dailyStatusMap[dk];
                 const isDayConfirmed = dayRec && dayRec.status === 'confirmed';
                 const dayBadge = isDayConfirmed
-                  ? `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">🟢 ข้อมูลจริง</span>`
-                  : `<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">🟡 เบื้องต้น</span>`;
+                  ? `<span class="px-1.5 py-0.5 rounded-full font-medium bg-green-100 text-green-700">🟢 จริง</span>`
+                  : `<span class="px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">🟡 เบื้องต้น</span>`;
                 const cfBtn = isFirstOfDay && !isDayConfirmed && _canCf
-                  ? `<button data-confirm-day="${dk}" data-plant="${plantKey}" class="p-1.5 rounded-lg hover:bg-green-100 text-green-600 flex-shrink-0" title="ยืนยันข้อมูลวันที่ ${fmtDate(dk)}"><i data-lucide="check-circle-2" class="w-4 h-4"></i></button>`
+                  ? `<button data-confirm-day="${dk}" data-plant="${plantKey}" class="p-1 rounded-lg hover:bg-green-100 text-green-600 flex-shrink-0" title="ยืนยันข้อมูลวันที่ ${fmtDate(dk)}"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i></button>`
                   : '';
                 return `
               <tr class="border-b border-secondary-50 hover:bg-secondary-50">
-                <td class="py-1.5 pr-2 whitespace-nowrap">${fmtDate(r.production_date)}</td>
-                <td class="py-1.5 pr-2">${dayBadge}</td>
-                <td class="py-1.5 pr-2 whitespace-nowrap">${Number(r.runtime_hour)||0} ชม. ${Number(r.runtime_minute)||0} นาที</td>
-                <td class="py-1.5 pr-2">${fmtNum(r.avg_ton_per_hour,1)}</td>
-                <td class="py-1.5 pr-2">${fmtNum(r.feed_ton,1)}</td>
-                ${cfg.productColumns.map(c => `<td class="py-1.5 pr-2">${fmtNum(r[c.key],1)}</td>`).join('')}
-                ${cfg.hasFlowmeter ? `<td class="py-1.5 pr-2">${fmtNum(r.meter_start,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.meter_stop,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.flowmeter_total,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.flowmeter_result,2)}</td>` : ''}
-                <td class="py-1.5 pr-2"><span class="px-2 py-0.5 rounded-full text-xs ${prodStatusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></td>
-                <td class="py-1.5 pr-2">
-                  <div class="flex items-center gap-1.5">
-                    <button data-edit="${r.id}" class="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-500" title="แก้ไข"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-                    <button data-del="${r.id}" class="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="ลบ"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                <td class="py-1 pr-1 whitespace-nowrap">${fmtDate(r.production_date)}</td>
+                <td class="py-1 pr-1">${dayBadge}</td>
+                <td class="py-1 pr-1 whitespace-nowrap">${Number(r.runtime_hour)||0}ชม.${Number(r.runtime_minute)||0}น.</td>
+                <td class="py-1 pr-1">${fmtNum(r.avg_ton_per_hour,1)}</td>
+                <td class="py-1 pr-1">${fmtNum(r.feed_ton,1)}</td>
+                ${cfg.productColumns.map(c => `<td class="py-1 pr-1">${fmtNum(r[c.key],1)}</td>`).join('')}
+                ${cfg.hasFlowmeter ? `<td class="py-1 pr-1">${fmtNum(r.meter_start,2)}</td><td class="py-1 pr-1">${fmtNum(r.meter_stop,2)}</td><td class="py-1 pr-1">${fmtNum(r.flowmeter_total,2)}</td><td class="py-1 pr-1">${fmtNum(r.flowmeter_result,2)}</td>` : ''}
+                <td class="py-1 pr-1"><span class="px-1.5 py-0.5 rounded-full ${prodStatusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></td>
+                <td class="py-1 pr-1">
+                  <div class="flex items-center gap-1">
+                    <button data-edit="${r.id}" class="p-1 rounded-lg hover:bg-secondary-100 text-secondary-500" title="แก้ไข"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                    <button data-del="${r.id}" class="p-1 rounded-lg hover:bg-red-50 text-red-500" title="ลบ"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                     ${cfBtn}
                   </div>
                 </td>
@@ -6842,7 +6842,7 @@ function renderManageGroundwaterTable() {
 function waterFormHtml(row) {
   row = row || {};
   return `
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="grid grid-cols-2 gap-3">
       <div>
         <label class="block text-xs font-medium text-secondary-500 mb-1">วันเดือนปี</label>
         <input type="date" id="wf-date" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm" value="${row.usage_date || ''}">
@@ -8080,7 +8080,7 @@ function renderPermissionMatrix(block, userId, extraDash, extraManage, userRole,
       <button id="perm-apply-tmpl-btn" class="px-3 py-1.5 rounded-xl bg-secondary-100 hover:bg-secondary-200 text-secondary-700 text-xs font-medium transition">ใช้ Template</button>
       <span class="text-xs text-secondary-400">(เลือกแล้วกด "ใช้ Template" แล้วปรับเพิ่ม/ลดได้)</span>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+    <div class="grid grid-cols-2 gap-4 mb-4">
       <div>
         <p class="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Dashboard</p>
         <div class="space-y-0.5">${dashRows}</div>
@@ -8757,7 +8757,7 @@ function openExecutiveReportDialog() {
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const today    = now.toISOString().slice(0,10);
   showModal({
-    title: 'รายงานผู้บริหาร (.pptx)',
+    title: 'รายงานผู้บริหาร (PDF)',
     hideConfirm: true, hideCancel: true,
     bodyHtml: `
       <div class="space-y-4 mt-1">
@@ -8777,7 +8777,7 @@ function openExecutiveReportDialog() {
           <input id="er-company" type="text" value="สานนท์" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
         <button id="er-generate-btn" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl py-2.5 transition flex items-center justify-center gap-2">
-          <i data-lucide="presentation" class="w-4 h-4"></i>สร้างรายงาน PowerPoint
+          <i data-lucide="file-text" class="w-4 h-4"></i>สร้างรายงาน PDF
         </button>
         <p id="er-status" class="text-xs text-center text-secondary-400 hidden">กำลังดึงข้อมูลและสร้างไฟล์...</p>
       </div>`,
@@ -8805,48 +8805,8 @@ function openExecutiveReportDialog() {
   });
 }
 
-async function loadPptxGenJS() {
-  // ถ้าโหลดมาแล้ว (จาก <head> async หรือโหลดครั้งก่อน) → ใช้เลย
-  if (window.PptxGenJS) return;
-  // รอ async script ที่ <head> โหลดเสร็จก่อน (max 5 วิ)
-  const waitGlobal = (ms) => new Promise(res => {
-    const t = Date.now();
-    const check = () => {
-      if (window.PptxGenJS) return res(true);
-      if (Date.now() - t > ms) return res(false);
-      setTimeout(check, 100);
-    };
-    check();
-  });
-  if (await waitGlobal(5000)) return;
-
-  // ถ้ายังไม่มี → ลองโหลด script ใหม่
-  const tryLoad = (src) => new Promise((resolve, reject) => {
-    // ตรวจว่า script นี้โหลดไปแล้วหรือยัง
-    if (document.querySelector(`script[src="${src}"]`)) {
-      setTimeout(() => window.PptxGenJS ? resolve() : reject(new Error('ไม่พบ global')), 500);
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = () => setTimeout(resolve, 100); // รอ script execute
-    s.onerror = () => reject(new Error('load_fail'));
-    document.head.appendChild(s);
-  });
-  const sources = [
-    'pptxgen.bundled.js',
-    'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundled.js',
-    'https://cdn.jsdelivr.net/npm/pptxgenjs@3.11.0/dist/pptxgen.bundled.js',
-    'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundled.js',
-  ];
-  for (const src of sources) {
-    try {
-      await tryLoad(src);
-      if (window.PptxGenJS) return;
-    } catch (_) {}
-  }
-  throw new Error('ไม่สามารถโหลด PptxGenJS ได้ — กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วลองใหม่อีกครั้ง');
-}
+// loadPptxGenJS — ไม่ใช้แล้ว (เปลี่ยนไปใช้ PDF แทน)
+async function loadPptxGenJS() { /* deprecated */ }
 
 async function fetchExecReportData(fromDate, toDate) {
   const plants = Object.keys(PRODUCTION_PLANT_CONFIG);
@@ -8857,10 +8817,15 @@ async function fetchExecReportData(fromDate, toDate) {
   const [, tm] = toDate.split('-').map(Number);
   const toYM   = ty * 100 + tm;
 
+  // คำนวณช่วงก่อนหน้าสำหรับ Trend (ช่วงเวลาเท่ากัน ก่อนหน้า)
+  const diffDays = Math.round((new Date(toDate) - new Date(fromDate)) / 86400000) + 1;
+  const prevToDate  = new Date(new Date(fromDate) - 86400000).toISOString().slice(0,10);
+  const prevFromDate = new Date(new Date(fromDate) - diffDays * 86400000).toISOString().slice(0,10);
+
   // Production plants
   await Promise.all(plants.map(async (pk) => {
     const cfg = PRODUCTION_PLANT_CONFIG[pk];
-    const cols = ['production_date','feed_ton','runtime_hour', ...cfg.productColumns.map(c => c.key)].join(',');
+    const cols = ['production_date','feed_ton','runtime_hour','start_hour','start_minute','stop_hour','stop_minute','breakdown_detail', ...cfg.productColumns.map(c => c.key)].join(',');
     const { data, error } = await db.from(cfg.table)
       .select(cols)
       .gte('production_date', fromDate)
@@ -8878,7 +8843,28 @@ async function fetchExecReportData(fromDate, toDate) {
     const actualRate    = totalRuntime > 0 ? totalFeed / totalRuntime : 0;
     const achievement   = targetRate > 0 ? (actualRate / targetRate) * 100 : 0;
     const operatingDays = new Set(rows.map(r => r.production_date)).size;
-    results[pk] = { rows, totalFeed, totalRuntime, productTotals, totalProduct, actualRate, achievement, operatingDays };
+
+    // Breakdown summary
+    const breakdownRows  = rows.filter(r => r.breakdown_detail && r.breakdown_detail.trim());
+    const breakdownCount = breakdownRows.length;
+    const breakdownList  = breakdownRows.map(r => ({ date: r.production_date, detail: r.breakdown_detail }));
+
+    // Prev period สำหรับ Trend
+    let prevFeed = 0, prevRuntime = 0, prevAchievement = 0;
+    try {
+      const { data: pd } = await db.from(cfg.table)
+        .select('feed_ton,runtime_hour')
+        .gte('production_date', prevFromDate)
+        .lte('production_date', prevToDate)
+        .eq('status', 'approved');
+      const pr = pd || [];
+      prevFeed    = pr.reduce((s,r) => s + (Number(r.feed_ton)||0), 0);
+      prevRuntime = pr.reduce((s,r) => s + (Number(r.runtime_hour)||0), 0);
+      const prevRate = prevRuntime > 0 ? prevFeed / prevRuntime : 0;
+      prevAchievement = targetRate > 0 ? (prevRate / targetRate) * 100 : 0;
+    } catch(_) {}
+
+    results[pk] = { rows, totalFeed, totalRuntime, productTotals, totalProduct, actualRate, achievement, operatingDays, breakdownCount, breakdownList, prevFeed, prevRuntime, prevAchievement };
   }));
 
   // Drone stock
@@ -8966,280 +8952,219 @@ function thDateEx(iso) {
 }
 
 async function generateExecutiveReport(fromDate, toDate, company) {
-  await loadPptxGenJS();
   const data = await fetchExecReportData(fromDate, toDate);
-  const pres = new PptxGenJS();
-  pres.layout = 'LAYOUT_16x9';
-  pres.title  = `รายงานสรุปยอดผลิต ${company}`;
-  const C = { navy:'1E2761', ice:'CADCFC', white:'FFFFFF', gray:'64748B', light:'F8FAFC', dark:'1E293B' };
-  const periodLabel = `${thDateEx(fromDate)} — ${thDateEx(toDate)}`;
   const plants = ['cde','propel','sanon1','sanon2'];
+  const periodLabel = `${thDateEx(fromDate)} — ${thDateEx(toDate)}`;
+  const now = thDateEx(new Date().toISOString().slice(0,10));
+  const PC = { cde:'#0D9488', propel:'#0891B2', sanon1:'#7C3AED', sanon2:'#DC2626' };
 
-  // ── Slide 1: Cover
-  const s1 = pres.addSlide();
-  s1.background = { color: C.navy };
-  s1.addShape(pres.ShapeType.RECTANGLE, { x:0, y:4.2, w:10, h:1.425, fill:{ color:'162050' }, line:{ color:'162050' } });
-  s1.addText(company, { x:0.6, y:1.1, w:8.8, h:0.7, fontSize:22, color:C.ice, fontFace:'Calibri' });
-  s1.addText('รายงานสรุปยอดผลิต', { x:0.6, y:1.85, w:8.8, h:1.2, fontSize:44, color:C.white, fontFace:'Calibri', bold:true });
-  s1.addText('ทุกโรงงาน', { x:0.6, y:2.95, w:8.8, h:0.8, fontSize:32, color:C.ice, fontFace:'Calibri' });
-  s1.addText(periodLabel, { x:0.6, y:4.4, w:8.8, h:0.5, fontSize:15, color:'A0B4D4', fontFace:'Calibri' });
-  s1.addText(`จัดทำเมื่อ ${thDateEx(new Date().toISOString().slice(0,10))}`, { x:0.6, y:4.9, w:8.8, h:0.4, fontSize:12, color:'8098B8', fontFace:'Calibri' });
+  // ── Helper: Traffic Light ──
+  const tl = (achv) => achv >= 100 ? '🟢' : achv >= 80 ? '🟡' : '🔴';
+  const tlColor = (achv) => achv >= 100 ? '#059669' : achv >= 80 ? '#D97706' : '#DC2626';
+  const tlBg    = (achv) => achv >= 100 ? '#f0fdf4' : achv >= 80 ? '#fffbeb' : '#fef2f2';
+  const trend = (cur, prev) => {
+    if (!prev || prev === 0) return '';
+    const diff = ((cur - prev) / prev * 100).toFixed(1);
+    if (Math.abs(diff) < 1) return `<span style="color:#64748b;font-size:10px"> →0%</span>`;
+    return diff > 0
+      ? `<span style="color:#059669;font-size:10px"> ▲${diff}%</span>`
+      : `<span style="color:#DC2626;font-size:10px"> ▼${Math.abs(diff)}%</span>`;
+  };
 
-  // ── Slide 2: Overview
-  const s2 = pres.addSlide();
-  s2.background = { color: C.light };
-  s2.addText('สรุปภาพรวมการผลิต', { x:0.5, y:0.25, w:9, h:0.55, fontSize:22, color:C.dark, fontFace:'Calibri', bold:true, margin:0 });
-  s2.addText(periodLabel, { x:0.5, y:0.78, w:9, h:0.32, fontSize:12, color:C.gray, fontFace:'Calibri', margin:0 });
-  const cardW=2.1, cardH=1.85, cardY=1.2, gap=0.13;
-  plants.forEach((pk, i) => {
-    const d = data[pk]; const col = EXEC_REPORT_COLORS[pk]; const cx = 0.45 + i*(cardW+gap);
-    s2.addShape(pres.ShapeType.ROUNDED_RECTANGLE, { x:cx, y:cardY, w:cardW, h:cardH, fill:{ color:C.white }, rectRadius:0.12, shadow:{ type:'outer', color:'000000', blur:8, offset:3, angle:45, opacity:0.09 } });
-    s2.addShape(pres.ShapeType.ROUNDED_RECTANGLE, { x:cx, y:cardY, w:cardW, h:0.38, fill:{ color:col }, rectRadius:0.12, line:{ color:col } });
-    s2.addText(EXEC_REPORT_LABELS[pk], { x:cx, y:cardY+0.05, w:cardW, h:0.3, fontSize:13, color:C.white, fontFace:'Calibri', bold:true, align:'center', margin:0 });
-    s2.addText(`${fmtExN(d.totalFeed)} ตัน`, { x:cx+0.1, y:cardY+0.48, w:cardW-0.2, h:0.5, fontSize:20, color:C.dark, fontFace:'Calibri', bold:true, align:'center' });
-    s2.addText('ยอดป้อน (Feed)', { x:cx+0.1, y:cardY+0.93, w:cardW-0.2, h:0.25, fontSize:10, color:C.gray, fontFace:'Calibri', align:'center' });
+  // ── ภาพรวม ──
+  const totalAll = plants.reduce((s,pk) => s + data[pk].totalFeed, 0);
+  const totalRt  = plants.reduce((s,pk) => s + data[pk].totalRuntime, 0);
+  const totalBd  = plants.reduce((s,pk) => s + data[pk].breakdownCount, 0);
+  const grandTotal = totalAll;
+
+  // ── Executive Summary (auto-generate) ──
+  const passPlants  = plants.filter(pk => data[pk].achievement >= 100).map(pk => EXEC_REPORT_LABELS[pk]);
+  const warnPlants  = plants.filter(pk => data[pk].achievement >= 80 && data[pk].achievement < 100).map(pk => EXEC_REPORT_LABELS[pk]);
+  const failPlants  = plants.filter(pk => data[pk].achievement < 80).map(pk => EXEC_REPORT_LABELS[pk]);
+  const summaryLines = [];
+  if (passPlants.length) summaryLines.push(`🟢 ผ่านเป้า: ${passPlants.join(', ')}`);
+  if (warnPlants.length) summaryLines.push(`🟡 ใกล้เป้า: ${warnPlants.join(', ')}`);
+  if (failPlants.length)  summaryLines.push(`🔴 ต่ำกว่าเป้า: ${failPlants.join(', ')} — ต้องติดตาม`);
+  if (totalBd > 0) summaryLines.push(`⚠️ พบ Breakdown รวม ${totalBd} วัน ใน ${plants.filter(pk=>data[pk].breakdownCount>0).map(pk=>EXEC_REPORT_LABELS[pk]).join(', ')}`);
+  summaryLines.push(`💰 ยอดขาย ${fmtExN(data._sales.totalValue,0)} บาท (${fmtExN(data._sales.totalTon,1)} ตัน)`);
+
+  // ── ตาราง Overview (พร้อม Traffic Light + Trend) ──
+  const overviewRows = plants.map(pk => {
+    const d = data[pk]; const achv = Math.round(d.achievement);
+    const feedTrend = trend(d.totalFeed, d.prevFeed);
+    return `<tr>
+      <td><span style="display:inline-block;width:14px">${tl(achv)}</span> <span style="color:${PC[pk]};font-weight:600">${EXEC_REPORT_LABELS[pk]}</span></td>
+      <td class="r">${fmtExN(d.totalFeed)}${feedTrend}</td>
+      <td class="r">${fmtExN(d.totalRuntime,1)}</td>
+      <td class="r">${fmtExN(d.actualRate,1)}</td>
+      <td class="c" style="font-weight:700;color:${tlColor(achv)};background:${tlBg(achv)}">${achv}%</td>
+      <td class="c">${d.breakdownCount > 0 ? `<span style="color:#DC2626">${d.breakdownCount} วัน</span>` : '<span style="color:#059669">-</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  // ── รายโรงงาน (พร้อม Trend) ──
+  const plantSections = plants.map(pk => {
+    const d = data[pk]; const cfg = PRODUCTION_PLANT_CONFIG[pk]; const col = PC[pk];
     const achv = Math.round(d.achievement);
-    const achvColor = achv>=100?'059669':achv>=80?'D97706':'DC2626';
-    s2.addText(`${achv}%`, { x:cx+0.1, y:cardY+1.17, w:cardW-0.2, h:0.38, fontSize:18, color:achvColor, fontFace:'Calibri', bold:true, align:'center' });
-    s2.addText(`vs เป้า (${EXEC_REPORT_TARGETS[pk]} ต./ชม.)`, { x:cx+0.05, y:cardY+1.55, w:cardW-0.1, h:0.22, fontSize:9, color:C.gray, fontFace:'Calibri', align:'center' });
-  });
-  const totalAll = plants.reduce((s,pk)=>s+data[pk].totalFeed,0);
-  const totalRt  = plants.reduce((s,pk)=>s+data[pk].totalRuntime,0);
-  const summaryRows = [
-    [{ text:'โรงงาน', options:{ bold:true, color:C.white, fill:{ color:C.navy }, align:'center' } },
-     { text:'ยอดป้อน (ตัน)', options:{ bold:true, color:C.white, fill:{ color:C.navy }, align:'center' } },
-     { text:'ชม.เดินเครื่อง', options:{ bold:true, color:C.white, fill:{ color:C.navy }, align:'center' } },
-     { text:'อัตรา (ต./ชม.)', options:{ bold:true, color:C.white, fill:{ color:C.navy }, align:'center' } },
-     { text:'% vs เป้า', options:{ bold:true, color:C.white, fill:{ color:C.navy }, align:'center' } }],
-    ...plants.map(pk => {
-      const d=data[pk]; const achv=Math.round(d.achievement);
-      return [
-        { text:EXEC_REPORT_LABELS[pk], options:{ bold:true, color:'334155' } },
-        { text:fmtExN(d.totalFeed), options:{ align:'right', color:'334155' } },
-        { text:fmtExN(d.totalRuntime,1), options:{ align:'right', color:'334155' } },
-        { text:fmtExN(d.actualRate,1), options:{ align:'right', color:'334155' } },
-        { text:`${achv}%`, options:{ align:'center', bold:true, color:achv>=100?'059669':achv>=80?'D97706':'DC2626' } },
-      ];
-    }),
-    [{ text:'รวม', options:{ bold:true, fill:{ color:'EEF2FF' }, color:C.navy } },
-     { text:fmtExN(totalAll), options:{ bold:true, align:'right', fill:{ color:'EEF2FF' }, color:C.navy } },
-     { text:fmtExN(totalRt,1), options:{ bold:true, align:'right', fill:{ color:'EEF2FF' }, color:C.navy } },
-     { text:totalRt>0?fmtExN(totalAll/totalRt,1):'-', options:{ bold:true, align:'right', fill:{ color:'EEF2FF' }, color:C.navy } },
-     { text:'-', options:{ align:'center', fill:{ color:'EEF2FF' }, color:C.navy } }],
-  ];
-  s2.addTable(summaryRows, { x:0.45, y:3.22, w:9.1, h:1.9, fontSize:11, fontFace:'Calibri', border:{ pt:0.5, color:'CBD5E1' }, rowH:0.34 });
+    const prodRows = cfg.productColumns.map(c => {
+      const v = d.productTotals[c.key]||0;
+      const pct = d.totalProduct>0?(v/d.totalProduct*100).toFixed(1):'0.0';
+      return `<tr><td>${c.label}</td><td class="r">${fmtExN(v,1)}</td><td class="c">${pct}%</td></tr>`;
+    }).join('');
+    return `<div class="plant-section" style="border-left:5px solid ${col};background:${tlBg(achv)}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:20px">${tl(achv)}</span>
+        <h3 style="color:${col};margin:0">${EXEC_REPORT_LABELS[pk]}</h3>
+        <span style="font-size:11px;color:${tlColor(achv)};font-weight:700">${achv}% vs เป้า ${EXEC_REPORT_TARGETS[pk]} ต./ชม.</span>
+      </div>
+      <div class="kpi-row">
+        <div class="kc"><div class="kv">${fmtExN(d.totalFeed)}${trend(d.totalFeed,d.prevFeed)}</div><div class="kl">ยอดป้อนรวม (ตัน)</div></div>
+        <div class="kc"><div class="kv">${fmtExN(d.totalRuntime,1)}</div><div class="kl">ชม.เดินเครื่อง</div></div>
+        <div class="kc"><div class="kv">${fmtExN(d.actualRate,1)}${trend(d.actualRate, d.prevRuntime>0?d.prevFeed/d.prevRuntime:0)}</div><div class="kl">อัตราเฉลี่ย (ต./ชม.)</div></div>
+        <div class="kc"><div class="kv">${d.operatingDays}</div><div class="kl">วันผลิต</div></div>
+        <div class="kc"><div class="kv" style="color:#DC2626">${d.breakdownCount} วัน</div><div class="kl">วันที่มี Breakdown</div></div>
+      </div>
+      <table><thead><tr style="background:${col}"><th>ผลิตภัณฑ์</th><th>ตัน</th><th>%</th></tr></thead>
+      <tbody>${prodRows}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(d.totalProduct,1)}</td><td class="c">100%</td></tr></tbody></table>
+    </div>`;
+  }).join('');
 
-  // ── Slide 3: Bar Chart
-  const s3 = pres.addSlide();
-  s3.background = { color: C.light };
-  s3.addText('เปรียบเทียบยอดป้อน (Feed) ทุกโรงงาน', { x:0.5, y:0.25, w:9, h:0.55, fontSize:22, color:C.dark, fontFace:'Calibri', bold:true, margin:0 });
-  s3.addText(periodLabel, { x:0.5, y:0.78, w:9, h:0.32, fontSize:12, color:C.gray, fontFace:'Calibri', margin:0 });
-  s3.addChart(pres.ChartType.BAR, [{ name:'ยอดป้อน (ตัน)', labels:plants.map(pk=>EXEC_REPORT_LABELS[pk]), values:plants.map(pk=>Math.round(data[pk].totalFeed)) }], {
-    x:0.5, y:1.2, w:9, h:3.9, barDir:'col',
-    chartColors:plants.map(pk=>EXEC_REPORT_COLORS[pk]),
-    chartArea:{ fill:{ color:C.white }, roundedCorners:true },
-    catAxisLabelColor:C.gray, valAxisLabelColor:C.gray,
-    valGridLine:{ color:'E2E8F0', size:0.5 }, catGridLine:{ style:'none' },
-    showValue:true, dataLabelPosition:'outEnd', dataLabelColor:C.dark, dataLabelFontSize:13, dataLabelFontBold:true,
-    showLegend:false, showTitle:false,
-  });
+  // ── Breakdown Section ──
+  const allBreakdowns = plants.flatMap(pk =>
+    data[pk].breakdownList.map(b => ({ plant: EXEC_REPORT_LABELS[pk], color: PC[pk], ...b }))
+  ).sort((a,b) => a.date.localeCompare(b.date));
+  const breakdownSection = allBreakdowns.length
+    ? allBreakdowns.map(b => `<tr><td>${thDateEx(b.date)}</td><td style="color:${b.color};font-weight:600">${b.plant}</td><td>${escapeHtml(b.detail)}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="c" style="color:#059669">ไม่พบ Breakdown ในช่วงนี้</td></tr>`;
 
-  // ── Slides 4-7: Per-factory detail
-  for (const pk of plants) {
-    const d=data[pk]; const cfg=PRODUCTION_PLANT_CONFIG[pk]; const col=EXEC_REPORT_COLORS[pk];
-    const sl = pres.addSlide();
-    sl.background = { color: C.light };
-    sl.addShape(pres.ShapeType.RECTANGLE, { x:0, y:0, w:10, h:1.05, fill:{ color:col }, line:{ color:col } });
-    sl.addText(EXEC_REPORT_LABELS[pk], { x:0.5, y:0.08, w:6, h:0.45, fontSize:22, color:C.white, fontFace:'Calibri', bold:true, margin:0 });
-    sl.addText(periodLabel, { x:0.5, y:0.55, w:6, h:0.36, fontSize:12, color:'D1FAE5', fontFace:'Calibri', margin:0 });
-    const achv=Math.round(d.achievement);
-    sl.addText(`${achv}%`, { x:7.5, y:0.12, w:2, h:0.5, fontSize:28, color:C.white, fontFace:'Calibri', bold:true, align:'right', margin:0 });
-    sl.addText('vs เป้าหมาย', { x:7.5, y:0.6, w:2, h:0.3, fontSize:10, color:'D1FAE5', fontFace:'Calibri', align:'right', margin:0 });
-    const kpis=[
-      { label:'ยอดป้อนรวม', val:`${fmtExN(d.totalFeed)} ตัน` },
-      { label:'ชม.เดินเครื่อง', val:`${fmtExN(d.totalRuntime,1)} ชม.` },
-      { label:'อัตราเฉลี่ย', val:`${fmtExN(d.actualRate,1)} ต./ชม.` },
-      { label:'วันผลิต', val:`${d.operatingDays} วัน` },
-    ];
-    kpis.forEach((k,i) => {
-      const kx=0.4+i*2.3, ky=1.18;
-      sl.addShape(pres.ShapeType.ROUNDED_RECTANGLE, { x:kx, y:ky, w:2.1, h:0.95, fill:{ color:C.white }, rectRadius:0.1, shadow:{ type:'outer', color:'000000', blur:6, offset:2, angle:45, opacity:0.08 } });
-      sl.addText(k.val, { x:kx, y:ky+0.08, w:2.1, h:0.48, fontSize:17, color:col, fontFace:'Calibri', bold:true, align:'center' });
-      sl.addText(k.label, { x:kx, y:ky+0.55, w:2.1, h:0.3, fontSize:10, color:C.gray, fontFace:'Calibri', align:'center' });
-    });
-    const prodLabels=cfg.productColumns.map(c=>c.label);
-    const prodValues=cfg.productColumns.map(c=>Math.round(d.productTotals[c.key]||0));
-    sl.addText('ยอดผลิตแยกตามประเภท', { x:0.4, y:2.28, w:5.5, h:0.35, fontSize:13, color:C.dark, fontFace:'Calibri', bold:true, margin:0 });
-    sl.addChart(pres.ChartType.BAR, [{ name:'ตัน', labels:prodLabels, values:prodValues }], {
-      x:0.4, y:2.65, w:5.5, h:2.7, barDir:'bar',
-      chartColors:[col],
-      chartArea:{ fill:{ color:C.white }, roundedCorners:true },
-      catAxisLabelColor:C.gray, valAxisLabelColor:C.gray,
-      valGridLine:{ color:'E2E8F0', size:0.5 }, catGridLine:{ style:'none' },
-      showValue:true, dataLabelPosition:'outEnd', dataLabelColor:C.dark, dataLabelFontSize:11,
-      showLegend:false, showTitle:false,
-    });
-    const prodRows=[
-      [{ text:'ประเภทผลิตภัณฑ์', options:{ bold:true, color:C.white, fill:{ color:col }, align:'center' } },
-       { text:'ตัน', options:{ bold:true, color:C.white, fill:{ color:col }, align:'center' } },
-       { text:'%', options:{ bold:true, color:C.white, fill:{ color:col }, align:'center' } }],
-      ...cfg.productColumns.map((c,ci) => {
-        const v=d.productTotals[c.key]||0; const pct=d.totalProduct>0?(v/d.totalProduct*100).toFixed(1):'0.0';
-        return [
-          { text:c.label, options:{ color:'334155', fill:{ color:ci%2===0?C.white:'F1F5F9' } } },
-          { text:fmtExN(v), options:{ align:'right', color:'334155', fill:{ color:ci%2===0?C.white:'F1F5F9' } } },
-          { text:`${pct}%`, options:{ align:'center', color:'334155', fill:{ color:ci%2===0?C.white:'F1F5F9' } } },
-        ];
-      }),
-      [{ text:'รวม', options:{ bold:true, fill:{ color:'EEF2FF' }, color:col } },
-       { text:fmtExN(d.totalProduct), options:{ bold:true, align:'right', fill:{ color:'EEF2FF' }, color:col } },
-       { text:'100%', options:{ bold:true, align:'center', fill:{ color:'EEF2FF' }, color:col } }],
-    ];
-    sl.addTable(prodRows, { x:6.1, y:2.28, w:3.5, h:Math.min(cfg.productColumns.length*0.36+0.72,3.1), fontSize:11, fontFace:'Calibri', border:{ pt:0.5, color:'CBD5E1' }, rowH:0.33 });
-  }
+  // ── ตารางอื่นๆ ──
+  const mkRows = (entries, total, cols=3) => entries.length
+    ? entries.map(([k,v]) => `<tr><td>${k}</td><td class="r">${fmtExN(v,1)}</td>${cols===3?`<td class="c">${total>0?(v/total*100).toFixed(1):'0.0'}%</td>`:''}</tr>`).join('')
+    : `<tr><td colspan="${cols}" class="c" style="color:#94a3b8">ไม่มีข้อมูล</td></tr>`;
 
-  // ── helper ใช้ใน slides 8-11 ──
-  const secHdr = (sl, title, color) => {
-    sl.background = { color: C.light };
-    sl.addShape(pres.ShapeType.RECTANGLE, { x:0, y:0, w:10, h:0.95, fill:{color}, line:{color} });
-    sl.addText(title, { x:0.5, y:0.08, w:7.5, h:0.44, fontSize:22, color:C.white, fontFace:'Calibri', bold:true, margin:0 });
-    sl.addText(periodLabel, { x:0.5, y:0.55, w:7.5, h:0.3, fontSize:12, color:'D1FAE5', fontFace:'Calibri', margin:0 });
-  };
-  const kpiBox = (sl, x, y, label, val, color) => {
-    sl.addShape(pres.ShapeType.ROUNDED_RECTANGLE, { x, y, w:2.1, h:0.9, fill:{color:C.white}, rectRadius:0.1, shadow:{type:'outer',color:'000000',blur:6,offset:2,angle:45,opacity:0.08} });
-    sl.addText(String(val), { x, y:y+0.05, w:2.1, h:0.45, fontSize:15, color, fontFace:'Calibri', bold:true, align:'center' });
-    sl.addText(label, { x, y:y+0.53, w:2.1, h:0.28, fontSize:9, color:C.gray, fontFace:'Calibri', align:'center' });
-  };
-  const emptyRow = (cols) => cols.map((c,i) => ({ text: i===0?'ไม่มีข้อมูลในช่วงนี้':'-', options:{color:C.gray, align:i===0?'left':'center'} }));
-  const tblOpts = (x, y, w, rows, color) => ({ x, y, w, h:Math.min(rows*0.34+0.1, 3.0), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.33, colW:Array(Object.keys({}).length||1).fill(w) });
+  const droneEntries = Object.entries(data._drone.byType).sort((a,b)=>b[1]-a[1]);
+  const stEntries    = Object.entries(data._sales.bySt).sort((a,b)=>b[1]-a[1]);
+  const ldEntries    = Object.entries(data._loader.byName).sort((a,b)=>b[1].work-a[1].work);
+  const wtEntries    = Object.entries(data._water.byWell).sort((a,b)=>b[1]-a[1]);
+  const loaderRows   = ldEntries.length
+    ? ldEntries.map(([ln,v])=>`<tr><td>${ln}</td><td class="r">${fmtExN(v.work,1)}</td><td class="r">${fmtExN(v.charge,0)}</td><td class="r">${fmtExN(v.cost,0)}</td></tr>`).join('')
+    : `<tr><td colspan="4" class="c" style="color:#94a3b8">ไม่มีข้อมูล</td></tr>`;
 
-  // ── Slide 8: สต็อคหินบินโดรน
-  const s8 = pres.addSlide();
-  secHdr(s8, 'สต็อคหินบินโดรน', '065A82');
-  const drone = data._drone;
-  const droneEntries = Object.entries(drone.byType).sort((a,b)=>b[1]-a[1]);
-  kpiBox(s8, 0.4,  1.1, 'ปริมาณสต็อครวม', `${fmtExN(drone.total,1)} ตัน`, '065A82');
-  kpiBox(s8, 2.75, 1.1, 'ประเภทหิน', `${Object.keys(drone.byType).length} ชนิด`, '065A82');
-  kpiBox(s8, 5.1,  1.1, 'จำนวนโรงงาน', `${Object.keys(drone.byFactory).length} โรง`, '065A82');
-  const droneHdr = [{text:'ประเภทหิน',options:{bold:true,color:C.white,fill:{color:'065A82'},align:'center'}},{text:'ปริมาณ (ตัน)',options:{bold:true,color:C.white,fill:{color:'065A82'},align:'center'}},{text:'% ของทั้งหมด',options:{bold:true,color:C.white,fill:{color:'065A82'},align:'center'}}];
-  const droneData = droneEntries.length
-    ? droneEntries.map(([st,v],i)=>[
-        {text:st,options:{color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v,1),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:`${drone.total>0?(v/drone.total*100).toFixed(1):'0.0'}%`,options:{align:'center',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-      ])
-    : [emptyRow(droneHdr)];
-  const droneFoot = [{text:'รวม',options:{bold:true,fill:{color:'EEF2FF'},color:'065A82'}},{text:fmtExN(drone.total,1),options:{bold:true,align:'right',fill:{color:'EEF2FF'},color:'065A82'}},{text:'100%',options:{bold:true,align:'center',fill:{color:'EEF2FF'},color:'065A82'}}];
-  s8.addTable([droneHdr, ...droneData, droneFoot], { x:1.5, y:2.18, w:7.0, h:Math.min((droneData.length+2)*0.34+0.1,2.9), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.33 });
+  const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>รายงานผู้บริหาร — ${company}</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Kanit',sans-serif;box-sizing:border-box}
+body{margin:0;padding:20px;color:#1e293b;font-size:12px}
+.cover{background:#1E2761;color:#fff;padding:28px 24px;margin:-20px -20px 20px}
+.cover h1{font-size:22px;margin:4px 0 0}
+.cover .sub{font-size:12px;color:#A0B4D4;margin-top:6px}
+.cover .dt{font-size:10px;color:#8098B8;margin-top:2px}
+h2{font-size:14px;font-weight:700;margin:16px 0 6px;color:#1E2761;border-bottom:2px solid #1E2761;padding-bottom:3px}
+h3{font-size:13px;font-weight:700;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:11px}
+th{padding:5px 7px;text-align:left;color:#fff;background:#1E2761}
+td{padding:4px 7px;border-bottom:1px solid #e2e8f0}
+tr:nth-child(even) td{background:#f8fafc}
+.tf td{background:#eef2ff!important;font-weight:600;color:#1E2761}
+.r{text-align:right}.c{text-align:center}
+.kpi-row{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.kc{flex:1;min-width:90px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px}
+.kv{font-size:14px;font-weight:700}
+.kl{font-size:10px;color:#64748b;margin-top:1px}
+.plant-section{padding:10px 10px 10px 16px;margin-bottom:14px;page-break-inside:avoid;border-radius:6px}
+.pb{page-break-before:always}
+.summary-box{background:#1E2761;color:#fff;border-radius:8px;padding:16px 20px;margin-bottom:16px}
+.summary-box .sv{font-size:22px;font-weight:700;color:#CADCFC}
+.summary-box .sl{font-size:11px;color:#8098B8;margin-top:2px}
+.exec-summary{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin-bottom:16px;line-height:1.9}
+.exec-summary p{margin:0;font-size:12px}
+.print-btn{position:fixed;top:12px;right:12px;background:#4f46e5;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Kanit;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+@media print{.print-btn{display:none}body{padding:10px}.cover{margin:-10px -10px 16px}}
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ บันทึก PDF</button>
 
-  // ── Slide 9: ยอดขาย
-  const s9 = pres.addSlide();
-  secHdr(s9, 'ยอดขาย', '1D9E75');
-  const sales = data._sales;
-  const topSt  = Object.entries(sales.bySt).sort((a,b)=>b[1]-a[1])[0];
-  const topFac = Object.entries(sales.byFactory).sort((a,b)=>b[1]-a[1])[0];
-  kpiBox(s9, 0.4,  1.1, 'ยอดขายรวม', `${fmtExN(sales.totalTon,1)} ตัน`, '1D9E75');
-  kpiBox(s9, 2.75, 1.1, 'มูลค่ารวม', sales.totalValue>0?`${fmtExN(sales.totalValue,0)} บาท`:'-', '1D9E75');
-  kpiBox(s9, 5.1,  1.1, 'หินขายดีสุด', topSt?topSt[0]:'-', '1D9E75');
-  kpiBox(s9, 7.45, 1.1, 'โรงงานขายมากสุด', topFac?topFac[0]:'-', '1D9E75');
-  s9.addText('แยกตามประเภทหิน', { x:0.4, y:2.18, w:5.7, h:0.3, fontSize:12, color:C.dark, fontFace:'Calibri', bold:true, margin:0 });
-  const stHdr = [{text:'ประเภทหิน',options:{bold:true,color:C.white,fill:{color:'1D9E75'},align:'center'}},{text:'ตัน',options:{bold:true,color:C.white,fill:{color:'1D9E75'},align:'center'}},{text:'%',options:{bold:true,color:C.white,fill:{color:'1D9E75'},align:'center'}}];
-  const stEntries = Object.entries(sales.bySt).sort((a,b)=>b[1]-a[1]);
-  const stData = stEntries.length
-    ? stEntries.map(([st,v],i)=>[
-        {text:st,options:{color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v,1),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:`${sales.totalTon>0?(v/sales.totalTon*100).toFixed(1):'0.0'}%`,options:{align:'center',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-      ])
-    : [emptyRow(stHdr)];
-  const stFoot = [{text:'รวม',options:{bold:true,fill:{color:'EEF2FF'},color:'1D9E75'}},{text:fmtExN(sales.totalTon,1),options:{bold:true,align:'right',fill:{color:'EEF2FF'},color:'1D9E75'}},{text:'100%',options:{bold:true,align:'center',fill:{color:'EEF2FF'},color:'1D9E75'}}];
-  s9.addTable([stHdr, ...stData, stFoot], { x:0.4, y:2.5, w:5.7, h:Math.min((stData.length+2)*0.34+0.1,2.8), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.33 });
-  s9.addText('แยกตามโรงงาน', { x:6.3, y:2.18, w:3.3, h:0.3, fontSize:12, color:C.dark, fontFace:'Calibri', bold:true, margin:0 });
-  const facHdr = [{text:'โรงงาน',options:{bold:true,color:C.white,fill:{color:'1D9E75'},align:'center'}},{text:'ตัน',options:{bold:true,color:C.white,fill:{color:'1D9E75'},align:'center'}}];
-  const facEntries = Object.entries(sales.byFactory).sort((a,b)=>b[1]-a[1]);
-  const facData = facEntries.length
-    ? facEntries.map(([fn,v],i)=>[
-        {text:fn,options:{color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v,1),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-      ])
-    : [[{text:'ไม่มีข้อมูล',options:{color:C.gray,align:'center'}},{text:'-',options:{align:'center',color:C.gray}}]];
-  s9.addTable([facHdr, ...facData], { x:6.3, y:2.5, w:3.3, h:Math.min((facData.length+1)*0.34+0.1,2.8), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.33 });
+<div class="cover">
+  <div style="font-size:11px;color:#CADCFC">${company}</div>
+  <h1>รายงานสรุปยอดผลิต ทุกโรงงาน</h1>
+  <div class="sub">${periodLabel}</div>
+  <div class="dt">จัดทำเมื่อ ${now}</div>
+</div>
 
-  // ── Slide 10: รถตักไฟฟ้า
-  const s10 = pres.addSlide();
-  secHdr(s10, 'รถตักไฟฟ้า', 'BA7517');
-  const loader = data._loader;
-  kpiBox(s10, 0.4,  1.1, 'ชั่วโมงทำงานรวม', `${fmtExN(loader.totalWork,1)} ชม.`, 'BA7517');
-  kpiBox(s10, 2.75, 1.1, 'เวลาชาร์จรวม', `${fmtExN(loader.totalCharge,0)} นาที`, 'BA7517');
-  kpiBox(s10, 5.1,  1.1, 'ค่าไฟรวม', `${fmtExN(loader.totalCost,0)} บาท`, 'BA7517');
-  kpiBox(s10, 7.45, 1.1, 'ค่าไฟ/ชม.', `${fmtExN(loader.costPerHour,2)} บ./ชม.`, 'BA7517');
-  const ldHdr = [
-    {text:'ชื่อรถตัก',options:{bold:true,color:C.white,fill:{color:'BA7517'},align:'center'}},
-    {text:'ชั่วโมงทำงาน',options:{bold:true,color:C.white,fill:{color:'BA7517'},align:'center'}},
-    {text:'ชาร์จ (นาที)',options:{bold:true,color:C.white,fill:{color:'BA7517'},align:'center'}},
-    {text:'ค่าไฟ (บาท)',options:{bold:true,color:C.white,fill:{color:'BA7517'},align:'center'}},
-  ];
-  const ldEntries = Object.entries(loader.byName).sort((a,b)=>b[1].work-a[1].work);
-  const ldData = ldEntries.length
-    ? ldEntries.map(([ln,v],i)=>[
-        {text:ln,options:{color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v.work,1),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v.charge,0),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v.cost,0),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-      ])
-    : [[{text:'ไม่มีข้อมูลในช่วงนี้',options:{color:C.gray,align:'center'}},{text:'-',options:{align:'center',color:C.gray}},{text:'-',options:{align:'center',color:C.gray}},{text:'-',options:{align:'center',color:C.gray}}]];
-  s10.addTable([ldHdr, ...ldData], { x:0.5, y:2.18, w:9.0, h:Math.min((ldData.length+1)*0.36+0.1,2.9), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.34 });
+<div class="exec-summary">
+  <div style="font-weight:700;font-size:13px;color:#1E2761;margin-bottom:6px">📋 สรุปสำหรับผู้บริหาร</div>
+  ${summaryLines.map(l=>`<p>${l}</p>`).join('')}
+</div>
 
-  // ── Slide 11: น้ำบาดาล
-  const s11 = pres.addSlide();
-  secHdr(s11, 'น้ำบาดาล', '0891B2');
-  const water = data._water;
-  const topWell = Object.entries(water.byWell).sort((a,b)=>b[1]-a[1])[0];
-  kpiBox(s11, 0.4,  1.1, 'ปริมาณใช้รวม', `${fmtExN(water.total,1)} ลบ.ม.`, '0891B2');
-  kpiBox(s11, 2.75, 1.1, 'จำนวนบ่อ', `${water.wellCount} บ่อ`, '0891B2');
-  kpiBox(s11, 5.1,  1.1, 'เฉลี่ย/บ่อ', `${fmtExN(water.wellCount>0?water.total/water.wellCount:0,1)} ลบ.ม.`, '0891B2');
-  kpiBox(s11, 7.45, 1.1, 'บ่อที่ใช้มากสุด', topWell?String(topWell[0]).slice(0,14):'-', '0891B2');
-  const wtHdr = [{text:'ตำแหน่งบ่อ',options:{bold:true,color:C.white,fill:{color:'0891B2'},align:'center'}},{text:'ปริมาณ (ลบ.ม.)',options:{bold:true,color:C.white,fill:{color:'0891B2'},align:'center'}},{text:'%',options:{bold:true,color:C.white,fill:{color:'0891B2'},align:'center'}}];
-  const wtEntries = Object.entries(water.byWell).sort((a,b)=>b[1]-a[1]);
-  const wtData = wtEntries.length
-    ? wtEntries.map(([loc,v],i)=>[
-        {text:loc,options:{color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:fmtExN(v,1),options:{align:'right',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-        {text:`${water.total>0?(v/water.total*100).toFixed(1):'0.0'}%`,options:{align:'center',color:'334155',fill:{color:i%2===0?C.white:'F1F5F9'}}},
-      ])
-    : [emptyRow(wtHdr)];
-  const wtFoot = [{text:'รวม',options:{bold:true,fill:{color:'EEF2FF'},color:'0891B2'}},{text:fmtExN(water.total,1),options:{bold:true,align:'right',fill:{color:'EEF2FF'},color:'0891B2'}},{text:'100%',options:{bold:true,align:'center',fill:{color:'EEF2FF'},color:'0891B2'}}];
-  s11.addTable([wtHdr, ...wtData, wtFoot], { x:1.5, y:2.18, w:7.0, h:Math.min((wtData.length+2)*0.34+0.1,2.9), fontSize:11, fontFace:'Calibri', border:{pt:0.5,color:'CBD5E1'}, rowH:0.33 });
+<div class="summary-box">
+  <div class="kpi-row" style="gap:16px">
+    <div><div class="sv">${fmtExN(grandTotal)} ตัน</div><div class="sl">ยอดป้อนรวมทุกโรงงาน</div></div>
+    <div><div class="sv">${fmtExN(totalRt,1)} ชม.</div><div class="sl">ชั่วโมงเดินเครื่องรวม</div></div>
+    <div><div class="sv">${fmtExN(data._sales.totalTon,1)} ตัน</div><div class="sl">ยอดขายรวม</div></div>
+    <div><div class="sv">${fmtExN(data._loader.totalCost,0)} บ.</div><div class="sl">ค่าไฟรถตัก</div></div>
+    <div><div class="sv" style="color:${totalBd>0?'#FCA5A5':'#86EFAC'}">${totalBd} วัน</div><div class="sl">Breakdown รวม</div></div>
+  </div>
+</div>
 
-  // ── Slide 12: สรุปรวม
-  const s12 = pres.addSlide();
-  s12.background = { color: C.navy };
-  const grandTotal = plants.reduce((s,pk)=>s+data[pk].totalFeed,0);
-  s12.addText('สรุปผลการดำเนินงาน', { x:0.6, y:0.55, w:8.8, h:0.65, fontSize:28, color:C.white, fontFace:'Calibri', bold:true });
-  s12.addText(periodLabel, { x:0.6, y:1.18, w:8.8, h:0.38, fontSize:13, color:'8098B8', fontFace:'Calibri' });
-  s12.addText(`ยอดป้อนรวมทุกโรงงาน  ${fmtExN(grandTotal)} ตัน`, { x:0.6, y:1.65, w:8.8, h:0.5, fontSize:18, color:C.ice, fontFace:'Calibri', bold:true });
-  s12.addText(
-    plants.map((pk,i)=>({ text:`${EXEC_REPORT_LABELS[pk]}: ${fmtExN(data[pk].totalFeed)} ตัน  (${Math.round(data[pk].achievement)}% vs เป้า)`, options:{ breakLine: i<plants.length-1 } })),
-    { x:0.6, y:2.2, w:8.8, h:1.0, fontSize:13, color:C.ice, fontFace:'Calibri' }
-  );
-  s12.addShape(pres.ShapeType.RECTANGLE, { x:0.6, y:3.28, w:8.8, h:0.015, fill:{color:'2D3F6A'}, line:{color:'2D3F6A'} });
-  const otherLines = [
-    `สต็อคหินบินโดรน: ${fmtExN(data._drone.total,1)} ตัน  (${Object.keys(data._drone.byType).length} ชนิด)`,
-    `ยอดขาย: ${fmtExN(data._sales.totalTon,1)} ตัน${data._sales.totalValue>0?'  |  '+fmtExN(data._sales.totalValue,0)+' บาท':''}`,
-    `รถตักไฟฟ้า: ${fmtExN(data._loader.totalWork,1)} ชม.  |  ค่าไฟ ${fmtExN(data._loader.totalCost,0)} บาท  (${fmtExN(data._loader.costPerHour,2)} บ./ชม.)`,
-    `น้ำบาดาล: ${fmtExN(data._water.total,1)} ลบ.ม.  |  ${data._water.wellCount} บ่อ`,
-  ];
-  s12.addText(
-    otherLines.map((t,i)=>({ text:t, options:{ breakLine: i<otherLines.length-1 } })),
-    { x:0.6, y:3.38, w:8.8, h:1.2, fontSize:13, color:'94A3B8', fontFace:'Calibri' }
-  );
-  s12.addText(company, { x:0.6, y:4.95, w:8.8, h:0.4, fontSize:11, color:'8098B8', fontFace:'Calibri' });
+<h2>สรุปภาพรวมการผลิต</h2>
+<table><thead><tr><th>โรงงาน</th><th>ยอดป้อน (ตัน)</th><th>ชม.เดินเครื่อง</th><th>อัตรา (ต./ชม.)</th><th>% vs เป้า</th><th>Breakdown</th></tr></thead>
+<tbody>${overviewRows}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(totalAll)}</td><td class="r">${fmtExN(totalRt,1)}</td><td class="r">${totalRt>0?fmtExN(totalAll/totalRt,1):'-'}</td><td class="c">—</td><td class="c">${totalBd} วัน</td></tr></tbody></table>
 
-  await pres.writeFile({ fileName: `Executive_Report_${fromDate}_to_${toDate}.pptx` });
-  showToast('ดาวน์โหลดรายงาน PowerPoint สำเร็จ', 'success');
+<div class="pb"></div>
+<h2>รายละเอียดแต่ละโรงงาน</h2>
+${plantSections}
+
+<div class="pb"></div>
+<h2>Breakdown Log</h2>
+<table><thead><tr style="background:#991B1B"><th>วันที่</th><th>โรงงาน</th><th>รายละเอียด</th></tr></thead>
+<tbody>${breakdownSection}</tbody></table>
+
+<h2>สต็อคหินบินโดรน</h2>
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtExN(data._drone.total,1)} ตัน</div><div class="kl">ปริมาณสต็อครวม</div></div>
+  <div class="kc"><div class="kv">${Object.keys(data._drone.byType).length} ชนิด</div><div class="kl">ประเภทหิน</div></div>
+  <div class="kc"><div class="kv">${Object.keys(data._drone.byFactory).length} โรง</div><div class="kl">จำนวนโรงงาน</div></div>
+</div>
+<table><thead><tr style="background:#065A82"><th>ประเภทหิน</th><th>ปริมาณ (ตัน)</th><th>%</th></tr></thead>
+<tbody>${mkRows(droneEntries,data._drone.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._drone.total,1)}</td><td class="c">100%</td></tr></tbody></table>
+
+<h2>ยอดขาย</h2>
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtExN(data._sales.totalTon,1)} ตัน</div><div class="kl">ยอดขายรวม</div></div>
+  <div class="kc"><div class="kv">${fmtExN(data._sales.totalValue,0)} บาท</div><div class="kl">มูลค่ารวม</div></div>
+</div>
+<table><thead><tr style="background:#1D9E75"><th>ประเภทหิน</th><th>ตัน</th><th>%</th></tr></thead>
+<tbody>${mkRows(stEntries,data._sales.totalTon)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._sales.totalTon,1)}</td><td class="c">100%</td></tr></tbody></table>
+
+<h2>รถตักไฟฟ้า</h2>
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtExN(data._loader.totalWork,1)} ชม.</div><div class="kl">ชั่วโมงทำงานรวม</div></div>
+  <div class="kc"><div class="kv">${fmtExN(data._loader.totalCharge,0)} นาที</div><div class="kl">เวลาชาร์จรวม</div></div>
+  <div class="kc"><div class="kv">${fmtExN(data._loader.totalCost,0)} บาท</div><div class="kl">ค่าไฟรวม</div></div>
+  <div class="kc"><div class="kv">${fmtExN(data._loader.costPerHour,2)} บ./ชม.</div><div class="kl">ค่าไฟต่อชั่วโมง</div></div>
+</div>
+<table><thead><tr style="background:#BA7517"><th>ชื่อรถตัก</th><th>ชั่วโมงทำงาน</th><th>ชาร์จ (นาที)</th><th>ค่าไฟ (บาท)</th></tr></thead>
+<tbody>${loaderRows}</tbody></table>
+
+<h2>น้ำบาดาล</h2>
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtExN(data._water.total,2)} ม³</div><div class="kl">ปริมาณใช้รวม</div></div>
+  <div class="kc"><div class="kv">${data._water.wellCount} บ่อ</div><div class="kl">จำนวนแหล่งน้ำ</div></div>
+</div>
+<table><thead><tr style="background:#0891B2"><th>แหล่งน้ำ</th><th>ปริมาณ (ม³)</th><th>%</th></tr></thead>
+<tbody>${mkRows(wtEntries,data._water.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._water.total,2)}</td><td class="c">100%</td></tr></tbody></table>
+
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) throw new Error('บราวเซอร์บล็อค popup — กรุณาอนุญาต popup แล้วลองใหม่');
+  w.document.write(html);
+  w.document.close();
+  showToast('เปิดรายงาน PDF สำเร็จ — กด "บันทึก PDF" หรือ Ctrl+P', 'success');
 }
 
-// หลัง render เนื้อหาใหม่ทุกครั้งต้องเรียก refreshIcons() ที่นิยามไว้ด้านบนแล้ว (เรียกใน render()/navigateTo() จุดต่างๆ)
+
+// หลัง render เนื้อหาใหม่ทุกครั้งต้องเรียก refreshIcons() ที่นิยามไว้ด้านบนแล้ว
 </script>
 </body>
 </html>
