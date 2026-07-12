@@ -5445,6 +5445,7 @@ function openProductionForm(plantKey, editingRow) {
         const { error } = await db.from(cfg2.table).insert([payload]);
         if (error) throw error;
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
+        loadProductionDistinctRawMaterialsAndLatest(plantKey); // refresh latestRow หลัง insert
       }
       closePfModal();
       loadProductionData(plantKey);
