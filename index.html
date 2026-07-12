@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundled.js" async></script>
 <script>
   tailwind.config = {
     theme: {
@@ -5252,8 +5253,8 @@ function openProductionForm(plantKey, editingRow) {
 
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="fixed inset-0 z-[9000] flex items-center justify-center p-3 modal-backdrop fade-in" id="pf-modal-backdrop">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col fade-in" id="pf-modal-inner" style="max-height:90svh;">
+    <div class="fixed inset-0 z-[9000] flex items-start sm:items-center p-0 sm:p-3 modal-backdrop fade-in" id="pf-modal-backdrop">
+      <div class="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col fade-in" id="pf-modal-inner" style="max-height:100dvh;max-height:100svh;">
         <div class="flex items-center justify-between px-4 py-3 border-b border-secondary-100 flex-shrink-0 bg-white">
           <div>
             <p class="text-xs text-secondary-400">${escapeHtml(cfg.title)}</p>
@@ -5345,7 +5346,30 @@ function openProductionForm(plantKey, editingRow) {
     </div>`;
   refreshIcons();
 
-  const closePfModal = () => { root.innerHTML = ''; };
+  // --- Mobile: lock body scroll + adjust modal height on keyboard open ---
+  document.body.style.overflow = 'hidden';
+  const _pfInner = document.getElementById('pf-modal-inner');
+  const _pfBody  = document.querySelector('.pf-modal-body');
+  if (_pfBody) _pfBody.scrollTop = 0;
+  const _pfAdjustHeight = () => {
+    if (!_pfInner) return;
+    const vp = window.visualViewport;
+    const availH = vp ? vp.height : window.innerHeight;
+    _pfInner.style.maxHeight = availH + 'px';
+  };
+  _pfAdjustHeight();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _pfAdjustHeight);
+    window._pfVPCleanup = () => window.visualViewport.removeEventListener('resize', _pfAdjustHeight);
+  } else {
+    window._pfVPCleanup = null;
+  }
+
+  const closePfModal = () => {
+    document.body.style.overflow = '';
+    if (window._pfVPCleanup) { window._pfVPCleanup(); window._pfVPCleanup = null; }
+    root.innerHTML = '';
+  };
   document.getElementById('pf-modal-close').addEventListener('click', closePfModal);
   document.getElementById('pf-modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'pf-modal-backdrop') closePfModal(); });
 
@@ -8782,23 +8806,46 @@ function openExecutiveReportDialog() {
 }
 
 async function loadPptxGenJS() {
+  // ถ้าโหลดมาแล้ว (จาก <head> async หรือโหลดครั้งก่อน) → ใช้เลย
   if (window.PptxGenJS) return;
+  // รอ async script ที่ <head> โหลดเสร็จก่อน (max 5 วิ)
+  const waitGlobal = (ms) => new Promise(res => {
+    const t = Date.now();
+    const check = () => {
+      if (window.PptxGenJS) return res(true);
+      if (Date.now() - t > ms) return res(false);
+      setTimeout(check, 100);
+    };
+    check();
+  });
+  if (await waitGlobal(5000)) return;
+
+  // ถ้ายังไม่มี → ลองโหลด script ใหม่
   const tryLoad = (src) => new Promise((resolve, reject) => {
+    // ตรวจว่า script นี้โหลดไปแล้วหรือยัง
+    if (document.querySelector(`script[src="${src}"]`)) {
+      setTimeout(() => window.PptxGenJS ? resolve() : reject(new Error('ไม่พบ global')), 500);
+      return;
+    }
     const s = document.createElement('script');
     s.src = src;
-    s.onload = resolve;
+    s.onload = () => setTimeout(resolve, 100); // รอ script execute
     s.onerror = () => reject(new Error('load_fail'));
     document.head.appendChild(s);
   });
   const sources = [
     'pptxgen.bundled.js',
     'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundled.js',
+    'https://cdn.jsdelivr.net/npm/pptxgenjs@3.11.0/dist/pptxgen.bundled.js',
     'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundled.js',
   ];
   for (const src of sources) {
-    try { await tryLoad(src); if (window.PptxGenJS) return; } catch (_) {}
+    try {
+      await tryLoad(src);
+      if (window.PptxGenJS) return;
+    } catch (_) {}
   }
-  throw new Error('ไม่สามารถโหลด PptxGenJS ได้ — กรุณาดาวน์โหลดไฟล์ pptxgen.bundled.js วางไว้ในโฟลเดอร์เดียวกับ index.html\n\nDownload: https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundled.js');
+  throw new Error('ไม่สามารถโหลด PptxGenJS ได้ — กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วลองใหม่อีกครั้ง');
 }
 
 async function fetchExecReportData(fromDate, toDate) {
