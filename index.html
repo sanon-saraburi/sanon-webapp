@@ -37,14 +37,13 @@
   @media (max-width:640px) {
     input, select, textarea { font-size:16px !important; }
   }
-  /* Mobile table: fit screen, wrap text, small font */
+  /* Mobile table: scroll ในแนวนอนได้ กดปุ่มแก้ไขได้ */
   @media (max-width:640px) {
-    #page-content { padding-left:8px !important; padding-right:8px !important; }
-    table { width:100% !important; table-layout:fixed; word-break:break-word; }
-    table th, table td { font-size:10px !important; padding:3px 4px !important; white-space:normal !important; }
-    .overflow-x-auto { overflow-x:hidden !important; }
-    /* bottom nav safe area */
-    #page-content { padding-bottom:80px !important; }
+    #page-content { padding-left:8px !important; padding-right:8px !important; padding-bottom:80px !important; }
+    /* ให้ table scroll ในแนวนอน ไม่บังคับ fit */
+    .overflow-x-auto { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+    table { width:max-content !important; min-width:100%; table-layout:auto; }
+    table th, table td { font-size:11px !important; padding:4px 6px !important; white-space:nowrap !important; }
   }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:8px; }
@@ -1512,6 +1511,11 @@ function attachShellEvents() {
       const key = btn.getAttribute('data-nav');
       isMobileSheetOpen = false;
       isManageSheetOpen = false;
+      // ซ่อน sheet ทันที (soft-navigate ไม่ full render จึงต้อง hide DOM โดยตรง)
+      const moreSheet = document.getElementById('mobile-more-sheet');
+      if (moreSheet) moreSheet.classList.add('hidden');
+      const manageSheet = document.getElementById('mobile-manage-sheet');
+      if (manageSheet) manageSheet.classList.add('hidden');
       navigateTo(key);
     });
   });
