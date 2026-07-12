@@ -45,6 +45,14 @@
     .overflow-x-auto { overflow-x:hidden !important; }
     /* bottom nav safe area */
     #page-content { padding-bottom:80px !important; }
+    /* Sticky action column (คอลัมน์สุดท้าย) ติดขอบขวาเสมอ */
+    table th:last-child, table td:last-child {
+      position: sticky !important;
+      right: 0 !important;
+      background: #fff !important;
+      box-shadow: -2px 0 4px rgba(0,0,0,0.08);
+      z-index: 2;
+    }
   }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:8px; }
