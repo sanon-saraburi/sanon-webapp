@@ -78,10 +78,11 @@
     .space-y-6 > * + * { margin-top: 12px !important; }
     /* modal content เต็มจอมือถือ */
     .modal-content { max-height: 92vh; overflow-y: auto; }
-    /* Production form modal — เต็มจอบนมือถือ */
-    .pf-modal-fullscreen { position:fixed; top:0; left:0; right:0; bottom:0; border-radius:0 !important; max-height:100dvh !important; }
+    /* Production form modal — ขยาย input/label บนมือถือ */
     .pf-modal-body input, .pf-modal-body select, .pf-modal-body textarea { font-size:18px !important; padding:10px 12px !important; }
     .pf-modal-body label { font-size:14px !important; margin-bottom:4px !important; font-weight:600; }
+    /* ตาราง production — ใหญ่ขึ้นเฉพาะมือถือ */
+    .prod-table { font-size: 16px !important; }
     /* ปุ่มต่างๆ ใน form */
     button[type="submit"], button.submit-btn {
       padding-top: 8px !important;
@@ -5121,7 +5122,7 @@ function renderProductionTables(plantKey) {
   if (t1) {
     t1.innerHTML = `
       <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
-        <table class="w-full text-xl">
+        <table class="w-full text-sm prod-table">
           <thead><tr class="text-left text-secondary-500 border-b border-secondary-100">
             <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดข้อมูล</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">รวมเวลาเดินเครื่อง</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">เฉลี่ย(ตัน/ชม)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th>
             ${cfg.productColumns.map(c => `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('')}
@@ -5177,7 +5178,7 @@ function renderProductionTables(plantKey) {
   if (t2) {
     t2.innerHTML = `
       <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
-        <table class="w-full text-xl">
+        <table class="w-full text-sm prod-table">
           <thead><tr class="text-left text-secondary-500 border-b border-secondary-100">
             <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">เฉลี่ย(ตัน/ชม)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th>
             ${cfg.productColumns.map(c => `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">${escapeHtml(c.label)} %</th>`).join('')}
@@ -5249,13 +5250,10 @@ function openProductionForm(plantKey, editingRow) {
     return (me && ms) ? ((me - ms) * 0.35 * 1.8) : (editingRow ? (editingRow.silk_sediment_ton ?? '') : '');
   })();
 
-  try { window.scrollTo(0, 0); } catch(_) {}
-
-  const isMobile = window.innerWidth < 640;
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="fixed inset-0 z-[9000] ${isMobile ? '' : 'flex items-center justify-center p-4'} modal-backdrop fade-in" id="pf-modal-backdrop">
-      <div class="bg-white flex flex-col shadow-2xl fade-in pf-modal-fullscreen${isMobile ? '' : ' sm-modal'}" id="pf-modal-inner" style="${isMobile ? 'position:fixed;top:0;left:0;right:0;bottom:0;border-radius:0;' : 'width:100%;max-width:34rem;max-height:92vh;border-radius:1rem;overflow:hidden;'}">
+    <div class="fixed inset-0 z-[9000] flex items-center justify-center p-3 modal-backdrop fade-in" id="pf-modal-backdrop">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col fade-in" id="pf-modal-inner" style="max-height:90svh;">
         <div class="flex items-center justify-between px-4 py-3 border-b border-secondary-100 flex-shrink-0 bg-white">
           <div>
             <p class="text-xs text-secondary-400">${escapeHtml(cfg.title)}</p>
