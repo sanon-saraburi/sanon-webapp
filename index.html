@@ -78,6 +78,10 @@
     .space-y-6 > * + * { margin-top: 12px !important; }
     /* modal content เต็มจอมือถือ */
     .modal-content { max-height: 92vh; overflow-y: auto; }
+    /* Production form modal — เต็มจอบนมือถือ */
+    .pf-modal-fullscreen { position:fixed; top:0; left:0; right:0; bottom:0; border-radius:0 !important; max-height:100dvh !important; }
+    .pf-modal-body input, .pf-modal-body select, .pf-modal-body textarea { font-size:18px !important; padding:10px 12px !important; }
+    .pf-modal-body label { font-size:14px !important; margin-bottom:4px !important; font-weight:600; }
     /* ปุ่มต่างๆ ใน form */
     button[type="submit"], button.submit-btn {
       padding-top: 8px !important;
@@ -4976,7 +4980,10 @@ function renderManageProduction(container, plantKey) {
       </div>
 
       <div>
-        <h3 class="text-sm font-semibold text-secondary-700 mb-2">ตารางที่ 1: ข้อมูลดิบ</h3>
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-secondary-700">ตารางที่ 1: ข้อมูลดิบ</h3>
+          <button id="mp-${plantKey}-add-btn2" class="sm:hidden flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 py-2 rounded-xl text-base transition"><i data-lucide="plus" class="w-5 h-5"></i>เพิ่มข้อมูล</button>
+        </div>
         <div id="mp-${plantKey}-table1-block">${skeletonBlock('h-56')}</div>
       </div>
       <div>
@@ -4993,6 +5000,8 @@ function renderManageProduction(container, plantKey) {
   loadProductionDistinctRawMaterialsAndLatest(plantKey);
 
   document.getElementById(`mp-${plantKey}-add-btn`).addEventListener('click', () => openProductionForm(plantKey));
+  const addBtn2 = document.getElementById(`mp-${plantKey}-add-btn2`);
+  if (addBtn2) addBtn2.addEventListener('click', () => openProductionForm(plantKey));
   document.getElementById(`mp-${plantKey}-search`).addEventListener('input', (e) => { st.search = e.target.value; renderProductionTables(plantKey); });
   document.getElementById(`mp-${plantKey}-month`).addEventListener('change', (e) => { st.month = Number(e.target.value); loadProductionData(plantKey); });
   document.getElementById(`mp-${plantKey}-year`).addEventListener('change', (e) => { st.year = Number(e.target.value); loadProductionData(plantKey); });
@@ -5240,104 +5249,106 @@ function openProductionForm(plantKey, editingRow) {
     return (me && ms) ? ((me - ms) * 0.35 * 1.8) : (editingRow ? (editingRow.silk_sediment_ton ?? '') : '');
   })();
 
-  // Mobile: reset zoom ให้พอดีหน้าจอก่อนเปิด modal
+  // Mobile: reset viewport zoom ก่อนเปิด modal
   try {
     window.scrollTo(0, 0);
-    if (window.innerWidth < 640) {
-      const vp = document.querySelector('meta[name="viewport"]');
-      if (vp) {
-        vp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0';
-        setTimeout(() => { vp.content = 'width=device-width, initial-scale=1.0'; }, 600);
-      }
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) {
+      vp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0';
+      setTimeout(() => { vp.content = 'width=device-width, initial-scale=1.0'; }, 600);
     }
   } catch(_) {}
 
+  const isMobile = window.innerWidth < 640;
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="fixed inset-0 z-[9000] flex items-end sm:items-center justify-center sm:p-4 modal-backdrop fade-in" id="pf-modal-backdrop">
-      <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl shadow-2xl flex flex-col fade-in" style="border-radius:1.25rem 1.25rem 0 0; max-height:95dvh;">
-        <div class="px-4 py-3 border-b border-secondary-100 flex items-center justify-between flex-shrink-0">
-          <h3 class="font-semibold text-secondary-800">${editingRow ? 'แก้ไขข้อมูลผลผลิต' : 'เพิ่มข้อมูลผลผลิต'} — ${escapeHtml(cfg.title)}</h3>
-          <button id="pf-modal-close" class="p-1 text-secondary-400 hover:text-secondary-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+    <div class="fixed inset-0 z-[9000] ${isMobile ? '' : 'flex items-center justify-center p-4'} modal-backdrop fade-in" id="pf-modal-backdrop">
+      <div class="bg-white flex flex-col shadow-2xl fade-in pf-modal-fullscreen${isMobile ? '' : ' sm-modal'}" id="pf-modal-inner" style="${isMobile ? 'position:fixed;top:0;left:0;right:0;bottom:0;border-radius:0;' : 'width:100%;max-width:34rem;max-height:92vh;border-radius:1rem;overflow:hidden;'}">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-secondary-100 flex-shrink-0 bg-white">
+          <div>
+            <p class="text-xs text-secondary-400">${escapeHtml(cfg.title)}</p>
+            <h3 class="font-semibold text-secondary-800 text-base">${editingRow ? 'แก้ไขข้อมูลผลผลิต' : 'เพิ่มข้อมูลผลผลิต'}</h3>
+          </div>
+          <button id="pf-modal-close" class="p-2 text-secondary-400 hover:text-secondary-700 rounded-xl hover:bg-secondary-100"><i data-lucide="x" class="w-6 h-6"></i></button>
         </div>
-        <div class="overflow-y-auto flex-1 px-4 py-3">
-          <form id="pf-modal-form" class="space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">วันเดือนปี *</label>
-                <input id="pf-date" required type="date" value="${editingRow ? editingRow.production_date : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">วัตถุดิบ (raw_material)</label>
-                <select id="pf-rawmat" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-                  <option value="">-- เลือกวัตถุดิบ --</option>
-                  ${rawMatOptions.map(v => `<option value="${escapeHtml(v)}" ${v===curRawMat?'selected':''}>${escapeHtml(v)}</option>`).join('')}
-                  ${(curRawMat && !rawMatOptions.includes(curRawMat)) ? `<option value="${escapeHtml(curRawMat)}" selected>${escapeHtml(curRawMat)}</option>` : ''}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">ชื่อผู้บันทึกข้อมูล</label>
-                <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50 text-secondary-500">
-              </div>
+        <div class="overflow-y-auto flex-1 px-4 py-3 pf-modal-body">
+          <form id="pf-modal-form" class="space-y-4">
+            <div>
+              <label class="block text-secondary-600 mb-1">วันเดือนปี *</label>
+              <input id="pf-date" required type="date" value="${editingRow ? editingRow.production_date : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
-                <input id="pf-start-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+            <div>
+              <label class="block text-secondary-600 mb-1">วัตถุดิบ</label>
+              <select id="pf-rawmat" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+                <option value="">-- เลือกวัตถุดิบ --</option>
+                ${rawMatOptions.map(v => `<option value="${escapeHtml(v)}" ${v===curRawMat?'selected':''}>${escapeHtml(v)}</option>`).join('')}
+                ${(curRawMat && !rawMatOptions.includes(curRawMat)) ? `<option value="${escapeHtml(curRawMat)}" selected>${escapeHtml(curRawMat)}</option>` : ''}
+              </select>
+            </div>
+            <div>
+              <label class="block text-secondary-600 mb-1">ผู้บันทึก</label>
+              <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 bg-secondary-50 text-secondary-500">
+            </div>
+            <div class="bg-secondary-50 rounded-xl p-3 space-y-3">
+              <p class="text-xs font-semibold text-secondary-500">เวลาเริ่มเดินเครื่อง</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-secondary-600 mb-1">${cfg.hourMeterMode ? 'ชม.เครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
+                  <input id="pf-start-hour" type="number" inputmode="numeric" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+                </div>
+                <div>
+                  <label class="block text-secondary-600 mb-1">นาทีเริ่ม</label>
+                  <input id="pf-start-minute" type="number" inputmode="numeric" min="0" max="59" value="${defaultStartMinute}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+                </div>
               </div>
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีเริ่ม</label>
-                <input id="pf-start-minute" type="number" min="0" max="59" value="${defaultStartMinute}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (หยุด)' : 'ชม.หยุด'}</label>
-                <input id="pf-stop-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${editingRow ? (editingRow.stop_hour ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">นาทีหยุด</label>
-                <input id="pf-stop-minute" type="number" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+              <p class="text-xs font-semibold text-secondary-500">เวลาหยุดเครื่อง</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-secondary-600 mb-1">${cfg.hourMeterMode ? 'ชม.เครื่อง (หยุด)' : 'ชม.หยุด'}</label>
+                  <input id="pf-stop-hour" type="number" inputmode="numeric" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${editingRow ? (editingRow.stop_hour ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+                </div>
+                <div>
+                  <label class="block text-secondary-600 mb-1">นาทีหยุด</label>
+                  <input id="pf-stop-minute" type="number" inputmode="numeric" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+                </div>
               </div>
             </div>
             ${cfg.hasFlowmeter ? `
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์เริ่ม</label>
-                <input id="pf-meter-start" type="number" step="any" value="${defaultMeterStart}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+                <label class="block text-secondary-600 mb-1">มิเตอร์เริ่ม</label>
+                <input id="pf-meter-start" type="number" inputmode="decimal" step="any" value="${defaultMeterStart}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
               </div>
               <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์หยุด</label>
-                <input id="pf-meter-stop" type="number" step="any" value="${defaultMeterStop}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+                <label class="block text-secondary-600 mb-1">มิเตอร์หยุด</label>
+                <input id="pf-meter-stop" type="number" inputmode="decimal" step="any" value="${defaultMeterStop}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
               </div>
             </div>` : ''}
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">หินป้อน(ตัน)</label>
-                <input id="pf-feed-ton" type="number" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-              </div>
-              <div class="sm:col-span-3 flex items-end">
-                <p class="text-xs text-secondary-500">Runtime และเฉลี่ย(ตัน/ชม.) คำนวณอัตโนมัติจากเวลาเริ่ม-หยุดเครื่องและหินป้อน${editingRow ? ` &mdash; ปัจจุบัน: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.` : ''}</p>
-              </div>
+            <div>
+              <label class="block text-secondary-600 mb-1">หินป้อน (ตัน)</label>
+              <input id="pf-feed-ton" type="number" inputmode="decimal" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
+              ${editingRow ? `<p class="text-xs text-secondary-400 mt-1">Runtime: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.</p>` : '<p class="text-xs text-secondary-400 mt-1">Runtime คำนวณอัตโนมัติจากเวลาเริ่ม-หยุด</p>'}
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 gap-3">
               ${cfg.productColumns.map(c => c.key === 'silk_sediment_ton' && cfg.hasFlowmeter ? `
               <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน) (คำนวณอัตโนมัติ)</label>
-                <input id="pf-prod-${c.key}" type="number" step="any" readonly value="${initSilk}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50">
+                <label class="block text-secondary-600 mb-1">${escapeHtml(c.label)} (ตัน) <span class="text-secondary-400 text-xs">อัตโนมัติ</span></label>
+                <input id="pf-prod-${c.key}" type="number" step="any" readonly value="${initSilk}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 bg-secondary-50">
               </div>` : `
               <div>
-                <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน)</label>
-                <input id="pf-prod-${c.key}" type="number" step="any" value="${editingRow ? (editingRow[c.key] ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+                <label class="block text-secondary-600 mb-1">${escapeHtml(c.label)} (ตัน)</label>
+                <input id="pf-prod-${c.key}" type="number" inputmode="decimal" step="any" value="${editingRow ? (editingRow[c.key] ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
               </div>`).join('')}
             </div>
             <div>
-              <label class="block text-xs font-medium text-secondary-500 mb-1">รายละเอียด Breakdown</label>
-              <textarea id="pf-breakdown" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.breakdown_detail || '') : ''}</textarea>
+              <label class="block text-secondary-600 mb-1">Breakdown</label>
+              <textarea id="pf-breakdown" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2">${editingRow ? escapeHtml(editingRow.breakdown_detail || '') : ''}</textarea>
             </div>
             <div>
-              <label class="block text-xs font-medium text-secondary-500 mb-1">หมายเหตุ</label>
-              <textarea id="pf-note" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${editingRow ? escapeHtml(editingRow.note || '') : ''}</textarea>
+              <label class="block text-secondary-600 mb-1">หมายเหตุ</label>
+              <textarea id="pf-note" rows="2" class="w-full border border-secondary-200 rounded-xl px-3 py-2">${editingRow ? escapeHtml(editingRow.note || '') : ''}</textarea>
             </div>
-            <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl py-2.5 transition">${editingRow ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผลผลิต'}</button>
+            <button type="submit" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl py-3 text-lg transition">${editingRow ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลผลผลิต'}</button>
           </form>
         </div>
       </div>
