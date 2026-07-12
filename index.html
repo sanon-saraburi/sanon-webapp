@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -58,6 +58,32 @@
   [data-page].active { display:block; }
   .modal-backdrop { background: rgba(15,23,42,0.55); }
   input:focus, select:focus, textarea:focus, button:focus { outline:none; }
+
+  /* ========== Mobile Form Optimization ========== */
+  @media (max-width: 640px) {
+    /* ป้องกัน iOS zoom เมื่อ focus input (ต้องการ font-size >= 16px) */
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    /* ลด padding input ให้กระชับขึ้น */
+    input[class*="rounded"], select[class*="rounded"], textarea[class*="rounded"] {
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+    }
+    /* label เล็กลง ชิดกับ input */
+    label.block { font-size: 12px !important; margin-bottom: 2px !important; }
+    /* ลด gap ระหว่าง field */
+    .space-y-4 > * + * { margin-top: 10px !important; }
+    .space-y-3 > * + * { margin-top: 8px !important; }
+    .space-y-6 > * + * { margin-top: 12px !important; }
+    /* modal content เต็มจอมือถือ */
+    .modal-content { max-height: 92vh; overflow-y: auto; }
+    /* ปุ่มต่างๆ ใน form */
+    button[type="submit"], button.submit-btn {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
+  }
   @media print {
     aside, header, .no-print { display:none !important; }
     main { padding:0 !important; }
@@ -460,6 +486,7 @@ async function doLogin(username, password) {
       currentUser._extraManage = [];
     }
     closeModal();
+    try { localStorage.setItem('_sn_last_username', username); } catch (_) {}
     showToast(`ยินดีต้อนรับ ${data.full_name || data.username}`, 'success');
     await fetchPendingApprovalCount();
     navigateTo(defaultPageForUser(currentUser));
@@ -1093,6 +1120,15 @@ function showLoginModal() {
   const close = () => { root.innerHTML = ''; };
   qs('#login-close-x', root).addEventListener('click', close);
   qs('#login-modal-backdrop', root).addEventListener('click', (e) => { if (e.target.id === 'login-modal-backdrop') close(); });
+  // pre-fill username จาก localStorage
+  try {
+    const saved = localStorage.getItem('_sn_last_username');
+    if (saved) {
+      const uField = qs('#login-username', root);
+      uField.value = saved;
+      qs('#login-password', root).focus();
+    }
+  } catch (_) {}
   qs('#login-form', root).addEventListener('submit', (e) => {
     e.preventDefault();
     const u = qs('#login-username', root).value.trim();
@@ -5085,13 +5121,13 @@ function renderProductionTables(plantKey) {
   const t1 = document.getElementById(`mp-${plantKey}-table1-block`);
   if (t1) {
     t1.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-sm p-5 overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead><tr class="text-left text-secondary-400 border-b border-secondary-100">
-            <th class="py-2 pr-3">วันเดือนปี</th><th class="py-2 pr-3">ยอดข้อมูล</th><th class="py-2 pr-3">รวมเวลาเดินเครื่อง</th><th class="py-2 pr-3">เฉลี่ย(ตัน/ชม)</th><th class="py-2 pr-3">วัตถุป้อน(ตัน)</th>
-            ${cfg.productColumns.map(c => `<th class="py-2 pr-3">${escapeHtml(c.label)}</th>`).join('')}
-            ${cfg.hasFlowmeter ? `<th class="py-2 pr-3">มิเตอร์เริ่ม</th><th class="py-2 pr-3">มิเตอร์หยุด</th><th class="py-2 pr-3">ยอดรวมFlowmater</th><th class="py-2 pr-3">ยอดFlowmater</th>` : ''}
-            <th class="py-2 pr-3">สถานะ</th><th class="py-2 pr-3">จัดการ</th>
+      <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
+        <table class="w-full text-xl">
+          <thead><tr class="text-left text-secondary-500 border-b border-secondary-100">
+            <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดข้อมูล</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">รวมเวลาเดินเครื่อง</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">เฉลี่ย(ตัน/ชม)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th>
+            ${cfg.productColumns.map(c => `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('')}
+            ${cfg.hasFlowmeter ? `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">มิเตอร์เริ่ม</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">มิเตอร์หยุด</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดรวมFlowmater</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">ยอดFlowmater</th>` : ''}
+            <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">สถานะ</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">จัดการ</th>
           </tr></thead>
           <tbody>
             ${rows.length ? (() => {
@@ -5110,15 +5146,15 @@ function renderProductionTables(plantKey) {
                   : '';
                 return `
               <tr class="border-b border-secondary-50 hover:bg-secondary-50">
-                <td class="py-2 pr-3">${fmtDate(r.production_date)}</td>
-                <td class="py-2 pr-3">${dayBadge}</td>
-                <td class="py-2 pr-3">${Number(r.runtime_hour)||0} ชม. ${Number(r.runtime_minute)||0} นาที</td>
-                <td class="py-2 pr-3">${fmtNum(r.avg_ton_per_hour,1)}</td>
-                <td class="py-2 pr-3">${fmtNum(r.feed_ton,1)}</td>
-                ${cfg.productColumns.map(c => `<td class="py-2 pr-3">${fmtNum(r[c.key],1)}</td>`).join('')}
-                ${cfg.hasFlowmeter ? `<td class="py-2 pr-3">${fmtNum(r.meter_start,2)}</td><td class="py-2 pr-3">${fmtNum(r.meter_stop,2)}</td><td class="py-2 pr-3">${fmtNum(r.flowmeter_total,2)}</td><td class="py-2 pr-3">${fmtNum(r.flowmeter_result,2)}</td>` : ''}
-                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded-full text-xs ${prodStatusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></td>
-                <td class="py-2 pr-3">
+                <td class="py-1.5 pr-2 whitespace-nowrap">${fmtDate(r.production_date)}</td>
+                <td class="py-1.5 pr-2">${dayBadge}</td>
+                <td class="py-1.5 pr-2 whitespace-nowrap">${Number(r.runtime_hour)||0} ชม. ${Number(r.runtime_minute)||0} นาที</td>
+                <td class="py-1.5 pr-2">${fmtNum(r.avg_ton_per_hour,1)}</td>
+                <td class="py-1.5 pr-2">${fmtNum(r.feed_ton,1)}</td>
+                ${cfg.productColumns.map(c => `<td class="py-1.5 pr-2">${fmtNum(r[c.key],1)}</td>`).join('')}
+                ${cfg.hasFlowmeter ? `<td class="py-1.5 pr-2">${fmtNum(r.meter_start,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.meter_stop,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.flowmeter_total,2)}</td><td class="py-1.5 pr-2">${fmtNum(r.flowmeter_result,2)}</td>` : ''}
+                <td class="py-1.5 pr-2"><span class="px-2 py-0.5 rounded-full text-xs ${prodStatusBadgeClass(r.status)}">${escapeHtml(r.status)}</span></td>
+                <td class="py-1.5 pr-2">
                   <div class="flex items-center gap-1.5">
                     <button data-edit="${r.id}" class="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-500" title="แก้ไข"><i data-lucide="pencil" class="w-4 h-4"></i></button>
                     <button data-del="${r.id}" class="p-1.5 rounded-lg hover:bg-red-50 text-red-500" title="ลบ"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
@@ -5141,22 +5177,22 @@ function renderProductionTables(plantKey) {
   const t2 = document.getElementById(`mp-${plantKey}-table2-block`);
   if (t2) {
     t2.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-sm p-5 overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead><tr class="text-left text-secondary-400 border-b border-secondary-100">
-            <th class="py-2 pr-3">วันเดือนปี</th><th class="py-2 pr-3">เฉลี่ย(ตัน/ชม)</th><th class="py-2 pr-3">วัตถุป้อน(ตัน)</th>
-            ${cfg.productColumns.map(c => `<th class="py-2 pr-3">${escapeHtml(c.label)} %</th>`).join('')}
+      <div class="bg-white rounded-2xl shadow-sm p-3 overflow-x-auto">
+        <table class="w-full text-xl">
+          <thead><tr class="text-left text-secondary-500 border-b border-secondary-100">
+            <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">เฉลี่ย(ตัน/ชม)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th>
+            ${cfg.productColumns.map(c => `<th class="py-1.5 pr-2 font-semibold whitespace-nowrap">${escapeHtml(c.label)} %</th>`).join('')}
           </tr></thead>
           <tbody>
             ${rows.length ? rows.map(r => {
               const feed = Number(r.feed_ton) || 0;
               return `<tr class="border-b border-secondary-50 hover:bg-secondary-50">
-                <td class="py-2 pr-3">${fmtDate(r.production_date)}</td>
-                <td class="py-2 pr-3">${fmtNum(r.avg_ton_per_hour,1)}</td>
-                <td class="py-2 pr-3">${fmtNum(r.feed_ton,1)}</td>
+                <td class="py-1.5 pr-2 whitespace-nowrap">${fmtDate(r.production_date)}</td>
+                <td class="py-1.5 pr-2">${fmtNum(r.avg_ton_per_hour,1)}</td>
+                <td class="py-1.5 pr-2">${fmtNum(r.feed_ton,1)}</td>
                 ${cfg.productColumns.map(c => {
                   const val = Number(r[c.key]) || 0;
-                  return `<td class="py-2 pr-3">${feed > 0 ? fmtNum((val/feed)*100,1) + '%' : '-'}</td>`;
+                  return `<td class="py-1.5 pr-2">${feed > 0 ? fmtNum((val/feed)*100,1) + '%' : '-'}</td>`;
                 }).join('')}
               </tr>`;
             }).join('') : `<tr><td colspan="${3+cfg.productColumns.length}" class="py-8 text-center text-secondary-400">ไม่พบข้อมูล</td></tr>`}
@@ -5240,7 +5276,7 @@ function renderProductionForm(container, plantKey, editingRow) {
           <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm bg-secondary-50 text-secondary-500">
         </div>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div>
           <label class="block text-xs font-medium text-secondary-500 mb-1">${cfg.hourMeterMode ? 'เลขชั่วโมงเครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
           <input id="pf-start-hour" type="number" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
@@ -5258,17 +5294,8 @@ function renderProductionForm(container, plantKey, editingRow) {
           <input id="pf-stop-minute" type="number" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">วัตถุป้อน(ตัน)</label>
-          <input id="pf-feed-ton" type="number" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div class="sm:col-span-3 flex items-end">
-          <p class="text-xs text-secondary-500">Runtime และเฉลี่ย(ตัน/ชม.) คำนวณอัตโนมัติจากเวลาเริ่ม-หยุดเครื่องและวัตถุป้อน${editingRow ? ` &mdash; ปัจจุบัน: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.` : ''}</p>
-        </div>
-      </div>
       ${cfg.hasFlowmeter ? `
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div>
           <label class="block text-xs font-medium text-secondary-500 mb-1">มิเตอร์เริ่ม</label>
           <input id="pf-meter-start" type="number" step="any" value="${defaultMeterStart}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
@@ -5278,7 +5305,16 @@ function renderProductionForm(container, plantKey, editingRow) {
           <input id="pf-meter-stop" type="number" step="any" value="${defaultMeterStop}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
       </div>` : ''}
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-secondary-500 mb-1">หินป้อน(ตัน)</label>
+          <input id="pf-feed-ton" type="number" step="any" value="${editingRow ? (editingRow.feed_ton ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div class="sm:col-span-3 flex items-end">
+          <p class="text-xs text-secondary-500">Runtime และเฉลี่ย(ตัน/ชม.) คำนวณอัตโนมัติจากเวลาเริ่ม-หยุดเครื่องและหินป้อน${editingRow ? ` &mdash; ปัจจุบัน: ${Number(editingRow.runtime_hour)||0} ชม. ${Number(editingRow.runtime_minute)||0} นาที / เฉลี่ย ${editingRow.avg_ton_per_hour != null ? Number(editingRow.avg_ton_per_hour).toFixed(1) : '-'} ตัน/ชม.` : ''}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         ${cfg.productColumns.map(c => c.key === 'silk_sediment_ton' && cfg.hasFlowmeter ? `
           <div>
             <label class="block text-xs font-medium text-secondary-500 mb-1">${escapeHtml(c.label)} (ตัน) (คำนวณอัตโนมัติ)</label>
@@ -5401,7 +5437,7 @@ function exportProductionExcel(plantKey) {
       'วันเดือนปี': r.production_date,
       'รวมเวลาเดินเครื่อง': `${Number(r.runtime_hour)||0} ชม. ${Number(r.runtime_minute)||0} นาที`,
       'เฉลี่ย(ตัน/ชม)': r.avg_ton_per_hour || 0,
-      'วัตถุป้อน(ตัน)': r.feed_ton || 0,
+      'หินป้อน(ตัน)': r.feed_ton || 0,
     };
     cfg.productColumns.forEach(c => { obj[c.label] = r[c.key] || 0; });
     obj['สถานะ'] = r.status;
@@ -7199,7 +7235,7 @@ function renderApprovalSections(plantKeys) {
             <div class="hidden sm:block overflow-x-auto">
               <table class="w-full text-sm">
                 <thead><tr class="text-left text-secondary-400 border-b border-secondary-100">
-                  <th class="py-2 pr-3">วันเดือนปี</th><th class="py-2 pr-3">Runtime</th><th class="py-2 pr-3">วัตถุป้อน(ตัน)</th><th class="py-2 pr-3">วัตถุดิบ</th>
+                  <th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วันเดือนปี</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">Runtime</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">หินป้อน(ตัน)</th><th class="py-1.5 pr-2 font-semibold whitespace-nowrap">วัตถุดิบ</th>
                   ${cfg.productColumns.map(c => `<th class="py-2 pr-3">${escapeHtml(c.label)}</th>`).join('')}
                   <th class="py-2 pr-3">Breakdown</th><th class="py-2 pr-3">ผู้กรอก</th><th class="py-2 pr-3">จัดการ</th>
                 </tr></thead>
@@ -7239,7 +7275,7 @@ function renderApprovalSections(plantKeys) {
                     </div>
                   </div>
                   <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-secondary-600">
-                    <div><span class="text-secondary-400">วัตถุป้อน:</span> ${fmtNum(r.feed_ton,1)} ตัน</div>
+                    <div><span class="text-secondary-400">หินป้อน:</span> ${fmtNum(r.feed_ton,1)} ตัน</div>
                     <div><span class="text-secondary-400">วัตถุดิบ:</span> ${escapeHtml(r.raw_material || '-')}</div>
                     ${cfg.productColumns.map(c => `<div><span class="text-secondary-400">${escapeHtml(c.label)}:</span> ${fmtNum(r[c.key],1)}</div>`).join('')}
                     ${r.breakdown_detail ? `<div class="col-span-2 text-orange-500"><span class="text-secondary-400">Breakdown:</span> ${escapeHtml(r.breakdown_detail)}</div>` : ''}
@@ -7408,7 +7444,7 @@ function openApprovalEditModal(plantKey, rowId) {
           <input id="aedit-eh" type="number" step="any" min="0" value="${row.stop_hour ?? ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
-          <label class="block text-xs font-medium text-secondary-500 mb-1">วัตถุป้อน (ตัน)</label>
+          <label class="block text-xs font-medium text-secondary-500 mb-1">หินป้อน (ตัน)</label>
           <input id="aedit-feed" type="number" step="any" min="0" value="${row.feed_ton ?? ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
@@ -8120,7 +8156,7 @@ const REPORT_TYPE_CONFIG = {
       { key: 'runtime_hour', label: 'Runtime ชม.' },
       { key: 'runtime_minute', label: 'Runtime นาที' },
       { key: 'avg_ton_per_hour', label: 'เฉลี่ย(ตัน/ชม)' },
-      { key: 'feed_ton', label: 'วัตถุป้อน(ตัน)' },
+      { key: 'feed_ton', label: 'หินป้อน(ตัน)' },
       { key: 'breakdown_detail', label: 'Breakdown' },
       { key: 'status', label: 'สถานะ' },
     ],
