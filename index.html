@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0">
 <title>ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -34,6 +34,10 @@
   body { background:#f8fafc; }
   html, body { max-width:100%; overflow-x:hidden; }
   * { touch-action: manipulation; }
+  /* ป้องกัน iOS auto-zoom บน input/select (ต้อง font-size >= 16px) */
+  @media (max-width:640px) {
+    input, select, textarea { font-size:16px !important; }
+  }
   /* Mobile table: fit screen, wrap text, small font */
   @media (max-width:640px) {
     #page-content { padding-left:8px !important; padding-right:8px !important; }
@@ -5264,7 +5268,7 @@ function openProductionForm(plantKey, editingRow) {
 
   const root = document.getElementById('modal-root');
   root.innerHTML = `
-    <div class="fixed inset-0 z-[9000] flex items-start sm:items-center p-0 sm:p-3 modal-backdrop fade-in" id="pf-modal-backdrop">
+    <div class="fixed inset-0 z-[9000] flex items-start sm:items-center justify-center p-0 sm:p-3 modal-backdrop fade-in" id="pf-modal-backdrop">
       <div class="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col fade-in" id="pf-modal-inner" style="max-height:100dvh;max-height:100svh;">
         <div class="flex items-center justify-between px-4 py-3 border-b border-secondary-100 flex-shrink-0 bg-white">
           <div>
@@ -8836,7 +8840,7 @@ async function fetchExecReportData(fromDate, toDate) {
   // Production plants
   await Promise.all(plants.map(async (pk) => {
     const cfg = PRODUCTION_PLANT_CONFIG[pk];
-    const cols = ['production_date','feed_ton','runtime_hour','runtime_minute','start_hour','start_minute','stop_hour','stop_minute','breakdown_detail', ...cfg.productColumns.map(c => c.key)].join(',');
+    const cols = ['production_date','feed_ton','runtime_hour','runtime_minute','avg_ton_per_hour','start_hour','start_minute','stop_hour','stop_minute','breakdown_detail', ...cfg.productColumns.map(c => c.key)].join(',');
     const { data, error } = await db.from(cfg.table)
       .select(cols)
       .gte('production_date', fromDate)
@@ -8851,9 +8855,11 @@ async function fetchExecReportData(fromDate, toDate) {
     cfg.productColumns.forEach(c => { productTotals[c.key] = rows.reduce((s,r) => s + (Number(r[c.key])||0), 0); });
     const totalProduct  = Object.values(productTotals).reduce((a,b) => a+b, 0);
     const targetRate    = EXEC_REPORT_TARGETS[pk] || 0;
-    const actualRate    = totalRuntime > 0 ? totalFeed / totalRuntime : 0;
+    // คำนวณแบบเดียวกับ Dashboard: avg ของ avg_ton_per_hour / rows.length
+    const actualRate    = rows.length > 0 ? rows.reduce((s,r) => s + (Number(r.avg_ton_per_hour)||0), 0) / rows.length : 0;
     const achievement   = targetRate > 0 ? (actualRate / targetRate) * 100 : 0;
-    const operatingDays = new Set(rows.map(r => r.production_date)).size;
+    // วันทำงาน: นับเฉพาะวันที่ runtime > 0 (เหมือน countWorkingDays ใน dashboard)
+    const operatingDays = new Set(rows.filter(r => (Number(r.runtime_hour)||0)*60 + (Number(r.runtime_minute)||0) > 0).map(r => r.production_date)).size;
 
     // Breakdown summary
     const breakdownRows  = rows.filter(r => r.breakdown_detail && r.breakdown_detail.trim());
@@ -9048,7 +9054,7 @@ async function generateExecutiveReport(fromDate, toDate, company) {
         <div class="kc"><div class="kv">${d.operatingDays}</div><div class="kl">วันผลิต</div></div>
         <div class="kc"><div class="kv" style="color:${d.breakdownCount>0?'#DC2626':'#059669'}">${d.breakdownCount > 0 ? d.breakdownCount+' วัน' : 'ไม่มี'}</div><div class="kl">Breakdown</div></div>
       </div>
-      <table><thead><tr style="background:${col}"><th>ผลิตภัณฑ์</th><th>ตัน</th><th>%</th></tr></thead>
+      <table><thead><tr style="background:${col}"><th>ผลิตภัณฑ์</th><th style="text-align:right">ตัน</th><th style="text-align:center">%</th></tr></thead>
       <tbody>${prodRows}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(d.totalProduct,1)}</td><td class="c">100%</td></tr></tbody></table>
     </div>`;
   }).join('');
@@ -9131,7 +9137,7 @@ tr:nth-child(even) td{background:#f8fafc}
 </div>
 
 <h2>สรุปภาพรวมการผลิต</h2>
-<table><thead><tr><th>โรงงาน</th><th>ยอดป้อน (ตัน)</th><th>ชม.เดินเครื่อง</th><th>อัตรา (ต./ชม.)</th><th>% vs เป้า</th><th>Breakdown</th></tr></thead>
+<table><thead><tr><th>โรงงาน</th><th style="text-align:right">ยอดป้อน (ตัน)</th><th style="text-align:right">ชม.เดินเครื่อง</th><th style="text-align:right">อัตรา (ต./ชม.)</th><th style="text-align:center">% vs เป้า</th><th style="text-align:center">Breakdown</th></tr></thead>
 <tbody>${overviewRows}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(totalAll)}</td><td class="r">${fmtExN(totalRt,1)}</td><td class="r">${totalRt>0?fmtExN(totalAll/totalRt,1):'-'}</td><td class="c">—</td><td class="c">${totalBd} วัน</td></tr></tbody></table>
 
 <div class="pb"></div>
@@ -9140,7 +9146,7 @@ ${plantSections}
 
 <div class="pb"></div>
 <h2>Breakdown Log</h2>
-<table><thead><tr style="background:#991B1B"><th>วันที่</th><th>โรงงาน</th><th>รายละเอียด</th></tr></thead>
+<table><thead><tr style="background:#991B1B"><th style="text-align:center">วันที่</th><th style="text-align:center">โรงงาน</th><th>รายละเอียด</th></tr></thead>
 <tbody>${breakdownSection}</tbody></table>
 
 <h2 style="background:#065A82;color:#fff;padding:6px 12px;border-radius:6px;border:none">🚁 สต็อคหินบินโดรน</h2>
