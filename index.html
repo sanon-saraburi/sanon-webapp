@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -32,6 +32,17 @@
 <style>
   * { font-family: 'Kanit', sans-serif; }
   body { background:#f8fafc; }
+  html, body { max-width:100%; overflow-x:hidden; }
+  * { touch-action: manipulation; }
+  /* Mobile table: fit screen, wrap text, small font */
+  @media (max-width:640px) {
+    #page-content { padding-left:8px !important; padding-right:8px !important; }
+    table { width:100% !important; table-layout:fixed; word-break:break-word; }
+    table th, table td { font-size:10px !important; padding:3px 4px !important; white-space:normal !important; }
+    .overflow-x-auto { overflow-x:hidden !important; }
+    /* bottom nav safe area */
+    #page-content { padding-bottom:80px !important; }
+  }
   ::-webkit-scrollbar { width:8px; height:8px; }
   ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:8px; }
   ::-webkit-scrollbar-thumb:hover { background:#94a3b8; }
@@ -5681,7 +5692,7 @@ function renderManageElectricLoader(container) {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-lg font-semibold text-secondary-800 flex items-center gap-2"><i data-lucide="truck" class="w-5 h-5 text-primary-600"></i>รถตักไฟฟ้า</h2>
         <div class="flex items-center gap-2 flex-wrap">
-          <button id="loader-m-add-btn" class="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="plus" class="w-4 h-4"></i>เพิ่ม</button>
+          <button id="loader-m-add-btn" class="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="plus" class="w-4 h-4"></i>เพิ่มข้อมูลรถตัก</button>
           <label class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition cursor-pointer">
             <i data-lucide="upload" class="w-4 h-4"></i>นำเข้า Excel/CSV
             <input id="loader-m-import-input" type="file" accept=".xlsx,.xls,.csv" class="hidden">
@@ -8825,7 +8836,7 @@ async function fetchExecReportData(fromDate, toDate) {
   // Production plants
   await Promise.all(plants.map(async (pk) => {
     const cfg = PRODUCTION_PLANT_CONFIG[pk];
-    const cols = ['production_date','feed_ton','runtime_hour','start_hour','start_minute','stop_hour','stop_minute','breakdown_detail', ...cfg.productColumns.map(c => c.key)].join(',');
+    const cols = ['production_date','feed_ton','runtime_hour','runtime_minute','start_hour','start_minute','stop_hour','stop_minute','breakdown_detail', ...cfg.productColumns.map(c => c.key)].join(',');
     const { data, error } = await db.from(cfg.table)
       .select(cols)
       .gte('production_date', fromDate)
@@ -8835,7 +8846,7 @@ async function fetchExecReportData(fromDate, toDate) {
     if (error) throw error;
     const rows = data || [];
     const totalFeed    = rows.reduce((s,r) => s + (Number(r.feed_ton)||0), 0);
-    const totalRuntime = rows.reduce((s,r) => s + (Number(r.runtime_hour)||0), 0);
+    const totalRuntime = rows.reduce((s,r) => s + (Number(r.runtime_hour)||0) + (Number(r.runtime_minute)||0)/60, 0);
     const productTotals = {};
     cfg.productColumns.forEach(c => { productTotals[c.key] = rows.reduce((s,r) => s + (Number(r[c.key])||0), 0); });
     const totalProduct  = Object.values(productTotals).reduce((a,b) => a+b, 0);
@@ -8991,15 +9002,28 @@ async function generateExecutiveReport(fromDate, toDate, company) {
   // ── ตาราง Overview (พร้อม Traffic Light + Trend) ──
   const overviewRows = plants.map(pk => {
     const d = data[pk]; const achv = Math.round(d.achievement);
-    const feedTrend = trend(d.totalFeed, d.prevFeed);
-    return `<tr>
-      <td><span style="display:inline-block;width:14px">${tl(achv)}</span> <span style="color:${PC[pk]};font-weight:600">${EXEC_REPORT_LABELS[pk]}</span></td>
-      <td class="r">${fmtExN(d.totalFeed)}${feedTrend}</td>
-      <td class="r">${fmtExN(d.totalRuntime,1)}</td>
-      <td class="r">${fmtExN(d.actualRate,1)}</td>
-      <td class="c" style="font-weight:700;color:${tlColor(achv)};background:${tlBg(achv)}">${achv}%</td>
-      <td class="c">${d.breakdownCount > 0 ? `<span style="color:#DC2626">${d.breakdownCount} วัน</span>` : '<span style="color:#059669">-</span>'}</td>
-    </tr>`;
+    const hasRuntime = d.totalRuntime > 0;
+    const tlEmoji   = tl(achv);
+    const tlClr     = tlColor(achv);
+    const tlBgClr   = tlBg(achv);
+    const plantName = EXEC_REPORT_LABELS[pk];
+    const plantClr  = PC[pk];
+    const feedVal   = fmtExN(d.totalFeed);
+    const feedTrendHtml = trend(d.totalFeed, d.prevFeed);
+    const rtVal     = hasRuntime ? fmtExN(d.totalRuntime, 1) : '-';
+    const rateVal   = hasRuntime ? fmtExN(d.actualRate, 1) : '-';
+    const achvTxt   = hasRuntime ? (achv + '%') : '-';
+    const achvStyle = hasRuntime ? ('font-weight:700;color:' + tlClr + ';background:' + tlBgClr) : 'color:#94a3b8';
+    const bdTxt     = d.breakdownCount > 0 ? d.breakdownCount + ' วัน' : '-';
+    const bdClr     = d.breakdownCount > 0 ? '#DC2626' : '#059669';
+    return '<tr>'
+      + '<td><span style="margin-right:4px">' + tlEmoji + '</span><span style="color:' + plantClr + ';font-weight:600">' + plantName + '</span></td>'
+      + '<td class="r">' + feedVal + feedTrendHtml + '</td>'
+      + '<td class="r">' + rtVal + '</td>'
+      + '<td class="r">' + rateVal + '</td>'
+      + '<td class="c" style="' + achvStyle + '">' + achvTxt + '</td>'
+      + '<td class="c" style="color:' + bdClr + '">' + bdTxt + '</td>'
+      + '</tr>';
   }).join('');
 
   // ── รายโรงงาน (พร้อม Trend) ──
@@ -9019,10 +9043,10 @@ async function generateExecutiveReport(fromDate, toDate, company) {
       </div>
       <div class="kpi-row">
         <div class="kc"><div class="kv">${fmtExN(d.totalFeed)}${trend(d.totalFeed,d.prevFeed)}</div><div class="kl">ยอดป้อนรวม (ตัน)</div></div>
-        <div class="kc"><div class="kv">${fmtExN(d.totalRuntime,1)}</div><div class="kl">ชม.เดินเครื่อง</div></div>
-        <div class="kc"><div class="kv">${fmtExN(d.actualRate,1)}${trend(d.actualRate, d.prevRuntime>0?d.prevFeed/d.prevRuntime:0)}</div><div class="kl">อัตราเฉลี่ย (ต./ชม.)</div></div>
+        <div class="kc"><div class="kv">${d.totalRuntime > 0 ? fmtExN(d.totalRuntime,1) : '<span style="color:#94a3b8">-</span>'}</div><div class="kl">ชม.เดินเครื่อง</div></div>
+        <div class="kc"><div class="kv">${d.totalRuntime > 0 ? fmtExN(d.actualRate,1) + trend(d.actualRate, d.prevRuntime>0?d.prevFeed/d.prevRuntime:0) : '<span style="color:#94a3b8">-</span>'}</div><div class="kl">อัตราเฉลี่ย (ต./ชม.)</div></div>
         <div class="kc"><div class="kv">${d.operatingDays}</div><div class="kl">วันผลิต</div></div>
-        <div class="kc"><div class="kv" style="color:#DC2626">${d.breakdownCount} วัน</div><div class="kl">วันที่มี Breakdown</div></div>
+        <div class="kc"><div class="kv" style="color:${d.breakdownCount>0?'#DC2626':'#059669'}">${d.breakdownCount > 0 ? d.breakdownCount+' วัน' : 'ไม่มี'}</div><div class="kl">Breakdown</div></div>
       </div>
       <table><thead><tr style="background:${col}"><th>ผลิตภัณฑ์</th><th>ตัน</th><th>%</th></tr></thead>
       <tbody>${prodRows}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(d.totalProduct,1)}</td><td class="c">100%</td></tr></tbody></table>
@@ -9119,7 +9143,7 @@ ${plantSections}
 <table><thead><tr style="background:#991B1B"><th>วันที่</th><th>โรงงาน</th><th>รายละเอียด</th></tr></thead>
 <tbody>${breakdownSection}</tbody></table>
 
-<h2>สต็อคหินบินโดรน</h2>
+<h2 style="background:#065A82;color:#fff;padding:6px 12px;border-radius:6px;border:none">🚁 สต็อคหินบินโดรน</h2>
 <div class="kpi-row">
   <div class="kc"><div class="kv">${fmtExN(data._drone.total,1)} ตัน</div><div class="kl">ปริมาณสต็อครวม</div></div>
   <div class="kc"><div class="kv">${Object.keys(data._drone.byType).length} ชนิด</div><div class="kl">ประเภทหิน</div></div>
@@ -9128,7 +9152,7 @@ ${plantSections}
 <table><thead><tr style="background:#065A82"><th>ประเภทหิน</th><th>ปริมาณ (ตัน)</th><th>%</th></tr></thead>
 <tbody>${mkRows(droneEntries,data._drone.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._drone.total,1)}</td><td class="c">100%</td></tr></tbody></table>
 
-<h2>ยอดขาย</h2>
+<h2 style="background:#1D9E75;color:#fff;padding:6px 12px;border-radius:6px;border:none">💰 ยอดขาย</h2>
 <div class="kpi-row">
   <div class="kc"><div class="kv">${fmtExN(data._sales.totalTon,1)} ตัน</div><div class="kl">ยอดขายรวม</div></div>
   <div class="kc"><div class="kv">${fmtExN(data._sales.totalValue,0)} บาท</div><div class="kl">มูลค่ารวม</div></div>
@@ -9136,7 +9160,7 @@ ${plantSections}
 <table><thead><tr style="background:#1D9E75"><th>ประเภทหิน</th><th>ตัน</th><th>%</th></tr></thead>
 <tbody>${mkRows(stEntries,data._sales.totalTon)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._sales.totalTon,1)}</td><td class="c">100%</td></tr></tbody></table>
 
-<h2>รถตักไฟฟ้า</h2>
+<h2 style="background:#BA7517;color:#fff;padding:6px 12px;border-radius:6px;border:none">⚡ รถตักไฟฟ้า</h2>
 <div class="kpi-row">
   <div class="kc"><div class="kv">${fmtExN(data._loader.totalWork,1)} ชม.</div><div class="kl">ชั่วโมงทำงานรวม</div></div>
   <div class="kc"><div class="kv">${fmtExN(data._loader.totalCharge,0)} นาที</div><div class="kl">เวลาชาร์จรวม</div></div>
@@ -9146,7 +9170,7 @@ ${plantSections}
 <table><thead><tr style="background:#BA7517"><th>ชื่อรถตัก</th><th>ชั่วโมงทำงาน</th><th>ชาร์จ (นาที)</th><th>ค่าไฟ (บาท)</th></tr></thead>
 <tbody>${loaderRows}</tbody></table>
 
-<h2>น้ำบาดาล</h2>
+<h2 style="background:#0891B2;color:#fff;padding:6px 12px;border-radius:6px;border:none">💧 น้ำบาดาล</h2>
 <div class="kpi-row">
   <div class="kc"><div class="kv">${fmtExN(data._water.total,2)} ม³</div><div class="kl">ปริมาณใช้รวม</div></div>
   <div class="kc"><div class="kv">${data._water.wellCount} บ่อ</div><div class="kl">จำนวนแหล่งน้ำ</div></div>
