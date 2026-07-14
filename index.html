@@ -1039,48 +1039,48 @@ function renderLanding() {
         </div>
 
         <!-- System 2 — Inventory -->
-        <a href="inventory.html"
-           class="bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-xl rounded-3xl p-5 sm:p-6 flex flex-col transition-all group no-underline cursor-pointer">
+        <div class="bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-3xl p-5 sm:p-6 text-white shadow-2xl flex flex-col">
           <div class="flex items-center gap-3 mb-4">
-            <div class="bg-emerald-50 group-hover:bg-emerald-100 rounded-2xl p-2.5 shrink-0 transition">
-              <i data-lucide="package" class="w-5 h-5 text-emerald-500 transition"></i>
+            <div class="bg-white/15 rounded-2xl p-2.5 shrink-0">
+              <i data-lucide="package" class="w-5 h-5"></i>
             </div>
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ระบบที่ 2 · Inventory</div>
+            <div class="text-[10px] font-bold text-white/50 uppercase tracking-widest">ระบบที่ 2 · Inventory</div>
           </div>
-          <h2 class="text-lg sm:text-xl font-bold text-slate-700 mb-0.5">ระบบพัสดุ</h2>
-          <p class="text-slate-400 text-xs mb-4">จัดการพัสดุ คลังสินค้า การเบิก-จ่าย</p>
+          <h2 class="text-lg sm:text-xl font-bold mb-0.5">ระบบคลังวัสดุ</h2>
+          <p class="text-white/55 text-xs mb-4">จัดการพัสดุ คลังสินค้า การเบิก-จ่าย</p>
           <div class="grid grid-cols-2 gap-y-2 gap-x-2 mb-5">
             ${featureInv.map(([icon,label]) => `
-              <div class="flex items-center gap-1.5 text-slate-400 text-xs">
-                <i data-lucide="${icon}" class="w-3 h-3 text-slate-300 shrink-0"></i>${label}
+              <div class="flex items-center gap-1.5 text-white/65 text-xs">
+                <i data-lucide="${icon}" class="w-3 h-3 text-white/35 shrink-0"></i>${label}
               </div>`).join('')}
           </div>
-          <div class="mt-auto inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 group-hover:gap-3 transition-all">
-            <i data-lucide="arrow-right" class="w-4 h-4"></i>ไปยังระบบพัสดุ
-          </div>
-        </a>
+          <a href="inventory.html"
+             class="mt-auto w-full bg-white text-emerald-700 font-bold px-4 py-2.5 rounded-xl hover:shadow-lg active:scale-95 transition flex items-center justify-center gap-2 text-sm no-underline">
+            <i data-lucide="log-in" class="w-4 h-4"></i>เข้าสู่ระบบ
+          </a>
+        </div>
 
         <!-- System 3 — PM เครื่องจักร -->
-        <a href="pm.html"
-           class="bg-white border border-slate-200 hover:border-amber-300 hover:shadow-xl rounded-3xl p-5 sm:p-6 flex flex-col transition-all group no-underline cursor-pointer">
+        <div class="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 rounded-3xl p-5 sm:p-6 text-white shadow-2xl flex flex-col">
           <div class="flex items-center gap-3 mb-4">
-            <div class="bg-amber-50 group-hover:bg-amber-100 rounded-2xl p-2.5 shrink-0 transition">
-              <i data-lucide="wrench" class="w-5 h-5 text-amber-500 transition"></i>
+            <div class="bg-white/15 rounded-2xl p-2.5 shrink-0">
+              <i data-lucide="wrench" class="w-5 h-5"></i>
             </div>
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ระบบที่ 3 · Maintenance</div>
+            <div class="text-[10px] font-bold text-white/50 uppercase tracking-widest">ระบบที่ 3 · Maintenance</div>
           </div>
-          <h2 class="text-lg sm:text-xl font-bold text-slate-700 mb-0.5">ระบบ PM เครื่องจักร</h2>
-          <p class="text-slate-400 text-xs mb-4">Preventive Maintenance — บำรุงรักษาเชิงป้องกัน</p>
+          <h2 class="text-lg sm:text-xl font-bold mb-0.5">ระบบ PM เครื่องจักร</h2>
+          <p class="text-white/55 text-xs mb-4">Preventive Maintenance — บำรุงรักษาเชิงป้องกัน</p>
           <div class="grid grid-cols-2 gap-y-2 gap-x-2 mb-5">
             ${featurePM.map(([icon,label]) => `
-              <div class="flex items-center gap-1.5 text-slate-400 text-xs">
-                <i data-lucide="${icon}" class="w-3 h-3 text-slate-300 shrink-0"></i>${label}
+              <div class="flex items-center gap-1.5 text-white/65 text-xs">
+                <i data-lucide="${icon}" class="w-3 h-3 text-white/35 shrink-0"></i>${label}
               </div>`).join('')}
           </div>
-          <div class="mt-auto inline-flex items-center gap-2 text-sm font-semibold text-amber-600 group-hover:gap-3 transition-all">
-            <i data-lucide="arrow-right" class="w-4 h-4"></i>ไปยังระบบ PM
-          </div>
-        </a>
+          <a href="pm.html"
+             class="mt-auto w-full bg-white text-orange-600 font-bold px-4 py-2.5 rounded-xl hover:shadow-lg active:scale-95 transition flex items-center justify-center gap-2 text-sm no-underline">
+            <i data-lucide="log-in" class="w-4 h-4"></i>เข้าสู่ระบบ
+          </a>
+        </div>
       </div>
 
       <!-- ─── PUBLIC STATS ─── -->
@@ -5626,17 +5626,35 @@ async function importProductionExcel(e, plantKey, finalMode = false) {
     }).filter(r => r.production_date); // กรองแถวที่ไม่มีวันที่ออก
 
     if (finalMode) {
-      // Upsert: ดึง record เดิมที่ตรงกับวันที่ในไฟล์ แล้ว UPDATE แทนที่ / INSERT ถ้าไม่มี
+      // Final import: ลบ row ซ้ำต่อวัน เก็บไว้แค่ 1 row แล้ว update ด้วยข้อมูลจาก CSV
       const dates = [...new Set(rows.map(r => r.production_date))];
-      const { data: existing, error: fetchErr } = await db.from(cfg.table).select('id, production_date').in('production_date', dates);
+      const { data: existing, error: fetchErr } = await db.from(cfg.table)
+        .select('id, production_date, created_at')
+        .in('production_date', dates)
+        .order('created_at', { ascending: true });
       if (fetchErr) throw fetchErr;
-      const existMap = {};
-      (existing || []).forEach(r => { existMap[r.production_date] = r.id; });
+
+      // จัดกลุ่มตามวัน → เก็บ id แรก (oldest) ไว้ update, ลบ id ที่เหลือ
+      const keepMap = {};   // date -> id ที่จะ update
+      const toDelete = [];  // id ที่ซ้ำ → ลบทิ้ง
+      (existing || []).forEach(r => {
+        if (!keepMap[r.production_date]) {
+          keepMap[r.production_date] = r.id;
+        } else {
+          toDelete.push(r.id);
+        }
+      });
+
+      // ลบ row ซ้ำก่อน
+      if (toDelete.length) {
+        const { error } = await db.from(cfg.table).delete().in('id', toDelete);
+        if (error) throw error;
+      }
 
       const toUpdate = [], toInsert = [];
       rows.forEach(row => {
-        if (existMap[row.production_date]) {
-          toUpdate.push({ id: existMap[row.production_date], payload: row });
+        if (keepMap[row.production_date]) {
+          toUpdate.push({ id: keepMap[row.production_date], payload: row });
         } else {
           toInsert.push(row);
         }
@@ -5656,7 +5674,9 @@ async function importProductionExcel(e, plantKey, finalMode = false) {
         const uniqueDates = [...new Set(rows.map(r => r.production_date))];
         const fc = PLANT_FACTORY_CODE[plantKey];
         const sp = uniqueDates.map(d => ({ factory_code:fc, production_date:d, status:'confirmed', confirmed_by:currentUser.id, confirmed_at:new Date().toISOString(), note:'อัตโนมัติ - นำเข้ายอดจริงสิ้นเดือน' }));
-        await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' }).catch(e => console.warn('auto-confirm:', e));
+        try {
+          await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' });
+        } catch(e) { console.warn('auto-confirm:', e); }
       }
     } else {
       const { error } = await db.from(cfg.table).insert(rows);
