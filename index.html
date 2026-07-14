@@ -2617,7 +2617,6 @@ function renderDashboardSales(container) {
         </div>
       </div>
       <div id="sales-stat-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-4">${[1,2,3,4].map(skeletonCardDark).join('')}</div>
-      <div id="sales-compare-block"></div>
       <div id="sales-chart-block">${skeletonBlockDark()}</div>
       <div id="sales-monthly-chart-block">${skeletonBlockDark()}</div>
       <div id="sales-table-block">${skeletonBlockDark('h-56')}</div>
@@ -2752,55 +2751,6 @@ async function loadSalesData() {
     ].join('');
     refreshIcons();
 
-    // --- comparison block (MoM + YoY) ---
-    (function renderSalesCompare() {
-      const compareEl = document.getElementById('sales-compare-block');
-      if (!compareEl) return;
-      const hasMoM = totalQtyPrev > 0 || Object.keys(byFactoryPrev).length > 0;
-      const hasYoY = _salesRangeState.mode === 'month' && (totalQtyYoy > 0 || Object.keys(byFactoryYoy).length > 0);
-      if (!hasMoM && !hasYoY) { compareEl.innerHTML = ''; return; }
-      const momLabel = _salesRangeState.mode === 'day' ? 'วันก่อนหน้า' : _salesRangeState.mode === 'year' ? 'ปีก่อน' : 'เดือนก่อน';
-      const yoyLabelPeriod = _salesRangeState.mode === 'month'
-        ? `${monthNameTH(_salesRangeState.month).slice(0,3)} ${_salesRangeState.year - 1}`
-        : '';
-      const factoriesForComp = Object.keys(byFactory).sort();
-      const mkCD = (cur, prev) => {
-        if (prev === 0) return `<span class="text-xs" style="color:#475569">-</span>`;
-        const d = cur - prev;
-        const pct = prev ? (d / prev * 100) : 0;
-        const col = d > 0 ? '#34d399' : d < 0 ? '#f87171' : '#94a3b8';
-        const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '=';
-        return `<span style="color:${col}" class="font-bold">${arrow} ${fmtNum(Math.abs(d),1)}</span> <span class="text-xs" style="color:${col}">(${d>=0?'+':''}${fmtNum(pct,1)}%)</span>`;
-      };
-      compareEl.innerHTML = `<div class="dash-dark-card rounded-2xl p-5">
-        <div class="flex items-center gap-2 mb-4">
-          <i data-lucide="trending-up" class="w-4 h-4 text-cyan-400"></i>
-          <h3 class="text-sm font-semibold dash-dark-text">เปรียบเทียบยอดขาย (ตัน)</h3>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead><tr class="border-b dash-dark-border">
-              <th class="py-2 pr-6 text-left text-xs dash-dark-text-muted">โรงงาน</th>
-              ${hasMoM ? `<th class="py-2 pr-6 text-center text-xs" style="color:#38bdf8">MoM — ${momLabel}<div class="font-normal mt-0.5" style="color:#475569">(${fmtNum(totalQtyPrev,1)} ตัน)</div></th>` : ''}
-              ${hasYoY ? `<th class="py-2 pr-6 text-center text-xs" style="color:#a78bfa">YoY — ${yoyLabelPeriod}<div class="font-normal mt-0.5" style="color:#475569">(${fmtNum(totalQtyYoy,1)} ตัน)</div></th>` : ''}
-            </tr></thead>
-            <tbody>
-              <tr class="border-b dash-dark-border dash-dark-text font-semibold">
-                <td class="py-2.5 pr-6">รวมทั้งหมด<div class="text-xs font-normal dash-dark-text-muted">${fmtNum(totalQty,1)} ตัน</div></td>
-                ${hasMoM ? `<td class="py-2.5 pr-6 text-center">${mkCD(totalQty, totalQtyPrev)}</td>` : ''}
-                ${hasYoY ? `<td class="py-2.5 pr-6 text-center">${mkCD(totalQty, totalQtyYoy)}</td>` : ''}
-              </tr>
-              ${factoriesForComp.map(f => `<tr class="border-b dash-dark-border dash-dark-row-hover dash-dark-text">
-                <td class="py-2.5 pr-6">${escapeHtml(f)}<div class="text-xs dash-dark-text-muted">${fmtNum(byFactory[f]||0,1)} ตัน</div></td>
-                ${hasMoM ? `<td class="py-2.5 pr-6 text-center">${mkCD(byFactory[f]||0, byFactoryPrev[f]||0)}</td>` : ''}
-                ${hasYoY ? `<td class="py-2.5 pr-6 text-center">${mkCD(byFactory[f]||0, byFactoryYoy[f]||0)}</td>` : ''}
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-      refreshIcons();
-    })();
 
     if (!rows.length) {
       const emptyHtml = `<div class="dash-dark-card rounded-2xl p-8 text-center dash-dark-text-muted text-sm">ไม่มีข้อมูลยอดขายในช่วงเวลานี้</div>`;
@@ -2927,6 +2877,16 @@ async function loadSalesData() {
       tension: 0.3,
       fill: false,
     }));
+    const hasMoM = totalQtyPrev > 0 || Object.keys(byFactoryPrev).length > 0;
+    const momColLabel = _salesRangeState.mode === 'day' ? 'วันก่อน' : _salesRangeState.mode === 'year' ? 'ปีก่อน' : 'เดือนก่อน';
+    const mkMoM = (cur, prev) => {
+      if (prev === 0) return `<span style="color:#475569">-</span>`;
+      const d = cur - prev;
+      const pct = prev ? (d/prev*100) : 0;
+      const col = d > 0 ? '#34d399' : d < 0 ? '#f87171' : '#94a3b8';
+      const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '=';
+      return `<span style="color:${col}" class="font-semibold">${arrow}${fmtNum(pct,1)}%</span><div class="text-xs" style="color:${col}">${d>=0?'+':''}${fmtNum(d,1)}</div>`;
+    };
     tableEl.innerHTML = `
       <div class="grid grid-cols-2 gap-4">
         ${factories.map((fname, fi) => {
@@ -2954,6 +2914,7 @@ async function loadSalesData() {
             ${allStoneTypes.map(st=>`<th class="py-2 pr-3 text-right">${escapeHtml(st)}</th>`).join('')}
             <th class="py-2 pr-3 text-right">รวม (ตัน)</th>
             ${hasPrice ? '<th class="py-2 pr-3 text-right">มูลค่า (บาท)</th>' : ''}
+            ${hasMoM ? `<th class="py-2 pr-3 text-right text-xs" style="color:#38bdf8">MoM<div class="font-normal" style="color:#475569">${momColLabel}</div></th>` : ''}
           </tr></thead>
           <tbody>
             ${factories.map(f => {
@@ -2963,6 +2924,7 @@ async function loadSalesData() {
                 ${allStoneTypes.map(st=>`<td class="py-2 pr-3 text-right">${byFactoryStone[f][st]?fmtNum(byFactoryStone[f][st],1):'-'}</td>`).join('')}
                 <td class="py-2 pr-3 text-right font-semibold">${fmtNum(byFactory[f],1)}</td>
                 ${hasPrice ? `<td class="py-2 pr-3 text-right">${fVal>0?fmtNum(fVal,0):'-'}</td>` : ''}
+                ${hasMoM ? `<td class="py-2 pr-3 text-right">${mkMoM(byFactory[f]||0, byFactoryPrev[f]||0)}</td>` : ''}
               </tr>`;
             }).join('')}
             <tr class="dash-dark-text font-semibold" style="border-top:2px solid #1d3a5f">
@@ -2970,6 +2932,7 @@ async function loadSalesData() {
               ${allStoneTypes.map(st=>`<td class="py-2 pr-3 text-right">${fmtNum(byStoneType[st]||0,1)}</td>`).join('')}
               <td class="py-2 pr-3 text-right">${fmtNum(totalQty,1)}</td>
               ${hasPrice ? `<td class="py-2 pr-3 text-right">${fmtNum(totalValue,0)}</td>` : ''}
+              ${hasMoM ? `<td class="py-2 pr-3 text-right">${mkMoM(totalQty, totalQtyPrev)}</td>` : ''}
             </tr>
           </tbody>
         </table>
