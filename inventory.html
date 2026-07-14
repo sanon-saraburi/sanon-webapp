@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
 * { font-family: 'Kanit', sans-serif; box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; font-size: 14px; }
 body { overflow-x: hidden; background: #f1f5f9; }
 
 /* Sidebar */
@@ -97,7 +97,8 @@ th { white-space: nowrap; }
 
 /* Bottom nav mobile */
 #mobile-nav { position:fixed; bottom:0; left:0; right:0; z-index:900;
-  background:#0f2744; border-top:1px solid rgba(255,255,255,.1); }
+  background:#0f2744; border-top:1px solid rgba(255,255,255,.1);
+  display:flex; align-items:stretch; }
 #mobile-nav a { flex:1; display:flex; flex-direction:column;
   align-items:center; gap:1px; padding:8px 4px;
   color:rgba(255,255,255,.6); font-size:10px; text-decoration:none; transition:.15s; }
@@ -107,8 +108,8 @@ th { white-space: nowrap; }
 @media (max-width: 768px) {
   /* KPI cards: 2 คอลัมน์ */
   .kpi-card { padding:.9rem 1rem; }
-  .kpi-card .kpi-val { font-size:1.4rem; }
-  .kpi-card .kpi-label { font-size:.75rem; }
+  .kpi-card .kpi-val { font-size:1.2rem; }
+  .kpi-card .kpi-label { font-size:.72rem; }
 
   /* Tables: scroll แนวนอน + font เล็กลง */
   .overflow-x-auto table { font-size:12px; }
@@ -683,6 +684,8 @@ async function navigateTo(page) {
 
   // Re-render shell (updates active state)
   renderShell();
+  // ปิด sidebar อีกครั้งหลัง re-render (overlay อยู่นอก #app-root ต้องซ้ำ)
+  closeSidebar();
 
   // Render page content
   const contentEl = qs('#page-content');
@@ -760,8 +763,17 @@ function renderLanding() {
     </div>
   </div>`;
   refreshIcons();
-  setTimeout(() => { const u = qs('#login-user'); if(u) u.focus(); }, 100);
+  setTimeout(() => {
+    const u = qs('#login-user');
+    if (!u) return;
+    try {
+      const saved = localStorage.getItem('_sn_last_username');
+      if (saved) { u.value = saved; qs('#login-pass')?.focus(); }
+      else { u.focus(); }
+    } catch (_) { u.focus(); }
+  }, 100);
 }
+
 
 async function handleLogin(e) {
   e.preventDefault();
@@ -785,6 +797,7 @@ async function handleLogin(e) {
   }
 
   // Login สำเร็จ — โหลด master data แล้วไป dashboard
+  try { localStorage.setItem('_sn_last_username', username); } catch (_) {}
   showToast(`ยินดีต้อนรับ ${data.full_name || data.username}`, 'success');
   await loadAllMasterData();
   startSessionTimer();
@@ -946,16 +959,19 @@ function renderShell() {
 function openSidebar() {
   const s = qs('#main-sidebar-mobile');
   const o = qs('#sidebar-overlay');
-  if (s) { s.classList.remove('hidden'); s.classList.add('flex'); }
+  if (s) { s.classList.remove('hidden'); s.classList.add('flex', 'open'); }
   if (o) o.classList.remove('hidden');
   _isSidebarOpen = true;
 }
 function closeSidebar() {
   const s = qs('#main-sidebar-mobile');
   const o = qs('#sidebar-overlay');
-  if (s) { s.classList.add('hidden'); s.classList.remove('flex'); }
+  if (s) { s.classList.add('hidden'); s.classList.remove('flex', 'open'); }
   if (o) o.classList.add('hidden');
   _isSidebarOpen = false;
+  // กันกรณี overlay อยู่นอก #app-root และยังค้างอยู่
+  const o2 = document.getElementById('sidebar-overlay');
+  if (o2) o2.classList.add('hidden');
 }
 
 // =====================================================================
@@ -1997,7 +2013,7 @@ async function saveItem(){
   const id=qs('#it-id')?.value;const name=qs('#it-name')?.value?.trim();
   if(!name){showToast('กรุณาระบุชื่อวัสดุ','error');return;}
   let code=qs('#it-code')?.value?.trim();
-  if(!code&&!id){const {count}=await db.from('inventory_items').select('id',{count:'exact',head:true});code='ITM-'+pad4((count||0)+1);}
+  if(!code&&!id){const {data:_maxRow}=await db.from('inventory_items').select('code').order('code',{ascending:false}).limit(1);const _lastNum=_maxRow?.[0]?.code?parseInt(_maxRow[0].code.replace('ITM-',''))||0:0;code='ITM-'+pad4(_lastNum+1);}
   const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null};
   let error;
   if(id){({error}=await db.from('inventory_items').update(payload).eq('id',id));}
@@ -2245,13 +2261,15 @@ async function reloadBalance() {
 }
 
 async function deleteInvItem(id) {
-  if(!confirm('ยืนยันลบวัสดุนี้? ข้อมูลการเคลื่อนไหวจะยังคงอยู่')) return;
-  const {error} = await db.from('inventory_items').delete().eq('id', id);
-  if(error) { showToast('ลบไม่สำเร็จ: '+error.message,'error'); return; }
+  const item = _invItems.find(i => i.id === id);
+  const nm = item ? `"${item.name}"` : 'วัสดุนี้';
+  if(!confirm(`ยืนยันปิดการใช้งาน ${nm}?\nวัสดุจะไม่แสดงในระบบ แต่ประวัติการเคลื่อนไหวยังคงอยู่`)) return;
+  const {error} = await db.from('inventory_items').update({status:'inactive'}).eq('id', id);
+  if(error) { showToast('ดำเนินการไม่สำเร็จ: '+error.message,'error'); return; }
   await loadInvItems();
   await loadStockData();
   renderBalanceTable();
-  showToast('ลบวัสดุแล้ว','success');
+  showToast('ปิดการใช้งานวัสดุแล้ว','success');
 }
 
 // =====================================================================
@@ -2593,9 +2611,9 @@ PAGE_RENDERERS['inv-qr'] = async function(el) {
           ${facOpts}
         </select>
         <select id="qr-size" onchange="renderQRGrid()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
-          <option value="sm">Label เล็ก (4 คอลัมน์)</option>
-          <option value="md" selected>Label กลาง (3 คอลัมน์)</option>
-          <option value="lg">Label ใหญ่ (2 คอลัมน์)</option>
+          <option value="sm">QR เล็ก (50px)</option>
+          <option value="md" selected>QR กลาง (70px)</option>
+          <option value="lg">QR ใหญ่ (90px)</option>
         </select>
         <select id="qr-filter-new" onchange="renderQRGrid()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
           <option value="">ทุกรายการ</option>
@@ -2623,10 +2641,9 @@ function renderQRGrid() {
   const size = qs('#qr-size')?.value||'md';
   const filterNew = parseInt(qs('#qr-filter-new')?.value||'0');
   const sort = qs('#qr-sort')?.value||'new';
-  const cols = size==='sm'?4 : size==='lg'?2 : 3;
-  const qrSize = size==='sm'?80 : size==='lg'?160 : 120;
-  const bcWidth = size==='sm'?1.2 : size==='lg'?2 : 1.6;
-  const bcHeight = size==='sm'?40 : size==='lg'?70 : 55;
+  const qrSize = size==='sm'?50 : size==='lg'?90 : 70;
+  const bcWidth = size==='sm'?1.0 : size==='lg'?1.8 : 1.4;
+  const bcHeight = size==='sm'?28 : size==='lg'?50 : 38;
   const now = new Date();
 
   let items = _invItems.filter(i => {
@@ -2640,7 +2657,6 @@ function renderQRGrid() {
     return true;
   });
 
-  // sort
   if(sort==='new') items.sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
   else if(sort==='code') items.sort((a,b)=>(a.code||'').localeCompare(b.code||''));
   else if(sort==='name') items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -2654,22 +2670,42 @@ function renderQRGrid() {
     return;
   }
 
-  const colClass = cols===4?'grid-cols-2 sm:grid-cols-4' : cols===2?'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3';
-  el.innerHTML = `<div class="grid ${colClass} gap-3" id="qr-grid">
-    ${items.map(i => `
-    <div class="qr-label-card bg-white rounded-xl border border-gray-200 p-3 flex flex-col items-center gap-2 cursor-pointer select-none"
-         id="qlc-${i.id}" onclick="toggleQRSelect('${i.id}')" title="${escapeHtml(i.name)}">
-      <div class="w-full flex items-center justify-between gap-1">
-        <span class="text-xs font-mono text-blue-700 font-semibold">${escapeHtml(i.code)}</span>
-        <div class="flex items-center gap-1">
-          ${(new Date()-new Date(i.created_at||0))/86400000<7?'<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">ใหม่</span>':''}
-          <input type="checkbox" class="qr-chk w-4 h-4 accent-blue-600" id="qchk-${i.id}" onclick="event.stopPropagation();toggleQRSelect('${i.id}',this.checked)" />
-        </div>
-      </div>
-      <p class="text-xs text-gray-600 text-center font-medium leading-tight line-clamp-2 w-full">${escapeHtml(i.name)}</p>
-      <div id="qr-${i.id}" class="qr-img"></div>
-      <svg id="bc-${i.id}" class="w-full"></svg>
-    </div>`).join('')}
+  el.innerHTML = `<div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+    <table class="w-full text-sm" id="qr-table">
+      <thead>
+        <tr class="bg-gray-50 border-b border-gray-200">
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold w-10">#</th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">รหัสวัสดุ</th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">ชื่อวัสดุ</th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">โรงงาน</th>
+          <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold">QR Code</th>
+          <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold">Barcode</th>
+          <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold w-10">
+            <input type="checkbox" class="w-4 h-4 accent-blue-600" title="เลือกทั้งหมด"
+              onchange="selectAllQR(this.checked)">
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((i, idx) => `
+        <tr id="qlc-${i.id}" class="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors"
+            onclick="toggleQRSelect('${i.id}')">
+          <td class="py-2 px-3 text-xs text-gray-400 tabular-nums">${idx+1}</td>
+          <td class="py-2 px-3">
+            <span class="font-mono text-xs text-blue-700 font-semibold">${escapeHtml(i.code)}</span>
+            ${(new Date()-new Date(i.created_at||0))/86400000<7?'<span class="ml-1 text-xs bg-green-100 text-green-700 px-1 py-0.5 rounded-full">ใหม่</span>':''}
+          </td>
+          <td class="py-2 px-3 text-xs text-gray-700 max-w-[180px]">${escapeHtml(i.name)}</td>
+          <td class="py-2 px-3 text-xs text-gray-500">${escapeHtml(i.location||'-')}</td>
+          <td class="py-2 px-3 text-center"><div id="qr-${i.id}" class="inline-block"></div></td>
+          <td class="py-2 px-3 text-center" style="min-width:120px"><svg id="bc-${i.id}"></svg></td>
+          <td class="py-2 px-3 text-center" onclick="event.stopPropagation()">
+            <input type="checkbox" class="qr-chk w-4 h-4 accent-blue-600" id="qchk-${i.id}"
+              onchange="toggleQRSelect('${i.id}',this.checked)">
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
   </div>`;
 
   // generate QR + Barcode หลัง DOM render
@@ -2681,20 +2717,20 @@ function renderQRGrid() {
           new QRCode(qrEl, { text: i.code, width: qrSize, height: qrSize, correctLevel: QRCode.CorrectLevel.M });
         const bcEl = qs(`#bc-${i.id}`);
         if(bcEl && typeof JsBarcode !== 'undefined')
-          JsBarcode(bcEl, i.code, { format:'CODE128', width:bcWidth, height:bcHeight, displayValue:true, fontSize:10, fontOptions:'bold', margin:4 });
+          JsBarcode(bcEl, i.code, { format:'CODE128', width:bcWidth, height:bcHeight, displayValue:true, fontSize:9, fontOptions:'bold', margin:3 });
       } catch(e) {}
     });
   });
 }
 
 function toggleQRSelect(id, force) {
-  const card = qs(`#qlc-${id}`);
+  const row = qs(`#qlc-${id}`);
   const chk = qs(`#qchk-${id}`);
-  if(!card) return;
+  if(!row) return;
   const selected = force !== undefined ? force : !chk?.checked;
   if(chk) chk.checked = selected;
-  card.style.outline = selected ? '2px solid #3b82f6' : '';
-  card.style.background = selected ? '#eff6ff' : '';
+  row.style.background = selected ? '#eff6ff' : '';
+  row.style.outline = selected ? '2px solid #3b82f6' : '';
 }
 
 function selectAllQR(val) {
@@ -2705,39 +2741,65 @@ function printSelectedLabels() {
   const selected = _invItems.filter(i => qs(`#qchk-${i.id}`)?.checked);
   if(!selected.length) { showToast('กรุณาเลือก Label ที่ต้องการพิมพ์','warn'); return; }
 
-  const labelHtml = selected.map(i => {
+  const rows = selected.map((i, idx) => {
     const qrEl = qs(`#qr-${i.id}`);
     const bcEl = qs(`#bc-${i.id}`);
     const qrImg = qrEl ? qrEl.innerHTML : '';
     const bcSvg = bcEl ? bcEl.outerHTML : '';
-    return `<div class="label">
-      <div class="code">${escapeHtml(i.code)}</div>
-      <div class="name">${escapeHtml(i.name)}</div>
-      <div class="qr-wrap">${qrImg}</div>
-      ${bcSvg}
-    </div>`;
+    const location = escapeHtml(i.location || '-');
+    const category = escapeHtml(i.category || '-');
+    return `<tr>
+      <td class="num">${idx+1}</td>
+      <td class="code">${escapeHtml(i.code)}</td>
+      <td class="name">${escapeHtml(i.name)}</td>
+      <td class="cat">${category}</td>
+      <td class="loc">${location}</td>
+      <td class="qr-cell"><div class="qr-wrap">${qrImg}</div></td>
+      <td class="bc-cell">${bcSvg}</td>
+    </tr>`;
   }).join('');
 
-  const w = window.open('', '_blank', 'width=794,height=1123');
+  const w = window.open('', '_blank', 'width=1000,height=800');
   if(!w) { showToast('กรุณาอนุญาต Popup เพื่อพิมพ์','warn'); return; }
   w.document.write(`<!DOCTYPE html><html><head>
-  <meta charset="UTF-8"><title>QR Labels — สานนท์ จำกัด</title>
+  <meta charset="UTF-8"><title>QR / Label — บริษัท สานนท์ จำกัด</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Arial',sans-serif;background:#fff;padding:8mm;}
-    .sheet{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;}
-    .label{border:1px solid #ccc;border-radius:6px;padding:5mm;text-align:center;
-           break-inside:avoid;page-break-inside:avoid;background:#fff;}
-    .code{font-family:monospace;font-size:9pt;color:#1d4ed8;font-weight:700;margin-bottom:2mm;}
-    .name{font-size:8pt;color:#374151;margin-bottom:3mm;line-height:1.3;
-          display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-    .qr-wrap{display:flex;justify-content:center;margin-bottom:2mm;}
-    .qr-wrap img,.qr-wrap canvas{width:22mm!important;height:22mm!important;}
-    svg{width:100%;max-height:14mm;}
+    body{font-family:'Arial',sans-serif;background:#fff;padding:8mm;font-size:9pt;}
+    h2{font-size:12pt;font-weight:700;margin-bottom:2mm;}
+    .sub{font-size:8pt;color:#555;margin-bottom:4mm;}
+    table{width:100%;border-collapse:collapse;}
+    th{background:#1e3a5f;color:#fff;font-size:8pt;padding:3mm 2mm;text-align:center;border:1px solid #ccc;}
+    td{border:1px solid #ccc;padding:2mm;vertical-align:middle;font-size:8pt;}
+    td.num{text-align:center;width:8mm;color:#666;}
+    td.code{font-family:monospace;font-weight:700;color:#1d4ed8;text-align:center;white-space:nowrap;}
+    td.name{max-width:45mm;}
+    td.cat{text-align:center;white-space:nowrap;color:#6d28d9;font-size:7.5pt;}
+    td.loc{text-align:center;white-space:nowrap;color:#374151;}
+    td.qr-cell{text-align:center;width:22mm;}
+    td.bc-cell{text-align:center;width:40mm;}
+    .qr-wrap img,.qr-wrap canvas{width:18mm!important;height:18mm!important;}
+    svg{width:36mm;height:12mm;}
+    tr{break-inside:avoid;page-break-inside:avoid;}
     @page{size:A4;margin:10mm;}
     @media print{body{padding:0;}}
   </style></head><body>
-  <div class="sheet">${labelHtml}</div>
+  <h2>QR Code & Barcode Label — บริษัท สานนท์ จำกัด</h2>
+  <div class="sub">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')} · จำนวน ${selected.length} รายการ</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>รหัสวัสดุ</th>
+        <th>ชื่อวัสดุ</th>
+        <th>ประเภท</th>
+        <th>โรงงาน</th>
+        <th>QR Code</th>
+        <th>Barcode</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
   <script>window.onload=function(){window.print();}<\/script>
   </body></html>`);
   w.document.close();
