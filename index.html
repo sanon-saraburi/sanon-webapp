@@ -491,7 +491,7 @@ async function doLogin(username, password) {
     const { data, error } = await db
       .from('app_users')
       .select('*')
-      .eq('username', username)
+      .ilike('username', username)
       .eq('password', password)
       .maybeSingle();
 
