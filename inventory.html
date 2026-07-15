@@ -299,7 +299,7 @@ function getAllowedInvMenus(user) {
   if (extra.length > 0) return extra;
 
   // fallback: role default
-  return ROLE_DEFAULT_MENUS[user.role] || [];
+  return ROLE_DEFAULT_MENUS[user.role] || ['inv-dashboard','inv-balance','inv-qr','inv-withdraw'];
 }
 
 function canAccess(menuKey) {
@@ -2420,22 +2420,102 @@ async function settingsTab(tab){
   } else if(tab==='users'){
     if(!isAdmin()){c.innerHTML='<div class="py-8 text-center text-gray-400">เฉพาะ Admin เท่านั้น</div>';return;}
     const {data:users}=await db.from('app_users').select('id,username,full_name,role,status').order('username');
+    // Load user_permissions for all users
+    const {data:allPerms}=await db.from('user_permissions').select('user_id,extra_manage');
+    const permMap={};(allPerms||[]).forEach(p=>{permMap[p.user_id]=p.extra_manage||[];});
     c.innerHTML=`
+    <div class="mb-3 text-xs text-gray-500 bg-blue-50 rounded-lg px-4 py-2.5 border border-blue-100">
+      <b>หมายเหตุ:</b> กำหนดสิทธิ์เข้าถึงเมนูระบบคลังวัสดุ (inv-) รายบุคคล — override ค่า Role Default
+    </div>
     <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm">
-      <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
-        <th class="text-left px-4 py-2">Username</th><th class="text-left px-4 py-2">ชื่อ</th>
+      <thead class="bg-gray-100 text-gray-700 text-xs font-semibold"><tr>
+        <th class="text-left px-4 py-2">Username</th><th class="text-left px-4 py-2">ชื่อ-นามสกุล</th>
         <th class="text-left px-4 py-2">Role</th><th class="text-left px-4 py-2">สถานะ</th>
+        <th class="text-left px-4 py-2">สิทธิ์ inv-</th>
+        <th class="text-left px-4 py-2 sticky right-0 bg-gray-100">จัดการ</th>
       </tr></thead>
-      <tbody>${(users||[]).map(u=>`<tr class="border-t hover:bg-gray-50">
-        <td class="px-4 py-2 font-mono text-xs">${escapeHtml(u.username)}</td>
-        <td class="px-4 py-2">${escapeHtml(u.full_name||'-')}</td>
-        <td class="px-4 py-2 capitalize">${escapeHtml(u.role)}</td>
-        <td class="px-4 py-2"><span class="${u.status==='active'?'badge-ok':u.status==='pending'?'badge-pending':'badge-out'} px-2 py-0.5 rounded-full text-xs">${escapeHtml(u.status)}</span></td>
-      </tr>`).join('')||'<tr><td colspan="4" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>'}
+      <tbody>${(users||[]).map(u=>{
+        const invPerms=(permMap[u.id]||[]).filter(k=>k.startsWith('inv-'));
+        const permBadge=invPerms.length>0
+          ?`<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">${invPerms.length} เมนู (Custom)</span>`
+          :`<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Role Default</span>`;
+        const statusBadge=u.status==='active'?'badge-ok':u.status==='pending'?'badge-pending':'badge-out';
+        return `<tr class="border-t hover:bg-gray-50">
+          <td class="px-4 py-2 font-mono text-xs">${escapeHtml(u.username)}</td>
+          <td class="px-4 py-2">${escapeHtml(u.full_name||'-')}</td>
+          <td class="px-4 py-2 text-xs capitalize">${escapeHtml(u.role)}</td>
+          <td class="px-4 py-2"><span class="${statusBadge} px-2 py-0.5 rounded-full text-xs">${escapeHtml(u.status)}</span></td>
+          <td class="px-4 py-2">${permBadge}</td>
+          <td class="px-4 py-2 sticky right-0 bg-white">
+            <button onclick='openUserPermModal(${JSON.stringify(u)},${JSON.stringify(invPerms)})' class="text-blue-600 hover:underline text-xs font-medium">กำหนดสิทธิ์</button>
+          </td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="6" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>'}
       </tbody>
     </table></div>`;
   }
   refreshIcons();
+}
+
+async function openUserPermModal(u, currentInvPerms){
+  const ALL_INV_MENUS=[
+    {key:'inv-dashboard',label:'ภาพรวมคลัง'},
+    {key:'inv-balance',label:'วัสดุคงเหลือ'},
+    {key:'inv-qr',label:'QR / Label'},
+    {key:'inv-stock',label:'รับวัสดุเข้า'},
+    {key:'inv-withdraw',label:'เบิกวัสดุ'},
+    {key:'inv-approvals',label:'รออนุมัติ'},
+    {key:'inv-po',label:'ใบสั่งซื้อ (PO)'},
+    {key:'inv-chem',label:'สารตกตะกอน'},
+    {key:'inv-report',label:'รายงาน'},
+    {key:'inv-settings',label:'ตั้งค่า (Admin)'},
+  ];
+  // Load all user_permissions for this user (to preserve non-inv keys)
+  const {data:existingPerm}=await db.from('user_permissions').select('extra_manage').eq('user_id',u.id).maybeSingle();
+  const allExisting=existingPerm?.extra_manage||[];
+  const nonInvPerms=allExisting.filter(k=>!k.startsWith('inv-'));
+
+  const roleDefault=ROLE_DEFAULT_MENUS[u.role]||['inv-dashboard','inv-balance','inv-qr','inv-withdraw'];
+  showModal({title:`กำหนดสิทธิ์ Inventory — ${escapeHtml(u.full_name||u.username)}`,body:`
+    <div class="text-xs text-gray-500 mb-3">Role: <b>${escapeHtml(u.role)}</b> | Default access: ${roleDefault.length} เมนู</div>
+    <div class="grid grid-cols-2 gap-2">
+    ${ALL_INV_MENUS.map(m=>`
+      <label class="flex items-center gap-2 text-sm cursor-pointer select-none p-2 rounded-lg hover:bg-gray-50 border border-gray-100">
+        <input type="checkbox" id="up-${m.key}" value="${m.key}" ${currentInvPerms.includes(m.key)?'checked':''} class="w-4 h-4 accent-blue-600"/>
+        <span>${escapeHtml(m.label)}</span>
+      </label>`).join('')}
+    </div>
+    <div class="mt-3 flex gap-2">
+      <button onclick="selectAllInvPerms(true)" class="text-xs text-blue-600 hover:underline">เลือกทั้งหมด</button>
+      <span class="text-gray-300">|</span>
+      <button onclick="selectAllInvPerms(false)" class="text-xs text-gray-500 hover:underline">ล้างทั้งหมด</button>
+      <span class="text-gray-300">|</span>
+      <button onclick="selectDefaultInvPerms('${u.role}')" class="text-xs text-gray-500 hover:underline">ใช้ค่า Role Default</button>
+    </div>`,
+    footer:`
+      <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ยกเลิก</button>
+      <button onclick="saveUserPermInv('${u.id}',${JSON.stringify(nonInvPerms)})" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">บันทึกสิทธิ์</button>`
+  });
+  refreshIcons();
+}
+
+function selectAllInvPerms(checked){
+  qsa('[id^="up-inv-"]').forEach(cb=>cb.checked=checked);
+}
+function selectDefaultInvPerms(role){
+  const defaults=ROLE_DEFAULT_MENUS[role]||['inv-dashboard','inv-balance','inv-qr','inv-withdraw'];
+  qsa('[id^="up-inv-"]').forEach(cb=>cb.checked=defaults.includes(cb.value));
+}
+
+async function saveUserPermInv(userId, nonInvPerms){
+  const selected=Array.from(qsa('[id^="up-inv-"]:checked')).map(cb=>cb.value);
+  const merged=[...nonInvPerms,...selected];
+  // upsert user_permissions
+  const {error}=await db.from('user_permissions').upsert({user_id:userId,extra_manage:merged},{onConflict:'user_id'});
+  if(error){showToast('บันทึกไม่สำเร็จ: '+error.message,'error');return;}
+  showToast('บันทึกสิทธิ์เรียบร้อย','success');
+  closeModal();
+  settingsTab('users');
 }
 
 function openItemModal(item){
