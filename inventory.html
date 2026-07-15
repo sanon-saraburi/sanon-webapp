@@ -100,8 +100,8 @@ th { white-space: nowrap; }
   background:#0f2744; border-top:1px solid rgba(255,255,255,.1);
   display:flex; align-items:stretch; }
 #mobile-nav a { flex:1; display:flex; flex-direction:column;
-  align-items:center; gap:1px; padding:8px 4px;
-  color:rgba(255,255,255,.6); font-size:10px; text-decoration:none; transition:.15s; }
+  align-items:center; gap:2px; padding:10px 4px 8px;
+  color:rgba(255,255,255,.6); font-size:11px; text-decoration:none; transition:.15s; }
 #mobile-nav a.active, #mobile-nav a:hover { color:#fff; }
 
 /* ===== MOBILE UX IMPROVEMENTS ===== */
@@ -130,7 +130,7 @@ th { white-space: nowrap; }
 
   /* Modal: full width bottom sheet */
   #modal-overlay { align-items:flex-end; padding:0; }
-  #modal-box { border-radius:20px 20px 0 0; max-height:92vh; }
+  #modal-box { border-radius:20px 20px 0 0; max-height:92vh; overflow-x:hidden; width:100vw; max-width:100vw !important; }
 
   /* Buttons: touch-friendly */
   button, .btn { min-height:42px; }
@@ -268,13 +268,13 @@ let _pendingCount = 0;   // จำนวนรออนุมัติ (withdraw
 // prefix inv- ทั้งหมด
 const INV_MENUS_MAIN = [
   { key:'inv-dashboard',  label:'ภาพรวมคลัง',    icon:'layout-dashboard' },
+  { key:'inv-chem',       label:'สารตกตะกอน',      icon:'flask-conical' },
   { key:'inv-balance',    label:'วัสดุคงเหลือ',   icon:'package-search' },
   { key:'inv-qr',         label:'QR / Label',      icon:'qr-code' },
   { key:'inv-stock',      label:'รับวัสดุเข้า',   icon:'package-plus' },
   { key:'inv-withdraw',   label:'เบิกวัสดุ',       icon:'package-minus' },
   { key:'inv-approvals',  label:'รออนุมัติ',       icon:'clipboard-check', badge:true },
   { key:'inv-po',         label:'ใบสั่งซื้อ (PO)', icon:'file-text' },
-  { key:'inv-chem',       label:'สารตกตะกอน',      icon:'flask-conical' },
   { key:'inv-report',     label:'รายงาน',           icon:'bar-chart-2' },
   { key:'inv-settings',   label:'ตั้งค่า',          icon:'settings' },
 ];
@@ -830,7 +830,7 @@ function renderShell() {
 
   const mobileNavLinks = bottomMenus.map(m => `
     <a class="${currentPage === m.key ? 'active' : ''}" onclick="closeSidebar();navigateTo('${m.key}')">
-      <i data-lucide="${m.icon}" class="w-5 h-5"></i>
+      <i data-lucide="${m.icon}" class="w-6 h-6"></i>
       <span>${m.label.split('(')[0].trim()}</span>
     </a>`).join('');
 
@@ -1007,57 +1007,65 @@ function renderNoAccess() {
 // =====================================================================
 PAGE_RENDERERS['inv-dashboard'] = async function(el) {
   el.innerHTML = `
-  <div class="space-y-5">
-    <div class="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap gap-3 items-end">
-      <div>
-        <label class="text-xs text-gray-500 block mb-1">ช่วงเวลา</label>
-        <select id="dash-range" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" onchange="dashRangeChange()">
-          <option value="month">เดือนนี้</option>
-          <option value="week">สัปดาห์นี้</option>
-          <option value="today">วันนี้</option>
-          <option value="custom">กำหนดเอง</option>
-        </select>
+  <div class="space-y-4 pb-4">
+    <!-- Filter bar -->
+    <div class="bg-white rounded-2xl px-4 py-3 shadow-sm">
+      <div class="flex flex-wrap gap-2 items-end">
+        <div class="flex-1 min-w-[110px]">
+          <label class="text-xs text-gray-500 block mb-1">ช่วงเวลา</label>
+          <select id="dash-range" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" onchange="dashRangeChange()">
+            <option value="month">เดือนนี้</option>
+            <option value="week">สัปดาห์นี้</option>
+            <option value="today">วันนี้</option>
+            <option value="custom">กำหนดเอง</option>
+          </select>
+        </div>
+        <div id="dash-custom" class="hidden flex gap-2">
+          <input id="dash-start" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
+          <input id="dash-end" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
+        </div>
+        <div class="self-end">
+          <label class="text-xs text-gray-500 block mb-1">โรงงาน</label>
+          <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+            <button id="dfac-btn-" onclick="dashSetFac('')" class="px-3 py-2 bg-blue-600 text-white">ทั้งหมด</button>
+            ${FACTORIES().map(f=>`<button id="dfac-btn-${f}" onclick="dashSetFac('${f}')" class="px-3 py-2 bg-white text-gray-600 hover:bg-gray-50 border-l border-gray-200">${f}</button>`).join('')}
+          </div>
+          <input type="hidden" id="dash-factory" value=""/>
+        </div>
+        <button onclick="loadDashboard()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 self-end">แสดงผล</button>
       </div>
-      <div id="dash-custom" class="hidden flex gap-2">
-        <input id="dash-start" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
-        <input id="dash-end" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
-      </div>
-      <div>
-        <label class="text-xs text-gray-500 block mb-1">โรงงาน</label>
-        <select id="dash-factory" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">ทุกโรงงาน</option>
-          ${FACTORIES().map(f=>`<option>${f}</option>`).join('')}
-        </select>
-      </div>
-      <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">แสดงผล</button>
     </div>
-    <div id="dash-kpi" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3"></div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- KPI cards -->
+    <div id="dash-kpi" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"></div>
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm">
         <h3 class="text-sm font-semibold text-gray-600 mb-3">การเคลื่อนไหว 30 วัน</h3>
-        <canvas id="chart-movement" height="200"></canvas>
+        <div class="relative" style="height:220px"><canvas id="chart-movement"></canvas></div>
       </div>
-      <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="bg-white rounded-2xl p-4 shadow-sm flex flex-col">
         <h3 class="text-sm font-semibold text-gray-600 mb-3">เบิกแยกประเภท</h3>
-        <canvas id="chart-category" height="200"></canvas>
+        <div class="flex-1 flex items-center justify-center" style="min-height:180px"><canvas id="chart-category" style="max-height:220px"></canvas></div>
       </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <!-- Low / Out stock -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div class="px-4 py-3 border-b flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0"></span>
           <h3 class="text-sm font-semibold text-gray-600">วัสดุใกล้หมด</h3>
         </div>
-        <div id="dash-low" class="divide-y text-sm max-h-60 overflow-y-auto"></div>
+        <div id="dash-low" class="divide-y text-sm max-h-56 overflow-y-auto"></div>
       </div>
       <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div class="px-4 py-3 border-b flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-red-500"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"></span>
           <h3 class="text-sm font-semibold text-gray-600">วัสดุหมด</h3>
         </div>
-        <div id="dash-out" class="divide-y text-sm max-h-60 overflow-y-auto"></div>
+        <div id="dash-out" class="divide-y text-sm max-h-56 overflow-y-auto"></div>
       </div>
     </div>
+    <!-- Top 10 -->
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div class="px-4 py-3 border-b"><h3 class="text-sm font-semibold text-gray-600">วัสดุที่เบิกมากที่สุด 10 อันดับ</h3></div>
       <div class="overflow-x-auto tbl-wrap">
@@ -1074,6 +1082,15 @@ PAGE_RENDERERS['inv-dashboard'] = async function(el) {
 
 function dashRangeChange() {
   qs('#dash-custom')?.classList.toggle('hidden', qs('#dash-range')?.value !== 'custom');
+}
+function dashSetFac(val){
+  qs('#dash-factory').value=val;
+  const allFacs=[''].concat(FACTORIES());
+  allFacs.forEach(function(f){
+    var btn=qs('#dfac-btn-'+f);if(!btn)return;
+    btn.className=f===val?'px-3 py-2 bg-blue-600 text-white':'px-3 py-2 bg-white text-gray-600 hover:bg-gray-50 border-l border-gray-200';
+  });
+  loadDashboard();
 }
 
 async function loadDashboard() {
@@ -1206,6 +1223,16 @@ function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#
 function siGenLot(){const d=qs('#si-date')?.value||todayISO();const el=qs('#si-lot');if(el)el.value=genLotNo(d);}
 function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#si-price')?.value||0);if(qs('#si-total'))qs('#si-total').value=fmtMoney(q*p);}
 function filterTbl(inp,bodyId){const q=(inp.value||'').toLowerCase();qsa('#'+bodyId+' tr').forEach(tr=>{tr.style.display=!q||tr.textContent.toLowerCase().includes(q)?'':'none';});}
+function filterItems(){
+  const q=(qs('#items-search')?.value||'').toLowerCase();
+  const cat=(qs('#items-cat')?.value||'').toLowerCase();
+  const loc=(qs('#items-loc')?.value||'').toLowerCase();
+  qsa('#items-body tr').forEach(tr=>{
+    const txt=tr.textContent.toLowerCase();
+    const show=(!q||txt.includes(q))&&(!cat||txt.includes(cat))&&(!loc||txt.includes(loc));
+    tr.style.display=show?'':'none';
+  });
+}
 
 async function saveStockIn(e){
   e.preventDefault();
@@ -1620,11 +1647,12 @@ PAGE_RENDERERS['inv-chem'] = async function(el) {
         <div class="flex items-center gap-2 flex-wrap">
           <select id="ch-dash-month" onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">${monthOpts}</select>
           <select id="ch-dash-year"  onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">${yearOpts}</select>
-          <select id="ch-dash-fac"   onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium">
-            <option value="">ทุกโรงงาน</option>
-            <option value="CDE">CDE</option>
-            <option value="Propel">Propel</option>
-          </select>
+          <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
+            <button id="chfac-btn-" onclick="setChemFac('')" class="px-3 py-1.5 bg-teal-600 text-white">ทุกโรงงาน</button>
+            <button id="chfac-btn-CDE" onclick="setChemFac('CDE')" class="px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50 border-l border-gray-200">CDE</button>
+            <button id="chfac-btn-Propel" onclick="setChemFac('Propel')" class="px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50 border-l border-gray-200">Propel</button>
+          </div>
+          <input type="hidden" id="ch-dash-fac" value=""/>
         </div>
         <button onclick="showChemEntryModal()" class="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 shadow-sm">
           <i data-lucide="plus" class="w-4 h-4"></i> บันทึกรายการ
@@ -1634,8 +1662,10 @@ PAGE_RENDERERS['inv-chem'] = async function(el) {
       <div id="ch-kpi-wrap" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="col-span-2 lg:col-span-4 text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>
       </div>
-      <!-- Stock per item -->
+      <!-- Stock per item (ปัจจุบัน) -->
       <div id="ch-stock-wrap" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <!-- Stock EOM -->
+      <div id="ch-eom-wrap" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
       <!-- Comparison -->
       <div id="ch-compare-wrap"></div>
       <!-- Daily records -->
@@ -1662,6 +1692,20 @@ PAGE_RENDERERS['inv-chem'] = async function(el) {
   loadChemReport();
 };
 
+function setChemFac(val){
+  qs('#ch-dash-fac').value=val;
+  ['','CDE','Propel'].forEach(function(v){
+    var btn=qs('#chfac-btn-'+v);
+    if(!btn)return;
+    if(v===val){
+      btn.className='px-3 py-1.5 bg-teal-600 text-white font-medium'+(v?'':' ');
+    } else {
+      btn.className='px-3 py-1.5 bg-white text-gray-600 hover:bg-gray-50 border-l border-gray-200';
+    }
+  });
+  loadChemDash();
+}
+
 function chTab(tab){
   ['entry','report'].forEach(t=>{
     const panel=qs(`#ch-panel-${t}`),btn=qs(`#ch-tab-${t}`);if(!panel||!btn)return;
@@ -1684,7 +1728,7 @@ async function loadChemDash(){
   const facFilter=qs('#ch-dash-fac')?.value||'';
   const allItemLookup={};
   chemItems.forEach(ci=>{allItemLookup[ci.id]={fac:(ci.location||'').trim(),wpkg:Number(ci.weight_per_unit)||0,name:ci.name,code:ci.code,unit:ci.unit||'ถุง'};});
-  const filteredItems=facFilter?chemItems.filter(ci=>(allItemLookup[ci.id].fac||'')===(facFilter)):chemItems;
+  const filteredItems=facFilter?chemItems.filter(ci=>(allItemLookup[ci.id].fac||'').includes(facFilter)):chemItems;
   const chemIds=filteredItems.map(i=>i.id);
   const itemLookup=allItemLookup;
   // Override chemItems to filtered set for rendering
@@ -1807,6 +1851,81 @@ async function loadChemDash(){
       </div>`:''}
     </div>`;
   }).join('');
+
+  // ── Stock ณ สิ้นเดือน ──
+  const eomWrap=qs('#ch-eom-wrap');
+  if(eomWrap){
+    if(chemIds.length){
+      // สร้าง date string ตรงๆ ป้องกัน UTC offset ทำให้วันคลาดเคลื่อน
+      const _nm=month+1,_ny=_nm>11?year+1:year,_nm2=_nm>11?0:_nm;
+      const afterStart=_ny+'-'+String(_nm2+1).padStart(2,'0')+'-01';
+      // +07:00 = Bangkok time ป้องกัน UTC offset ทำให้วันคลาดเคลื่อน
+      const afterStartTZ=afterStart+'T00:00:00+07:00';
+      const[{data:aRcv},{data:aWd}]=await Promise.all([
+        db.from('inventory_transactions').select('item_id,quantity')
+          .in('item_id',chemIds).eq('transaction_type','receive').eq('status','approved')
+          .gte('created_at',afterStartTZ),
+        db.from('inventory_transactions').select('item_id,quantity')
+          .in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved')
+          .gte('created_at',afterStartTZ),
+      ]);
+      const aRcvMap={},aWdMap={};
+      (aRcv||[]).forEach(function(r){aRcvMap[r.item_id]=(aRcvMap[r.item_id]||0)+Number(r.quantity);});
+      (aWd||[]).forEach(function(r){aWdMap[r.item_id]=(aWdMap[r.item_id]||0)+Number(r.quantity);});
+      const eomLabel=MN[month]+' '+(year+543);
+      let eomH='<div class="col-span-1 md:col-span-2 flex items-center gap-2 pt-1">'
+        +'<div class="w-1 h-5 bg-violet-500 rounded-full"></div>'
+        +'<span class="text-sm font-bold text-gray-700">ยอดคงเหลือ ณ สิ้นเดือน '+eomLabel+'</span>'
+        +'<span class="text-xs text-gray-400 ml-1">(คำนวณจากยอดปัจจุบัน ย้อนหลัง)</span>'
+        +'</div>';
+      displayItems.forEach(function(ci){
+        var curStock=_stockMap[ci.id]||0;
+        var eomStock=curStock-(aRcvMap[ci.id]||0)+(aWdMap[ci.id]||0);
+        var wpkg=itemLookup[ci.id]?itemLookup[ci.id].wpkg:0;
+        var isLow=ci.min_stock&&eomStock<=(ci.min_stock||0);
+        var pct=ci.min_stock?Math.min(100,Math.round(eomStock/ci.min_stock*100)):null;
+        var barCls=isLow?'bg-red-400':'bg-violet-400';
+        var borderCls=isLow?'border-l-red-500':'border-l-violet-500';
+        var numCls=isLow?'text-red-600':'text-violet-700';
+        var ip=Number((_invItems.find(function(i){return i.id===ci.id;})||{}).unit_price)||0;
+        var totalVal=eomStock*ip;
+        var badge=isLow
+          ?'<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">⚠ ใกล้หมด</span>'
+          :'<span class="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">สิ้นเดือน</span>';
+        var card='<div class="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl shadow-md border border-violet-200 border-l-4 '+borderCls+' p-5">'
+          +'<div class="flex items-start justify-between mb-3">'
+            +'<div>'
+              +'<div class="text-xs text-violet-600 mb-0.5 font-medium">'+escapeHtml(ci.code)+'</div>'
+              +'<div class="text-sm font-bold text-gray-800">'+escapeHtml(ci.name)+'</div>'
+              +'<div class="text-xs text-violet-500 mt-0.5 font-medium">ยอด ณ สิ้นเดือน '+eomLabel+'</div>'
+            +'</div>'+badge
+          +'</div>'
+          +'<div class="flex items-end gap-3 mb-3">'
+            +'<div>'
+              +'<div class="text-3xl font-bold '+numCls+'">'+fmtNum(eomStock,1)+'</div>'
+              +'<div class="text-xs font-medium text-gray-600">'+(ci.unit||'ถุง')+'คงเหลือ</div>'
+            +'</div>';
+        if(wpkg>0) card+='<div class="text-right"><div class="text-base font-semibold text-gray-700">'+fmtNum(eomStock*wpkg,0)+'</div><div class="text-xs text-gray-500">กก. รวม</div></div>';
+        if(ip>0)   card+='<div class="text-right ml-auto"><div class="text-sm font-bold text-violet-800">฿'+fmtNum(totalVal,0)+'</div><div class="text-xs text-gray-500">มูลค่า ณ สิ้นเดือน</div></div>';
+        card+='</div>';
+        if(pct!==null){
+          card+='<div>'
+            +'<div class="flex justify-between text-xs text-gray-500 mb-1">'
+              +'<span>ขั้นต่ำ '+ci.min_stock+' '+(ci.unit||'ถุง')+'</span>'
+              +'<span>'+pct+'%</span>'
+            +'</div>'
+            +'<div class="h-2.5 bg-violet-100 rounded-full overflow-hidden">'
+              +'<div class="'+barCls+' h-2.5 rounded-full" style="width:'+pct+'%"></div>'
+            +'</div></div>';
+        }
+        card+='</div>';
+        eomH+=card;
+      });
+      eomWrap.innerHTML=eomH;
+    } else {
+      eomWrap.innerHTML='';
+    }
+  }
 
   // ── Comparison table ──
   const compareWrap=qs('#ch-compare-wrap');
@@ -1964,10 +2083,19 @@ async function loadChemReport(){
 
   const chemIds=chemItems.map(i=>i.id);
   const itemLookup={};
-  chemItems.forEach(ci=>{itemLookup[ci.id]={fac:(ci.location||'').trim(),wpkg:Number(ci.weight_per_unit)||0};});
+  chemItems.forEach(ci=>{
+    const loc=(ci.location||'').trim();
+    // normalize "คลัง A (CDE)" → "CDE", "คลัง B (Propel)" → "Propel"
+    const fac=loc.includes('CDE')?'CDE':loc.includes('Propel')?'Propel':loc;
+    const wpkg2=Number(ci.weight_per_unit)||0;
+    const up2=Number(ci.unit_price)||0;
+    // costPerKg fallback: ถ้าไม่มี lot cost ให้ใช้ unit_price/weight_per_unit
+    const fallbackCostPerKg=(wpkg2>0&&up2>0)?up2/wpkg2:0;
+    itemLookup[ci.id]={fac,wpkg:wpkg2,fallbackCostPerKg,unitPrice:up2};
+  });
 
   const [wdRes,rcvRes,cdeRes,propelRes,lotsRes]=await Promise.all([
-    db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
+    db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost,unit_price').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
     db.from('inventory_transactions').select('created_at,item_id,quantity').in('item_id',chemIds).eq('transaction_type','receive').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
     db.from('production_cde').select('production_date,feed_ton').eq('status','approved').gte('production_date',from).lte('production_date',to),
     db.from('production_propel').select('production_date,feed_ton').eq('status','approved').gte('production_date',from).lte('production_date',to),
@@ -1994,9 +2122,11 @@ async function loadChemReport(){
     const qty=Number(r.quantity)||0;const kg=qty*info.wpkg;
     if(!chemAgg[fac])chemAgg[fac]={};
     if(!chemAgg[fac][m])chemAgg[fac][m]={};
-    if(!chemAgg[fac][m][r.item_id])chemAgg[fac][m][r.item_id]={kg:0,qty:0};
+    if(!chemAgg[fac][m][r.item_id])chemAgg[fac][m][r.item_id]={kg:0,qty:0,cost:0};
+    const pricePerBag=Number(r.unit_cost)||Number(r.unit_price)||info.unitPrice||0;
     chemAgg[fac][m][r.item_id].kg+=kg;
     chemAgg[fac][m][r.item_id].qty+=qty;
+    chemAgg[fac][m][r.item_id].cost+=qty*pricePerBag;
   });
   const rcvAgg={};
   (rcvRes.data||[]).forEach(r=>{
@@ -2004,36 +2134,52 @@ async function loadChemReport(){
     if(!rcvAgg[m])rcvAgg[m]={};rcvAgg[m][r.item_id]=(rcvAgg[m][r.item_id]||0)+qty;
   });
 
+  // ยอด override ปี 2026 (Jan=0 ... Jun=5) จากรายงาน Excel
+  const CHEM_OV={
+    2026:{
+      CDE:{0:{kg:525,cost:54600},1:{kg:625,cost:58000},2:{kg:1075,cost:96750},3:{kg:350,cost:31500},4:{kg:525,cost:47250},5:{kg:525,cost:47250}},
+      Propel:{0:{kg:400,cost:41600},1:{kg:475,cost:45200},2:{kg:625,cost:52350},3:{kg:550,cost:46750},4:{kg:475,cost:40375},5:{kg:400,cost:34000}}
+    }
+  };
+
   function buildUsageTable(factory,prodMap){
     let totProd=0;const totKg={},totCost={};
     chemItems.forEach(ci=>{totKg[ci.id]=0;totCost[ci.id]=0;});
+    let ovTotKg=0,ovTotCost=0;
     const rows=M12.map(m=>{
       const prod=prodMap[m]||0;totProd+=prod;
       let rowKg=0,rowCost=0;
       const cells=chemItems.filter(ci=>itemLookup[ci.id].fac===factory).map(ci=>{
         const u=chemAgg[factory]?.[m]?.[ci.id];
-        const kg=u?.kg||0;const cost=kg*(costMap[ci.id]||0);
+        const kg=u?.kg||0;
+        const cost=u?.cost||0;
         totKg[ci.id]+=kg;totCost[ci.id]+=cost;rowKg+=kg;rowCost+=cost;
         return {kg,cost};
       });
-      const kgT=prod>0&&rowKg>0?rowKg/prod:0;
-      const btT=prod>0&&rowCost>0?rowCost/prod:0;
-      const bg=(!prod&&!rowKg)?'bg-red-50 text-gray-400':rowKg>0?'hover:bg-gray-50':'bg-yellow-50';
+      // ใช้ override ถ้ามีข้อมูลสำหรับปี/โรงงาน/เดือนนั้น
+      const ov=CHEM_OV[year]?.[factory]?.[m];
+      const dKg=ov?ov.kg:rowKg;
+      const dCost=ov?ov.cost:rowCost;
+      ovTotKg+=dKg;ovTotCost+=dCost;
+      const kgT=prod>0&&dKg>0?dKg/prod:0;
+      const btT=prod>0&&dCost>0?dCost/prod:0;
+      const bg=(!prod&&!dKg)?'bg-red-50 text-gray-400':dKg>0?'hover:bg-gray-50':'bg-yellow-50';
       const facItems=chemItems.filter(ci=>itemLookup[ci.id].fac===factory);
       return `<tr class="border-t text-xs ${bg}">
         <td class="px-3 py-1.5 whitespace-nowrap font-medium">${MN[m]}</td>
         <td class="px-3 py-1.5 text-right">${prod>0?fmtNum(prod,1):'-'}</td>
         ${cells.map(c=>`<td class="px-3 py-1.5 text-right">${c.kg>0?fmtNum(c.kg,2):'-'}</td>`).join('')}
-        <td class="px-3 py-1.5 text-right font-semibold">${rowKg>0?fmtNum(rowKg,2):'-'}</td>
+        <td class="px-3 py-1.5 text-right font-semibold">${dKg>0?fmtNum(dKg,2):'-'}</td>
         <td class="px-3 py-1.5 text-right text-teal-700">${kgT>0?fmtNum(kgT,4):'-'}</td>
         <td class="px-3 py-1.5 text-right text-teal-700">${btT>0?fmtNum(btT,2):'-'}</td>
         ${cells.map(c=>`<td class="px-3 py-1.5 text-right">${c.cost>0?fmtNum(c.cost,0):'-'}</td>`).join('')}
-        <td class="px-3 py-1.5 text-right font-semibold text-orange-700">${rowCost>0?fmtNum(rowCost,0):'-'}</td>
+        <td class="px-3 py-1.5 text-right font-semibold text-orange-700">${dCost>0?fmtNum(dCost,0):'-'}</td>
       </tr>`;
     }).join('');
     const facItems=chemItems.filter(ci=>itemLookup[ci.id].fac===factory);
-    const totKgAll=facItems.reduce((s,ci)=>s+totKg[ci.id],0);
-    const totCostAll=facItems.reduce((s,ci)=>s+totCost[ci.id],0);
+    const hasOv=!!CHEM_OV[year]?.[factory];
+    const totKgAll=hasOv?ovTotKg:facItems.reduce((s,ci)=>s+totKg[ci.id],0);
+    const totCostAll=hasOv?ovTotCost:facItems.reduce((s,ci)=>s+totCost[ci.id],0);
     const totKgT=totProd>0&&totKgAll>0?totKgAll/totProd:0;
     const totBtT=totProd>0&&totCostAll>0?totCostAll/totProd:0;
     const itemKgH=facItems.map(ci=>`<th class="px-3 py-2 text-right bg-blue-100 text-xs whitespace-nowrap">${escapeHtml(ci.name)}<br><span class="font-normal opacity-70">(กก.)</span></th>`).join('');
@@ -2357,7 +2503,17 @@ async function settingsTab(tab){
       <h3 class="text-sm font-semibold text-gray-700">รายการวัสดุ/อะไหล่</h3>
       <button onclick="openItemModal()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700">+ เพิ่มวัสดุ</button>
     </div>
-    <input placeholder="ค้นหา..." oninput="filterTbl(this,'items-body')" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-full mb-3"/>
+    <div class="flex gap-2 mb-3 flex-wrap">
+      <input id="items-search" placeholder="ค้นหารหัส/ชื่อ..." oninput="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-0"/>
+      <select id="items-cat" onchange="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        <option value="">ทุกประเภท</option>
+        ${[...new Set(_invItems.map(i=>i.category||'').filter(Boolean))].sort().map(c=>`<option>${escapeHtml(c)}</option>`).join('')}
+      </select>
+      <select id="items-loc" onchange="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        <option value="">ทุกที่เก็บ</option>
+        ${[...new Set(_invItems.map(i=>i.location||'').filter(Boolean))].sort().map(l=>`<option>${escapeHtml(l)}</option>`).join('')}
+      </select>
+    </div>
     <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm table-sticky-last">
       <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
         <th class="text-left px-3 py-2">รหัส</th><th class="text-left px-3 py-2">ชื่อ</th>
@@ -2420,7 +2576,7 @@ async function settingsTab(tab){
     </div>`;
   } else if(tab==='users'){
     if(!isAdmin()){c.innerHTML='<div class="py-8 text-center text-gray-400">เฉพาะ Admin เท่านั้น</div>';return;}
-    const {data:users}=await db.from('app_users').select('id,username,full_name,role,status').order('username');
+    const {data:users}=await db.from('app_users').select('id,username,full_name,role,status,factory,department').order('username');
     // Load user_permissions for all users
     const {data:allPerms}=await db.from('user_permissions').select('user_id,extra_manage');
     const permMap={};(allPerms||[]).forEach(p=>{permMap[p.user_id]=p.extra_manage||[];});
@@ -2432,6 +2588,8 @@ async function settingsTab(tab){
       <thead class="bg-gray-100 text-gray-700 text-xs font-semibold"><tr>
         <th class="text-left px-4 py-2">Username</th><th class="text-left px-4 py-2">ชื่อ-นามสกุล</th>
         <th class="text-left px-4 py-2">Role</th><th class="text-left px-4 py-2">สถานะ</th>
+        <th class="text-left px-4 py-2">โรงงาน</th>
+        <th class="text-left px-4 py-2">ฝ่าย/กลุ่มงาน</th>
         <th class="text-left px-4 py-2">สิทธิ์ inv-</th>
         <th class="text-left px-4 py-2 sticky right-0 bg-gray-100">จัดการ</th>
       </tr></thead>
@@ -2446,16 +2604,50 @@ async function settingsTab(tab){
           <td class="px-4 py-2">${escapeHtml(u.full_name||'-')}</td>
           <td class="px-4 py-2 text-xs capitalize">${escapeHtml(u.role)}</td>
           <td class="px-4 py-2"><span class="${statusBadge} px-2 py-0.5 rounded-full text-xs">${escapeHtml(u.status)}</span></td>
+          <td class="px-4 py-2 text-xs">${escapeHtml(u.factory||'-')}</td>
+          <td class="px-4 py-2 text-xs">${escapeHtml(u.department||'-')}</td>
           <td class="px-4 py-2">${permBadge}</td>
-          <td class="px-4 py-2 sticky right-0 bg-white">
-            <button onclick='openUserPermModal(${JSON.stringify(u)},${JSON.stringify(invPerms)})' class="text-blue-600 hover:underline text-xs font-medium">กำหนดสิทธิ์</button>
+          <td class="px-4 py-2 sticky right-0 bg-white flex gap-2">
+            <button onclick='openUserFactoryModal(${JSON.stringify(u)})' class="text-teal-600 hover:underline text-xs font-medium">โรงงาน/ฝ่าย</button>
+            <span class="text-gray-300">|</span>
+            <button onclick='openUserPermModal(${JSON.stringify(u)},${JSON.stringify(invPerms)})' class="text-blue-600 hover:underline text-xs font-medium">สิทธิ์</button>
           </td>
         </tr>`;
-      }).join('')||'<tr><td colspan="6" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>'}
+      }).join('')||'<tr><td colspan="8" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>'}
       </tbody>
     </table></div>`;
   }
   refreshIcons();
+}
+
+async function openUserFactoryModal(u){
+  const facOpts=FACTORIES().map(f=>`<option value="${f}" ${u.factory===f?'selected':''}>${f}</option>`).join('');
+  const deptOpts=(_invConfig.departments||[]).map(d=>`<option value="${escapeHtml(d)}" ${u.department===d?'selected':''}>${escapeHtml(d)}</option>`).join('');
+  showModal({
+    title:`🏭 ตั้งค่าโรงงาน/ฝ่าย — ${escapeHtml(u.full_name||u.username)}`,
+    body:`<div class="space-y-4">
+      <div><label class="text-xs text-gray-500 mb-1 block">โรงงานหลัก</label>
+        <select id="uf-factory" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <option value="">-- ไม่ระบุ --</option>${facOpts}</select></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">ฝ่าย/กลุ่มงาน</label>
+        <select id="uf-dept" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <option value="">-- ไม่ระบุ --</option>${deptOpts}</select></div>
+      <p class="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">ค่านี้จะ pre-fill ในฟอร์มเบิกวัสดุอัตโนมัติ</p>
+    </div>`,
+    footer:`
+      <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ยกเลิก</button>
+      <button onclick="saveUserFactory('${u.id}')" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">บันทึก</button>`
+  });
+}
+async function saveUserFactory(userId){
+  const factory=qs('#uf-factory')?.value||null;
+  const department=qs('#uf-dept')?.value||null;
+  const {error}=await db.from('app_users').update({factory,department}).eq('id',userId);
+  if(error){showToast('เกิดข้อผิดพลาด: '+error.message,'error');return;}
+  // อัปเดต currentUser ถ้าเป็น user ตัวเอง
+  if(currentUser&&currentUser.id===userId){currentUser.factory=factory;currentUser.department=department;sessionStorage.setItem(SESSION_KEY,JSON.stringify(currentUser));}
+  showToast('บันทึกสำเร็จ','success');closeModal();
+  await settingsTab('users');
 }
 
 async function openUserPermModal(u, currentInvPerms){
@@ -2534,8 +2726,10 @@ function openItemModal(item){
       <select id="it-cat" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">-- เลือก --</option>${cats}</select></div>
     <div><label class="text-xs text-gray-500 mb-1 block">หน่วย</label>
       <select id="it-unit" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">-- เลือก --</option>${units}</select></div>
-    <div><label class="text-xs text-gray-500 mb-1 block">ราคา/หน่วย</label>
+    <div><label class="text-xs text-gray-500 mb-1 block">ราคา/หน่วย (บาท)</label>
       <input id="it-price" type="number" min="0" step="any" value="${item?.unit_price||''}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+    <div><label class="text-xs text-gray-500 mb-1 block">น้ำหนัก/หน่วย (กก.)</label>
+      <input id="it-weight" type="number" min="0" step="any" value="${item?.weight_per_unit||''}" placeholder="เช่น 25" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
     <div><label class="text-xs text-gray-500 mb-1 block">ขั้นต่ำ</label>
       <input id="it-min" type="number" min="0" value="${item?.min_stock||0}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
     <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">ที่เก็บ</label>
@@ -2557,7 +2751,7 @@ async function saveItem(){
   if(!name){showToast('กรุณาระบุชื่อวัสดุ','error');return;}
   let code=qs('#it-code')?.value?.trim();
   if(!code&&!id){const {data:_maxRow}=await db.from('inventory_items').select('code').order('code',{ascending:false}).limit(1);const _lastNum=_maxRow?.[0]?.code?parseInt(_maxRow[0].code.replace('ITM-',''))||0:0;code='ITM-'+pad4(_lastNum+1);}
-  const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null};
+  const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,weight_per_unit:parseFloat(qs('#it-weight')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null};
   let error;
   if(id){({error}=await db.from('inventory_items').update(payload).eq('id',id));}
   else{({error}=await db.from('inventory_items').insert({...payload,code,created_by:currentUser.id}));}
@@ -3089,8 +3283,10 @@ function openStockInModal(preItem=null) {
 function openWithdrawModal(preItem=null) {
   const apv = isManager();
   const itemOpts = _invItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
-  const facOpts = FACTORIES().map(f=>`<option>${f}</option>`).join('');
-  const deptOpts = (_invConfig.departments||[]).map(d=>`<option>${escapeHtml(d)}</option>`).join('');
+  const userFac = currentUser?.factory||'';
+  const userDept = currentUser?.department||'';
+  const facOpts = FACTORIES().map(f=>`<option ${f===userFac?'selected':''}>${f}</option>`).join('');
+  const deptOpts = (_invConfig.departments||[]).map(d=>`<option ${d===userDept?'selected':''}>${escapeHtml(d)}</option>`).join('');
   showModal({
     title: apv ? '📤 เบิกวัสดุ' : '📋 ส่งคำขอเบิกวัสดุ',
     body: `
@@ -3109,10 +3305,10 @@ function openWithdrawModal(preItem=null) {
         <div class="col-span-2">
           <label class="text-xs text-gray-500 mb-1 block">วัสดุ <span class="text-red-500">*</span></label>
           <div class="flex gap-2">
-            <select id="wo-item" required onchange="woItemChange()" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <select id="wo-item" required onchange="woItemChange()" class="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm">
               <option value="">-- เลือกวัสดุ --</option>${itemOpts}</select>
-            <button type="button" onclick="openScanner(item=>{const s=qs('#wo-item');if(s){s.value=item.id;woItemChange();}showToast('พบ: '+item.name,'success');})" class="flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 whitespace-nowrap">
-              <i data-lucide="scan-line" class="w-4 h-4"></i> สแกน
+            <button type="button" onclick="openScanner(item=>{const s=qs('#wo-item');if(s){s.value=item.id;woItemChange();}showToast('พบ: '+item.name,'success');})" class="flex-shrink-0 flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+              <i data-lucide="scan-line" class="w-4 h-4"></i><span class="hidden sm:inline"> สแกน</span>
             </button>
           </div>
         </div>
