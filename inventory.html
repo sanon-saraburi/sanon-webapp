@@ -256,6 +256,9 @@ let _invConfig = { factories:[],
 let _invItems     = [];  // inventory_items (active)
 let _stockMap     = {};  // item_id → current_quantity
 let _lotsMap      = {};  // item_id → [{id,lot_no,received_date,remaining_qty,unit_cost}] (FIFO order)
+let _balSort      = { col:'', dir:'asc' }; // click sort state (inv-balance)
+let _qrSort       = { col:'', dir:'asc' }; // click sort state (inv-qr)
+let _dragSrcId    = null; // drag & drop
 let _suppliers    = [];  // inv_suppliers
 let _pendingCount = 0;   // จำนวนรออนุมัติ (withdraw pending)
 
@@ -584,7 +587,8 @@ async function loadInvItems() {
     .from('inventory_items')
     .select('*')
     .eq('status','active')
-    .order('code');
+    .order('sort_order', { ascending: true })
+    .order('code', { ascending: true });
   _invItems = data || [];
 }
 
@@ -666,6 +670,7 @@ const PAGE_RENDERERS = {};  // registered by each section: PAGE_RENDERERS['inv-x
 
 async function navigateTo(page) {
   currentPage = page;
+  try { sessionStorage.setItem('_sn_inv_page', page); } catch(_) {}
   // ปิด mobile sidebar drawer ทุกครั้งที่ navigate
   closeSidebar();
 
@@ -1593,86 +1598,345 @@ async function printPo(poId){
 }
 
 // =====================================================================
-// SECTION 16: inv-chem — สารตกตะกอน
+// SECTION 16: inv-chem — สารตกตะกอน (Dashboard)
 // =====================================================================
 PAGE_RENDERERS['inv-chem'] = async function(el) {
-  const chemItems=_invItems.filter(i=>i.is_chemical);
-  const {data:hist}=await db.from('chem_daily_usage').select('*,inventory_items(name,unit,weight_per_unit)').order('usage_date',{ascending:false}).limit(60);
+  const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const now=new Date(),thisYear=now.getFullYear(),thisMonth=now.getMonth();
+  const yearOpts=[thisYear,thisYear-1,thisYear-2].map(y=>`<option value="${y}">${y+543}</option>`).join('');
+  const monthOpts=MN.map((m,i)=>`<option value="${i}" ${i===thisMonth?'selected':''}>${m}</option>`).join('');
   el.innerHTML=`
-  <div class="space-y-5">
-    <div class="bg-white rounded-2xl shadow-sm p-5">
-      <h2 class="text-base font-semibold text-gray-700 mb-4">บันทึกการใช้สารตกตะกอนประจำวัน</h2>
-      <form id="chem-form" onsubmit="saveChemUsage(event)" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div><label class="text-xs text-gray-500 mb-1 block">วันที่ <span class="text-red-500">*</span></label>
-          <input id="ch-date" type="date" value="${todayISO()}" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน <span class="text-red-500">*</span></label>
-          <select id="ch-factory" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            <option value="">-- เลือก --</option><option>CDE</option><option>Propel</option></select></div>
-        <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">สาร <span class="text-red-500">*</span></label>
-          <select id="ch-item" required onchange="chItemChange()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            <option value="">-- เลือกสาร --</option>${chemItems.map(i=>`<option value="${i.id}" data-wpkg="${i.weight_per_unit||0}" data-unit="${escapeHtml(i.unit||'')}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('')}
-          </select></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">คงเหลือ (ถุง)</label>
-          <input id="ch-stock" readonly class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500"/></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">ใช้ (ถุง) <span class="text-red-500">*</span></label>
-          <input id="ch-used" type="number" min="0" step="any" required placeholder="0" oninput="chCalc()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">น้ำหนักใช้ (กก.)</label>
-          <input id="ch-kg" readonly class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500"/></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">จัดซื้อเพิ่ม (ถุง)</label>
-          <input id="ch-buy" type="number" min="0" step="any" placeholder="0" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
-        <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">หมายเหตุ</label>
-          <input id="ch-note" placeholder="หมายเหตุ" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
-        <div class="col-span-2 md:col-span-4 flex justify-end">
-          <button type="submit" id="ch-btn" class="px-6 py-2 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700">บันทึก</button>
+  <div class="space-y-0">
+    <!-- Tab bar -->
+    <div class="flex gap-0 border-b border-gray-200 bg-white rounded-t-2xl px-4 pt-3">
+      <button id="ch-tab-entry" onclick="chTab('entry')" class="px-5 py-2 text-sm font-medium border-b-2 border-teal-500 text-teal-600 -mb-px">ภาพรวม</button>
+      <button id="ch-tab-report" onclick="chTab('report')" class="px-5 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px">รายงานประจำปี</button>
+    </div>
+    <!-- Dashboard Tab -->
+    <div id="ch-panel-entry" class="space-y-4 pt-4">
+      <!-- Controls -->
+      <div class="bg-white rounded-2xl shadow-sm px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="ch-dash-month" onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">${monthOpts}</select>
+          <select id="ch-dash-year"  onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">${yearOpts}</select>
+          <select id="ch-dash-fac"   onchange="loadChemDash()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium">
+            <option value="">ทุกโรงงาน</option>
+            <option value="CDE">CDE</option>
+            <option value="Propel">Propel</option>
+          </select>
         </div>
-      </form>
-    </div>
-    <!-- Summary by month -->
-    <div class="bg-white rounded-2xl shadow-sm p-5">
-      <h3 class="text-sm font-semibold text-gray-600 mb-3">สรุปรายเดือน (กก./ตัน)</h3>
-      <div class="overflow-x-auto tbl-wrap">
-        <table class="w-full text-sm"><thead class="bg-gray-50 text-gray-500 text-xs"><tr>
-          <th class="text-left px-3 py-2">เดือน</th><th class="text-left px-3 py-2">โรง</th>
-          <th class="text-left px-3 py-2">สาร</th><th class="text-right px-3 py-2">ใช้ (ถุง)</th>
-          <th class="text-right px-3 py-2">ใช้ (กก.)</th><th class="text-right px-3 py-2">ผลิต (ตัน)</th>
-          <th class="text-right px-3 py-2">กก./ตัน</th>
-        </tr></thead>
-        <tbody id="chem-summary">
-          <tr><td colspan="7" class="text-center py-4 text-gray-400">กำลังโหลด...</td></tr>
-        </tbody></table>
+        <button onclick="showChemEntryModal()" class="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 shadow-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i> บันทึกรายการ
+        </button>
       </div>
+      <!-- KPI 4 cards -->
+      <div id="ch-kpi-wrap" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="col-span-2 lg:col-span-4 text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>
+      </div>
+      <!-- Stock per item -->
+      <div id="ch-stock-wrap" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      <!-- Comparison -->
+      <div id="ch-compare-wrap"></div>
+      <!-- Daily records -->
+      <div id="ch-daily-wrap"></div>
     </div>
-    <!-- History -->
-    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-5 py-3 border-b"><h3 class="text-sm font-semibold text-gray-600">ประวัติ 60 รายการล่าสุด</h3></div>
-      <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
-          <th class="text-left px-4 py-2">วันที่</th><th class="text-left px-4 py-2">โรง</th>
-          <th class="text-left px-4 py-2">สาร</th><th class="text-right px-4 py-2">ใช้ (ถุง)</th>
-          <th class="text-right px-4 py-2">ใช้ (กก.)</th><th class="text-right px-4 py-2">จัดซื้อ</th>
-        </tr></thead>
-        <tbody>${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50">
-          <td class="px-4 py-2 text-gray-500">${fmtDate(r.usage_date)}</td>
-          <td class="px-4 py-2">${escapeHtml(r.factory)}</td>
-          <td class="px-4 py-2">${escapeHtml(r.inventory_items?.name||'-')}</td>
-          <td class="px-4 py-2 text-right font-medium">${fmtNum(r.qty_used,2)}</td>
-          <td class="px-4 py-2 text-right">${r.kg_used?fmtNum(r.kg_used,1)+' กก.':'-'}</td>
-          <td class="px-4 py-2 text-right text-green-600">${r.qty_purchase?fmtNum(r.qty_purchase,2):'-'}</td>
-        </tr>`).join('')||'<tr><td colspan="6" class="text-center py-8 text-gray-400">ยังไม่มีข้อมูล</td></tr>'}
-        </tbody>
-      </table></div>
+    <!-- Report Tab -->
+    <div id="ch-panel-report" class="hidden pt-5">
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <h2 class="text-base font-semibold text-gray-700">รายงานการใช้และค่าใช้จ่ายสารตกตะกอน</h2>
+          <div class="flex items-center gap-2">
+            <select id="ch-rpt-year" onchange="loadChemReport()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">${yearOpts}</select>
+            <button onclick="printChemReport()" class="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+              <i data-lucide="file-text" class="w-4 h-4"></i> Export PDF
+            </button>
+          </div>
+        </div>
+        <div id="ch-rpt-body"><div class="text-center py-10 text-gray-400">กำลังโหลด...</div></div>
+      </div>
     </div>
   </div>`;
   refreshIcons();
-  loadChemSummary();
+  loadChemDash();
+  loadChemReport();
 };
+
+function chTab(tab){
+  ['entry','report'].forEach(t=>{
+    const panel=qs(`#ch-panel-${t}`),btn=qs(`#ch-tab-${t}`);if(!panel||!btn)return;
+    panel.classList.toggle('hidden',t!==tab);
+    if(t===tab){btn.classList.replace('border-transparent','border-teal-500');btn.classList.replace('text-gray-500','text-teal-600');}
+    else{try{btn.classList.replace('border-teal-500','border-transparent');btn.classList.replace('text-teal-600','text-gray-500');}catch(_){}}
+  });
+}
+
+async function loadChemDash(){
+  const month=parseInt(qs('#ch-dash-month')?.value??new Date().getMonth());
+  const year=parseInt(qs('#ch-dash-year')?.value??new Date().getFullYear());
+  const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const chemItems=_invItems.filter(i=>(i.category||'').includes('สาร'));
+  const kpiWrap=qs('#ch-kpi-wrap');
+  if(!chemItems.length){
+    if(kpiWrap)kpiWrap.innerHTML='<div class="col-span-4 text-center py-8 text-gray-400">ไม่พบวัสดุประเภทสารตกตะกอน</div>';return;
+  }
+  // Factory filter
+  const facFilter=qs('#ch-dash-fac')?.value||'';
+  const allItemLookup={};
+  chemItems.forEach(ci=>{allItemLookup[ci.id]={fac:(ci.location||'').trim(),wpkg:Number(ci.weight_per_unit)||0,name:ci.name,code:ci.code,unit:ci.unit||'ถุง'};});
+  const filteredItems=facFilter?chemItems.filter(ci=>(allItemLookup[ci.id].fac||'')===(facFilter)):chemItems;
+  const chemIds=filteredItems.map(i=>i.id);
+  const itemLookup=allItemLookup;
+  // Override chemItems to filtered set for rendering
+  const displayItems=filteredItems;
+
+  // Date ranges — current month
+  const from=`${year}-${String(month+1).padStart(2,'0')}-01`;
+  const lastDay=new Date(year,month+1,0).getDate();
+  const to=`${year}-${String(month+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  // Previous month
+  const pd=new Date(year,month-1,1);const pY=pd.getFullYear(),pM=pd.getMonth();
+  const pFrom=`${pY}-${String(pM+1).padStart(2,'0')}-01`;
+  const pLastDay=new Date(pY,pM+1,0).getDate();
+  const pTo=`${pY}-${String(pM+1).padStart(2,'0')}-${String(pLastDay).padStart(2,'0')}`;
+
+  const [wdRes,rcvRes,pwdRes,prcvRes,lotsRes]=await Promise.all([
+    db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost,unit_price,note').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59').order('created_at',{ascending:false}),
+    db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost,unit_price').in('item_id',chemIds).eq('transaction_type','receive').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
+    db.from('inventory_transactions').select('item_id,quantity,unit_cost,unit_price').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',pFrom+'T00:00:00').lte('created_at',pTo+'T23:59:59'),
+    db.from('inventory_transactions').select('item_id,quantity,unit_cost,unit_price').in('item_id',chemIds).eq('transaction_type','receive').eq('status','approved').gte('created_at',pFrom+'T00:00:00').lte('created_at',pTo+'T23:59:59'),
+    db.from('inventory_lots').select('item_id,remaining_qty,unit_cost').gt('remaining_qty',0)
+  ]);
+
+  // Weighted avg cost from lots
+  const costAcc={};
+  (lotsRes.data||[]).forEach(l=>{
+    if(!costAcc[l.item_id])costAcc[l.item_id]={tq:0,tc:0};
+    costAcc[l.item_id].tq+=Number(l.remaining_qty)||0;
+    costAcc[l.item_id].tc+=(Number(l.remaining_qty)||0)*(Number(l.unit_cost)||0);
+  });
+  const avgCost={};
+  Object.keys(costAcc).forEach(id=>{const c=costAcc[id];avgCost[id]=c.tq>0?c.tc/c.tq:0;});
+
+  function aggRows(rows){
+    const m={};
+    (rows||[]).forEach(r=>{
+      if(!m[r.item_id])m[r.item_id]={qty:0,cost:0};
+      const qty=Number(r.quantity)||0;
+      const wpkg=itemLookup[r.item_id]?.wpkg||0;
+      // ราคา/ถุง: ใช้จาก transaction ก่อน → fallback ราคา item
+      const lotCostPerBag=avgCost[r.item_id]?wpkg*(avgCost[r.item_id]||0):0;
+      const itemPrice=Number(_invItems.find(i=>i.id===r.item_id)?.unit_price)||0;
+      const pricePerBag=Number(r.unit_cost)||Number(r.unit_price)||lotCostPerBag||itemPrice;
+      m[r.item_id].qty+=qty;
+      m[r.item_id].cost+=qty*pricePerBag;
+    });
+    return m;
+  }
+  const curWd=aggRows(wdRes.data),curRcv=aggRows(rcvRes.data);
+  const prevWd=aggRows(pwdRes.data),prevRcv=aggRows(prcvRes.data);
+
+  const totWdQty=displayItems.reduce((s,ci)=>s+(curWd[ci.id]?.qty||0),0);
+  const totWdCost=displayItems.reduce((s,ci)=>s+(curWd[ci.id]?.cost||0),0);
+  const totRcvQty=displayItems.reduce((s,ci)=>s+(curRcv[ci.id]?.qty||0),0);
+  const totRcvCost=displayItems.reduce((s,ci)=>s+(curRcv[ci.id]?.cost||0),0);
+  const pTotWdQty=displayItems.reduce((s,ci)=>s+(prevWd[ci.id]?.qty||0),0);
+  const pTotWdCost=displayItems.reduce((s,ci)=>s+(prevWd[ci.id]?.cost||0),0);
+  const pTotRcvQty=displayItems.reduce((s,ci)=>s+(prevRcv[ci.id]?.qty||0),0);
+
+  function trendBadge(curr,prev,inverse=false){
+    if(!prev||prev===0)return'';
+    const pct=((curr-prev)/prev)*100;
+    const up=pct>=0;
+    const good=inverse?!up:up;// for cost, up=bad; for receipt, up=good
+    const col=good?'text-green-600':'text-red-500';
+    const icon=up?'trending-up':'trending-down';
+    return `<span class="inline-flex items-center gap-0.5 text-xs ${col}"><i data-lucide="${icon}" class="w-3 h-3"></i>${Math.abs(pct).toFixed(1)}%</span>`;
+  }
+
+  // ── KPI Cards ──
+  const kpiDef=[
+    {icon:'package-minus',bg:'bg-orange-100',ic:'text-orange-600',title:'เบิกจ่ายเดือนนี้',val:`${fmtNum(totWdQty,1)} ถุง`,badge:trendBadge(totWdQty,pTotWdQty,true),sub:`เดือนก่อน ${fmtNum(pTotWdQty,1)} ถุง`},
+    {icon:'banknote',bg:'bg-red-100',ic:'text-red-600',title:'ค่าใช้จ่ายเบิก',val:`฿${fmtNum(totWdCost,0)}`,badge:trendBadge(totWdCost,pTotWdCost,true),sub:`เดือนก่อน ฿${fmtNum(pTotWdCost,0)}`},
+    {icon:'package-plus',bg:'bg-blue-100',ic:'text-blue-600',title:'รับเข้าเดือนนี้',val:`${fmtNum(totRcvQty,1)} ถุง`,badge:trendBadge(totRcvQty,pTotRcvQty,false),sub:`เดือนก่อน ${fmtNum(pTotRcvQty,1)} ถุง`},
+    {icon:'wallet',bg:'bg-emerald-100',ic:'text-emerald-700',title:'ค่าใช้จ่ายรับเข้า',val:`฿${fmtNum(totRcvCost,0)}`,badge:'',sub:'มูลค่าสต็อครับเข้า'},
+  ];
+  if(kpiWrap)kpiWrap.innerHTML=kpiDef.map(c=>`
+    <div class="bg-white rounded-2xl shadow-md border border-gray-100 p-4">
+      <div class="flex items-start justify-between mb-3">
+        <div class="w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center">
+          <i data-lucide="${c.icon}" class="${c.ic} w-5 h-5"></i>
+        </div>
+        ${c.badge}
+      </div>
+      <div class="text-2xl font-bold text-gray-900 mb-0.5">${c.val}</div>
+      <div class="text-xs font-medium text-gray-600">${c.title}</div>
+      <div class="text-xs text-gray-500 mt-0.5">${c.sub}</div>
+    </div>`).join('');
+
+  // ── Stock per item ──
+  const stockWrap=qs('#ch-stock-wrap');
+  if(stockWrap)stockWrap.innerHTML=displayItems.map(ci=>{
+    const stock=_stockMap[ci.id]||0;const wpkg=itemLookup[ci.id].wpkg;
+    const ac=avgCost[ci.id]||0;const isLow=ci.min_stock&&stock<=(ci.min_stock||0);
+    const pct=ci.min_stock?Math.min(100,Math.round(stock/ci.min_stock*100)):null;
+    const barColor=isLow?'bg-red-400':'bg-teal-400';
+    const statusBadge=isLow
+      ?'<span class="text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full font-bold">⚠ ใกล้หมด</span>'
+      :'<span class="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium">✓ ปกติ</span>';
+    return `<div class="bg-white rounded-2xl shadow-md border border-gray-100 border-l-4 ${isLow?'border-red-500':'border-teal-500'} p-5">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <div class="text-xs text-gray-500 mb-0.5 font-medium">${escapeHtml(ci.code)}</div>
+          <div class="text-sm font-bold text-gray-800">${escapeHtml(ci.name)}</div>
+          <div class="text-xs text-gray-500 mt-0.5">ยอด ณ ปัจจุบัน</div>
+        </div>
+        ${statusBadge}
+      </div>
+      <div class="flex items-end gap-3 mb-3">
+        <div>
+          <div class="text-3xl font-bold ${isLow?'text-red-600':'text-gray-900'}">${fmtNum(stock,1)}</div>
+          <div class="text-xs font-medium text-gray-600">${ci.unit||'ถุง'}คงเหลือ</div>
+        </div>
+        ${wpkg>0?`<div class="text-right"><div class="text-base font-semibold text-gray-800">${fmtNum(stock*wpkg,0)}</div><div class="text-xs text-gray-500">กก. รวม</div></div>`:''}
+        ${(()=>{const ip=Number(_invItems.find(i=>i.id===ci.id)?.unit_price)||0;const priceShow=wpkg>0&&ac>0?fmtNum(wpkg*ac,0):ip>0?fmtNum(ip,0):null;return priceShow?`<div class="text-right ml-auto"><div class="text-sm font-bold text-teal-800">฿${priceShow}</div><div class="text-xs text-gray-500">บ./ถุง (ราคาเฉลี่ย)</div></div>`:''})()}
+      </div>
+      ${pct!==null?`<div>
+        <div class="flex justify-between text-xs text-gray-400 mb-1"><span>ขั้นต่ำ ${ci.min_stock} ${ci.unit||'ถุง'}</span><span>${pct}%</span></div>
+        <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="${barColor} h-2.5 rounded-full transition-all" style="width:${pct}%"></div></div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+
+  // ── Comparison table ──
+  const compareWrap=qs('#ch-compare-wrap');
+  if(compareWrap){
+    const prevLabel=`${MN[pM]} ${pY+543}`,curLabel=`${MN[month]} ${year+543}`;
+    const rows=displayItems.map(ci=>{
+      const cQ=curWd[ci.id]?.qty||0,pQ=prevWd[ci.id]?.qty||0;
+      const cC=curWd[ci.id]?.cost||0,pC=prevWd[ci.id]?.cost||0;
+      const dQ=cQ-pQ,dC=cC-pC;
+      const pctQ=pQ>0?((dQ/pQ)*100):null;
+      const qUp=dQ>0;const cUp=dC>0;
+      return `<tr class="border-t hover:bg-gray-50 text-xs">
+        <td class="px-4 py-3 font-semibold text-gray-800">${escapeHtml(ci.name)}<div class="text-gray-500 font-normal text-xs">${escapeHtml(itemLookup[ci.id].fac)}</div></td>
+        <td class="px-4 py-3 text-center text-gray-600">${fmtNum(pQ,1)} ถุง<div class="text-gray-500">฿${fmtNum(pC,0)}</div></td>
+        <td class="px-4 py-3 text-center font-bold text-gray-800">${fmtNum(cQ,1)} ถุง<div class="text-gray-600 font-normal">฿${fmtNum(cC,0)}</div></td>
+        <td class="px-4 py-3 text-center">
+          <span class="inline-flex items-center gap-1 font-medium ${qUp?'text-red-500':'text-green-600'}">
+            <i data-lucide="${qUp?'arrow-up':'arrow-down'}" class="w-3.5 h-3.5"></i>
+            ${dQ>=0?'+':''}${fmtNum(dQ,1)} ถุง
+          </span>
+          ${pctQ!==null?`<div class="text-gray-400 mt-0.5">${pctQ>=0?'+':''}${pctQ.toFixed(1)}%</div>`:''}
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span class="${cUp?'text-red-500':'text-green-600'}">${dC>=0?'+':''}฿${fmtNum(dC,0)}</span>
+        </td>
+      </tr>`;
+    }).join('');
+    compareWrap.innerHTML=`<div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-5 py-3 border-b flex items-center gap-2">
+        <i data-lucide="bar-chart-2" class="w-4 h-4 text-teal-700"></i>
+        <h3 class="text-sm font-bold text-gray-800">เปรียบเทียบการเบิก — ${prevLabel} vs ${curLabel}</h3>
+      </div>
+      <div class="overflow-auto">
+        <table class="w-full">
+          <thead class="bg-gray-100 text-xs text-gray-700 font-semibold">
+            <tr>
+              <th class="px-4 py-2.5 text-left">สาร / โรงงาน</th>
+              <th class="px-4 py-2.5 text-center">${prevLabel}</th>
+              <th class="px-4 py-2.5 text-center">${curLabel}</th>
+              <th class="px-4 py-2.5 text-center">เปลี่ยนแปลง (ถุง)</th>
+              <th class="px-4 py-2.5 text-center">เปลี่ยนแปลง (฿)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  // ── Daily records ──
+  const dailyWrap=qs('#ch-daily-wrap');
+  if(dailyWrap){
+    const wdRows=(wdRes.data||[]).map(r=>{
+      const info=itemLookup[r.item_id]||{};
+      const qty=Number(r.quantity)||0;const wpkg=info.wpkg||0;const kg=qty*wpkg;
+      const lotCostPerBag2=avgCost[r.item_id]?wpkg*(avgCost[r.item_id]||0):0;
+      const itemPrice2=Number(_invItems.find(i=>i.id===r.item_id)?.unit_price)||0;
+      const pricePerBag2=Number(r.unit_cost)||Number(r.unit_price)||lotCostPerBag2||itemPrice2;
+      const cost=qty*pricePerBag2;
+      const d=new Date(r.created_at);
+      const dt=`${d.getDate()} ${MN[d.getMonth()]} ${d.getFullYear()+543}`;
+      return `<tr class="border-t hover:bg-gray-50 text-xs">
+        <td class="px-4 py-2.5 text-gray-700 font-medium whitespace-nowrap">${dt}</td>
+        <td class="px-4 py-2.5"><span class="inline-block px-2 py-0.5 rounded-full text-xs ${info.fac==='CDE'?'bg-blue-100 text-blue-800 font-semibold':'bg-teal-100 text-teal-800 font-semibold'}">${escapeHtml(info.fac||'-')}</span></td>
+        <td class="px-4 py-2.5 font-semibold text-gray-800">${escapeHtml(info.name||'-')}</td>
+        <td class="px-4 py-2.5 text-right font-semibold">${fmtNum(qty,1)} ${info.unit||'ถุง'}</td>
+        <td class="px-4 py-2.5 text-right text-gray-500">${wpkg>0?fmtNum(kg,1)+' กก.':'-'}</td>
+        <td class="px-4 py-2.5 text-right font-bold text-orange-800">${cost>0?'฿'+fmtNum(cost,0):'-'}</td>
+        <td class="px-4 py-2.5 text-gray-400 max-w-xs truncate">${escapeHtml(r.note||'')}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="7" class="text-center py-8 text-gray-400">ไม่มีรายการเบิกในเดือนนี้</td></tr>';
+    dailyWrap.innerHTML=`<div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="list" class="w-4 h-4 text-gray-400"></i>
+          <h3 class="text-sm font-semibold text-gray-700">รายการเบิกจ่ายประจำวัน</h3>
+        </div>
+        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">${(wdRes.data||[]).length} รายการ</span>
+      </div>
+      <div class="overflow-auto tbl-wrap">
+        <table class="w-full"><thead class="bg-gray-50 text-xs text-gray-500 sticky top-0">
+          <tr>
+            <th class="px-4 py-2.5 text-left">วันที่</th>
+            <th class="px-4 py-2.5 text-left">โรง</th>
+            <th class="px-4 py-2.5 text-left">สาร</th>
+            <th class="px-4 py-2.5 text-right">เบิก</th>
+            <th class="px-4 py-2.5 text-right">กก.</th>
+            <th class="px-4 py-2.5 text-right">ค่าใช้จ่าย</th>
+            <th class="px-4 py-2.5 text-left">หมายเหตุ</th>
+          </tr>
+        </thead><tbody>${wdRows}</tbody></table>
+      </div>
+    </div>`;
+  }
+  refreshIcons();
+}
+
+function showChemEntryModal(){
+  const chemItems=_invItems.filter(i=>(i.category||'').includes('สาร'));
+  const opts=chemItems.map(i=>`<option value="${i.id}" data-wpkg="${i.weight_per_unit||0}" data-unit="${escapeHtml(i.unit||'')}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  showModal({title:'บันทึกการใช้สารตกตะกอน',body:`
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="text-xs text-gray-500 mb-1 block">วันที่ *</label>
+        <input id="ch-date" type="date" value="${todayISO()}" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน *</label>
+        <select id="ch-factory" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <option value="">-- เลือก --</option><option>CDE</option><option>Propel</option></select></div>
+      <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">สาร *</label>
+        <select id="ch-item" required onchange="chItemChange()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <option value="">-- เลือกสาร --</option>${opts}</select></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">คงเหลือ</label>
+        <input id="ch-stock" readonly class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500"/></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">ใช้ (ถุง) *</label>
+        <input id="ch-used" type="number" min="0" step="any" required placeholder="0" oninput="chCalc()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">น้ำหนักใช้ (กก.)</label>
+        <input id="ch-kg" readonly class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500"/></div>
+      <div><label class="text-xs text-gray-500 mb-1 block">จัดซื้อเพิ่ม (ถุง)</label>
+        <input id="ch-buy" type="number" min="0" step="any" placeholder="0" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+      <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">หมายเหตุ</label>
+        <input id="ch-note" placeholder="หมายเหตุ" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+    </div>`,
+    footer:`<button onclick="closeModal()" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200">ยกเลิก</button>
+      <button id="ch-save-btn" onclick="saveChemUsage()" class="px-6 py-2 text-sm text-white bg-teal-600 rounded-xl hover:bg-teal-700 font-medium">บันทึก</button>`
+  });
+}
 
 function chItemChange(){const o=qs('#ch-item')?.selectedOptions[0];if(qs('#ch-stock'))qs('#ch-stock').value=fmtNum(o?.dataset.stock||0);chCalc();}
 function chCalc(){const o=qs('#ch-item')?.selectedOptions[0];const u=parseFloat(qs('#ch-used')?.value||0),w=parseFloat(o?.dataset.wpkg||0);if(qs('#ch-kg'))qs('#ch-kg').value=w>0?fmtNum(u*w,2)+' กก.':'-';}
 
-async function saveChemUsage(e){
-  e.preventDefault();
-  const btn=qs('#ch-btn');btn.disabled=true;btn.textContent='กำลังบันทึก...';
+async function saveChemUsage(){
+  const btn=qs('#ch-save-btn');if(btn){btn.disabled=true;btn.textContent='กำลังบันทึก...';}
   try{
     const item_id=qs('#ch-item')?.value,factory=qs('#ch-factory')?.value;
     const qty_used=parseFloat(qs('#ch-used')?.value||0),qty_purchase=parseFloat(qs('#ch-buy')?.value||0);
@@ -1682,27 +1946,225 @@ async function saveChemUsage(e){
     const kg_used=qty_used*wpkg||null;
     const {error}=await db.from('chem_daily_usage').insert({usage_date:qs('#ch-date').value,factory,item_id,qty_used,qty_purchase:qty_purchase||0,kg_used,note:qs('#ch-note')?.value||null,created_by:currentUser.id});
     if(error)throw error;
-    await loadStockData();showToast('บันทึกสำเร็จ','success');qs('#chem-form')?.reset();qs('#ch-date').value=todayISO();navigateTo('inv-chem');
+    await loadStockData();showToast('บันทึกสำเร็จ','success');closeModal();loadChemDash();
   }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
-  finally{btn.disabled=false;btn.textContent='บันทึก';}
+  finally{if(btn){btn.disabled=false;btn.textContent='บันทึก';}}
 }
 
-async function loadChemSummary(){
-  const {data}=await db.from('v_chem_monthly').select('*').order('month_date',{ascending:false}).limit(48);
-  const el=qs('#chem-summary');if(!el)return;
-  if(!data?.length){el.innerHTML='<tr><td colspan="7" class="text-center py-4 text-gray-400">ยังไม่มีข้อมูล</td></tr>';return;}
-  const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  el.innerHTML=data.map(r=>{
-    const d=new Date(r.month_date);const label=`${months[d.getMonth()]} ${d.getFullYear()+543}`;
-    return `<tr class="border-t hover:bg-gray-50">
-      <td class="px-3 py-2">${label}</td><td class="px-3 py-2">${escapeHtml(r.factory)}</td>
-      <td class="px-3 py-2 text-sm">${escapeHtml(r.item_name)}</td>
-      <td class="px-3 py-2 text-right">${fmtNum(r.total_qty_used,2)}</td>
-      <td class="px-3 py-2 text-right">${r.total_kg_used?fmtNum(r.total_kg_used,1):'-'}</td>
-      <td class="px-3 py-2 text-right">${r.production_ton?fmtNum(r.production_ton,1):'-'}</td>
-      <td class="px-3 py-2 text-right font-medium ${r.rate_kg_per_ton?'text-teal-700':''}">${r.rate_kg_per_ton?fmtNum(r.rate_kg_per_ton,4):'-'}</td>
-    </tr>`;
-  }).join('');
+async function loadChemReport(){
+  const el=qs('#ch-rpt-body');if(!el)return;
+  el.innerHTML='<div class="text-center py-10 text-gray-400">กำลังโหลด...</div>';
+  const year=parseInt(qs('#ch-rpt-year')?.value||new Date().getFullYear());
+  const from=`${year}-01-01`,to=`${year}-12-31`;
+  const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const M12=Array.from({length:12},(_,i)=>i);
+  const chemItems=_invItems.filter(i=>(i.category||'').includes('สาร'));
+  if(!chemItems.length){el.innerHTML='<div class="text-center py-10 text-gray-400">ไม่พบวัสดุประเภทสารตกตะกอน<br><span class="text-xs">ตรวจสอบ ประเภทวัสดุ ให้มีคำว่า "สาร"</span></div>';return;}
+
+  const chemIds=chemItems.map(i=>i.id);
+  const itemLookup={};
+  chemItems.forEach(ci=>{itemLookup[ci.id]={fac:(ci.location||'').trim(),wpkg:Number(ci.weight_per_unit)||0};});
+
+  const [wdRes,rcvRes,cdeRes,propelRes,lotsRes]=await Promise.all([
+    db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
+    db.from('inventory_transactions').select('created_at,item_id,quantity').in('item_id',chemIds).eq('transaction_type','receive').eq('status','approved').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'),
+    db.from('production_cde').select('production_date,feed_ton').eq('status','approved').gte('production_date',from).lte('production_date',to),
+    db.from('production_propel').select('production_date,feed_ton').eq('status','approved').gte('production_date',from).lte('production_date',to),
+    db.from('inventory_lots').select('item_id,remaining_qty,unit_cost').gt('remaining_qty',0)
+  ]);
+
+  const costAcc={};
+  (lotsRes.data||[]).forEach(l=>{
+    if(!costAcc[l.item_id])costAcc[l.item_id]={tq:0,tc:0};
+    costAcc[l.item_id].tq+=Number(l.remaining_qty)||0;
+    costAcc[l.item_id].tc+=(Number(l.remaining_qty)||0)*(Number(l.unit_cost)||0);
+  });
+  const costMap={};
+  Object.keys(costAcc).forEach(id=>{const c=costAcc[id];costMap[id]=c.tq>0?c.tc/c.tq:0;});
+
+  const prodByFac={CDE:{},Propel:{}};
+  (cdeRes.data||[]).forEach(r=>{const m=new Date(r.production_date).getMonth();prodByFac.CDE[m]=(prodByFac.CDE[m]||0)+(Number(r.feed_ton)||0);});
+  (propelRes.data||[]).forEach(r=>{const m=new Date(r.production_date).getMonth();prodByFac.Propel[m]=(prodByFac.Propel[m]||0)+(Number(r.feed_ton)||0);});
+
+  const chemAgg={};
+  (wdRes.data||[]).forEach(r=>{
+    const info=itemLookup[r.item_id];if(!info)return;
+    const fac=info.fac,m=new Date(r.created_at).getMonth();
+    const qty=Number(r.quantity)||0;const kg=qty*info.wpkg;
+    if(!chemAgg[fac])chemAgg[fac]={};
+    if(!chemAgg[fac][m])chemAgg[fac][m]={};
+    if(!chemAgg[fac][m][r.item_id])chemAgg[fac][m][r.item_id]={kg:0,qty:0};
+    chemAgg[fac][m][r.item_id].kg+=kg;
+    chemAgg[fac][m][r.item_id].qty+=qty;
+  });
+  const rcvAgg={};
+  (rcvRes.data||[]).forEach(r=>{
+    const m=new Date(r.created_at).getMonth();const qty=Number(r.quantity)||0;
+    if(!rcvAgg[m])rcvAgg[m]={};rcvAgg[m][r.item_id]=(rcvAgg[m][r.item_id]||0)+qty;
+  });
+
+  function buildUsageTable(factory,prodMap){
+    let totProd=0;const totKg={},totCost={};
+    chemItems.forEach(ci=>{totKg[ci.id]=0;totCost[ci.id]=0;});
+    const rows=M12.map(m=>{
+      const prod=prodMap[m]||0;totProd+=prod;
+      let rowKg=0,rowCost=0;
+      const cells=chemItems.filter(ci=>itemLookup[ci.id].fac===factory).map(ci=>{
+        const u=chemAgg[factory]?.[m]?.[ci.id];
+        const kg=u?.kg||0;const cost=kg*(costMap[ci.id]||0);
+        totKg[ci.id]+=kg;totCost[ci.id]+=cost;rowKg+=kg;rowCost+=cost;
+        return {kg,cost};
+      });
+      const kgT=prod>0&&rowKg>0?rowKg/prod:0;
+      const btT=prod>0&&rowCost>0?rowCost/prod:0;
+      const bg=(!prod&&!rowKg)?'bg-red-50 text-gray-400':rowKg>0?'hover:bg-gray-50':'bg-yellow-50';
+      const facItems=chemItems.filter(ci=>itemLookup[ci.id].fac===factory);
+      return `<tr class="border-t text-xs ${bg}">
+        <td class="px-3 py-1.5 whitespace-nowrap font-medium">${MN[m]}</td>
+        <td class="px-3 py-1.5 text-right">${prod>0?fmtNum(prod,1):'-'}</td>
+        ${cells.map(c=>`<td class="px-3 py-1.5 text-right">${c.kg>0?fmtNum(c.kg,2):'-'}</td>`).join('')}
+        <td class="px-3 py-1.5 text-right font-semibold">${rowKg>0?fmtNum(rowKg,2):'-'}</td>
+        <td class="px-3 py-1.5 text-right text-teal-700">${kgT>0?fmtNum(kgT,4):'-'}</td>
+        <td class="px-3 py-1.5 text-right text-teal-700">${btT>0?fmtNum(btT,2):'-'}</td>
+        ${cells.map(c=>`<td class="px-3 py-1.5 text-right">${c.cost>0?fmtNum(c.cost,0):'-'}</td>`).join('')}
+        <td class="px-3 py-1.5 text-right font-semibold text-orange-700">${rowCost>0?fmtNum(rowCost,0):'-'}</td>
+      </tr>`;
+    }).join('');
+    const facItems=chemItems.filter(ci=>itemLookup[ci.id].fac===factory);
+    const totKgAll=facItems.reduce((s,ci)=>s+totKg[ci.id],0);
+    const totCostAll=facItems.reduce((s,ci)=>s+totCost[ci.id],0);
+    const totKgT=totProd>0&&totKgAll>0?totKgAll/totProd:0;
+    const totBtT=totProd>0&&totCostAll>0?totCostAll/totProd:0;
+    const itemKgH=facItems.map(ci=>`<th class="px-3 py-2 text-right bg-blue-100 text-xs whitespace-nowrap">${escapeHtml(ci.name)}<br><span class="font-normal opacity-70">(กก.)</span></th>`).join('');
+    const itemCostH=facItems.map(ci=>`<th class="px-3 py-2 text-right bg-orange-100 text-xs whitespace-nowrap">${escapeHtml(ci.name)}<br><span class="font-normal opacity-70">(บาท)</span></th>`).join('');
+    const totKgC=facItems.map(ci=>`<td class="px-3 py-2 text-right font-bold">${fmtNum(totKg[ci.id],2)}</td>`).join('');
+    const totCostC=facItems.map(ci=>`<td class="px-3 py-2 text-right font-bold">${fmtNum(totCost[ci.id],0)}</td>`).join('');
+    return `<div class="mb-8">
+      <div class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full inline-block ${factory==='CDE'?'bg-blue-500':'bg-teal-500'}"></span>
+        รวมปริมาณการใช้และค่าใช้จ่ายเครื่อง ${factory} ประจำปี ${year+543}
+      </div>
+      <div class="overflow-auto rounded-xl border border-gray-200">
+        <table class="w-full text-xs border-collapse">
+          <thead><tr class="bg-amber-400 text-gray-800">
+            <th class="px-3 py-2 text-left whitespace-nowrap">เดือน</th>
+            <th class="px-3 py-2 text-right whitespace-nowrap bg-amber-300">ผลิต (ตัน)</th>
+            ${itemKgH}
+            <th class="px-3 py-2 text-right bg-blue-200 whitespace-nowrap">รวม (กก.)</th>
+            <th class="px-3 py-2 text-right bg-green-200 whitespace-nowrap">กก./ตัน</th>
+            <th class="px-3 py-2 text-right bg-green-200 whitespace-nowrap">บาท/ตัน</th>
+            ${itemCostH}
+            <th class="px-3 py-2 text-right bg-red-200 whitespace-nowrap">รวมค่าใช้จ่าย (บาท)</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr class="bg-red-600 text-white font-bold text-xs">
+            <td class="px-3 py-2">รวม</td>
+            <td class="px-3 py-2 text-right">${fmtNum(totProd,1)}</td>
+            ${totKgC}
+            <td class="px-3 py-2 text-right">${fmtNum(totKgAll,2)}</td>
+            <td class="px-3 py-2 text-right">${totKgT>0?fmtNum(totKgT,4):'-'}</td>
+            <td class="px-3 py-2 text-right">${totBtT>0?fmtNum(totBtT,2):'-'}</td>
+            ${totCostC}
+            <td class="px-3 py-2 text-right">${fmtNum(totCostAll,0)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  function buildPurchaseTable(){
+    const FACS=['CDE','Propel'];
+    const totUsed={},totRcv={};
+    FACS.forEach(fac=>{totUsed[fac]={};chemItems.forEach(ci=>{totUsed[fac][ci.id]=0;});});
+    chemItems.forEach(ci=>{totRcv[ci.id]=0;});
+    const rows=M12.map(m=>{
+      const usedCells=FACS.flatMap(fac=>chemItems.filter(ci=>itemLookup[ci.id].fac===fac).map(ci=>{
+        const qty=chemAgg[fac]?.[m]?.[ci.id]?.qty||0;
+        totUsed[fac][ci.id]+=qty;
+        return `<td class="px-2 py-1.5 text-right text-xs">${qty>0?fmtNum(qty,1):'-'}</td>`;
+      })).join('');
+      const rcvCells=chemItems.map(ci=>{
+        const r=rcvAgg[m]?.[ci.id]||0;totRcv[ci.id]+=r;
+        return `<td class="px-2 py-1.5 text-right text-xs text-green-700 font-medium">${r>0?fmtNum(r,1):'-'}</td>`;
+      }).join('');
+      return `<tr class="border-t hover:bg-gray-50 text-xs"><td class="px-2 py-1.5 whitespace-nowrap font-medium">${MN[m]}</td>${usedCells}${rcvCells}</tr>`;
+    }).join('');
+    const totUsedCells=FACS.flatMap(fac=>chemItems.filter(ci=>itemLookup[ci.id].fac===fac).map(ci=>`<td class="px-2 py-2 text-right font-bold">${fmtNum(totUsed[fac][ci.id],1)}</td>`)).join('');
+    const totRcvCells=chemItems.map(ci=>`<td class="px-2 py-2 text-right font-bold text-green-300">${fmtNum(totRcv[ci.id],1)}</td>`).join('');
+    const usedH=FACS.flatMap(fac=>chemItems.filter(ci=>itemLookup[ci.id].fac===fac).map(ci=>`<th class="px-2 py-2 text-right text-xs whitespace-nowrap">${fac}<br>${escapeHtml(ci.name)}<br><span class="font-normal opacity-70">(ถุง เบิก)</span></th>`)).join('');
+    const rcvH=chemItems.map(ci=>`<th class="px-2 py-2 text-right text-xs whitespace-nowrap bg-green-100">รับเข้า<br>${escapeHtml(ci.name)}<br><span class="font-normal opacity-70">(ถุง)</span></th>`).join('');
+    return `<div class="mb-8">
+      <div class="text-sm font-bold text-gray-700 mb-2">สรุปการเบิกจ่ายและรับวัสดุ (ถุง)</div>
+      <div class="overflow-auto rounded-xl border border-gray-200">
+        <table class="w-full text-xs border-collapse">
+          <thead><tr class="bg-amber-400 text-gray-800"><th class="px-2 py-2 text-left">เดือน</th>${usedH}${rcvH}</tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr class="bg-red-600 text-white font-bold text-xs"><td class="px-2 py-2">รวม</td>${totUsedCells}${totRcvCells}</tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  function buildStockTable(){
+    if(!chemItems.length)return'';
+    const rows=chemItems.map(ci=>{
+      const stock=_stockMap[ci.id]||0;const ac=costMap[ci.id]||0;const wpkg=Number(ci.weight_per_unit)||0;
+      const kgTotal=stock*wpkg;const valTotal=kgTotal*ac;
+      return `<tr class="border-t hover:bg-gray-50 text-xs">
+        <td class="px-3 py-2 font-mono text-gray-500">${escapeHtml(ci.code)}</td>
+        <td class="px-3 py-2 font-medium">${escapeHtml(ci.name)}</td>
+        <td class="px-3 py-2 text-right">${fmtNum(stock,1)} ${ci.unit||'ถุง'}</td>
+        <td class="px-3 py-2 text-right">${wpkg>0?fmtNum(kgTotal,1)+' กก.':'-'}</td>
+        <td class="px-3 py-2 text-right">${ac>0?fmtNum(ac,2)+' บ./กก.':'-'}</td>
+        <td class="px-3 py-2 text-right font-semibold text-teal-700">${valTotal>0?'฿'+fmtNum(valTotal,0):'-'}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="mb-4">
+      <div class="text-sm font-bold text-gray-700 mb-2">สต็อคสารตกตะกอนคงเหลือ (ราคาเฉลี่ย FIFO)</div>
+      <div class="overflow-auto rounded-xl border border-gray-200">
+        <table class="w-full text-xs border-collapse">
+          <thead><tr class="bg-blue-500 text-white">
+            <th class="px-3 py-2 text-left">รหัส</th><th class="px-3 py-2 text-left">ชื่อสาร</th>
+            <th class="px-3 py-2 text-right">คงเหลือ</th><th class="px-3 py-2 text-right">น้ำหนัก</th>
+            <th class="px-3 py-2 text-right">ราคาเฉลี่ย</th><th class="px-3 py-2 text-right">มูลค่าคงเหลือ</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML=buildUsageTable('CDE',prodByFac.CDE)+buildUsageTable('Propel',prodByFac.Propel)+buildPurchaseTable()+buildStockTable();
+}
+
+function printChemReport(){
+  const body=qs('#ch-rpt-body');if(!body)return;
+  const year=parseInt(qs('#ch-rpt-year')?.value||new Date().getFullYear());
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+  <meta charset="utf-8">
+  <title>รายงานสารตกตะกอน ปี ${year+543}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{font-family:'Kanit',sans-serif;box-sizing:border-box;margin:0;padding:0;}
+    body{padding:12px;font-size:10px;color:#111;}
+    h1{text-align:center;font-size:13px;font-weight:700;margin-bottom:16px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:9px;}
+    th,td{border:1px solid #ccc;padding:3px 5px;}
+    th{font-weight:600;}
+    .bg-amber-400{background:#fbbf24;}.bg-red-600{background:#dc2626;color:#fff;}
+    .bg-blue-500{background:#3b82f6;color:#fff;}.bg-blue-100,.bg-blue-200{background:#dbeafe;}
+    .bg-orange-100,.bg-orange-200{background:#ffedd5;}.bg-green-100,.bg-green-200{background:#dcfce7;}
+    .bg-red-200{background:#fecaca;}.bg-red-50{background:#fef2f2;color:#9ca3af;}
+    .bg-yellow-50{background:#fefce8;}.bg-amber-300{background:#fcd34d;}
+    @page{size:A3 landscape;margin:10mm;}
+    @media print{body{padding:0;}}
+  </style></head><body>
+  <h1>รายงานการใช้และค่าใช้จ่ายสารตกตะกอน ประจำปี ${year+543}</h1>
+  ${body.innerHTML}
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 // =====================================================================
@@ -2157,16 +2619,16 @@ PAGE_RENDERERS['inv-balance'] = async function(el) {
         <table class="w-full text-sm" id="bal-table">
           <thead class="bg-gray-50 text-gray-500 text-xs">
             <tr>
-              <th class="text-center px-3 py-2 w-10">ลำดับ</th>
-              <th class="text-left px-3 py-2">รหัส</th>
-              <th class="text-left px-3 py-2 hide-mobile">โรงงาน</th>
-              <th class="text-left px-3 py-2 hide-mobile">ประเภทวัสดุ</th>
-              <th class="text-left px-3 py-2">รายการ</th>
-              <th class="text-right px-3 py-2">จำนวนคงเหลือ</th>
+              <th class="text-center px-3 py-2 w-10" title="ลาก & วางเพื่อจัดลำดับ">⠿</th>
+              <th class="text-left px-3 py-2 cursor-pointer select-none hover:bg-gray-100" onclick="balSortBy('code')">รหัส <span id="bsort-code"></span></th>
+              <th class="text-left px-3 py-2 cursor-pointer select-none hover:bg-gray-100 hide-mobile" onclick="balSortBy('factory')">โรงงาน <span id="bsort-factory"></span></th>
+              <th class="text-left px-3 py-2 cursor-pointer select-none hover:bg-gray-100 hide-mobile" onclick="balSortBy('cat')">ประเภทวัสดุ <span id="bsort-cat"></span></th>
+              <th class="text-left px-3 py-2 cursor-pointer select-none hover:bg-gray-100" onclick="balSortBy('name')">รายการ <span id="bsort-name"></span></th>
+              <th class="text-right px-3 py-2 cursor-pointer select-none hover:bg-gray-100" onclick="balSortBy('qty')">จำนวนคงเหลือ <span id="bsort-qty"></span></th>
               <th class="text-left px-3 py-2 hide-mobile">หน่วยนับ</th>
               <th class="text-right px-3 py-2 hide-mobile">ราคาต่อหน่วย</th>
               <th class="text-right px-3 py-2 hide-mobile">ขั้นต่ำ</th>
-              <th class="text-center px-3 py-2">สถานะ</th>
+              <th class="text-center px-3 py-2 cursor-pointer select-none hover:bg-gray-100" onclick="balSortBy('status')">สถานะ <span id="bsort-status"></span></th>
               <th class="text-center px-3 py-2">จัดการ</th>
             </tr>
           </thead>
@@ -2208,6 +2670,32 @@ function renderBalanceTable() {
     return true;
   });
 
+  // Click sort
+  if(_balSort.col) {
+    rows.sort((a, b) => {
+      let va, vb;
+      const qA = _stockMap[a.id]||0, qB = _stockMap[b.id]||0;
+      if(_balSort.col==='code')    { va=a.code||''; vb=b.code||''; }
+      else if(_balSort.col==='name')    { va=a.name||''; vb=b.name||''; }
+      else if(_balSort.col==='cat')     { va=a.category||''; vb=b.category||''; }
+      else if(_balSort.col==='factory') { va=_extractFactory(a); vb=_extractFactory(b); }
+      else if(_balSort.col==='qty')     { va=qA; vb=qB; }
+      else if(_balSort.col==='status')  {
+        const s=i=>{const q=_stockMap[i.id]||0;return q<=0?0:q<=(i.min_stock||0)?1:2;};
+        va=s(a); vb=s(b);
+      }
+      const cmp = typeof va==='string' ? va.localeCompare(vb,'th') : va-vb;
+      return _balSort.dir==='asc' ? cmp : -cmp;
+    });
+  }
+
+  // อัพเดท sort indicators
+  ['code','name','cat','factory','qty','status'].forEach(c => {
+    const el = qs('#bsort-'+c);
+    if(!el) return;
+    el.textContent = _balSort.col===c ? (_balSort.dir==='asc'?'▲':'▼') : '';
+  });
+
   const tbody = qs('#bal-tbody');
   if(!tbody) return;
 
@@ -2229,8 +2717,14 @@ function renderBalanceTable() {
         : '<span class="badge-ok px-2 py-0.5 rounded-full text-xs">ใช้งาน</span>';
     const rowBg = isOut ? 'bg-red-50' : isLow ? 'bg-amber-50' : '';
     const itemJson = JSON.stringify(i).replace(/'/g,"&#39;");
-    return `<tr class="border-t hover:bg-gray-50 ${rowBg}">
-      <td class="px-3 py-2 text-center text-gray-400 text-xs">${idx+1}</td>
+    return `<tr class="border-t hover:bg-gray-50 ${rowBg} transition-colors"
+        draggable="true"
+        data-id="${i.id}"
+        ondragstart="balDragStart(event,'${i.id}')"
+        ondragover="balDragOver(event)"
+        ondrop="balDrop(event,'${i.id}')"
+        ondragend="balDragEnd()">
+      <td class="px-3 py-2 text-center text-gray-300 cursor-grab active:cursor-grabbing select-none" title="ลากเพื่อจัดลำดับ">⠿</td>
       <td class="px-3 py-2 font-mono text-xs text-blue-700">${escapeHtml(i.code)}</td>
       <td class="px-3 py-2 text-xs text-gray-500 hide-mobile">${escapeHtml(factory)}</td>
       <td class="px-3 py-2 text-xs text-gray-500 hide-mobile">${escapeHtml(i.category||'-')}</td>
@@ -2251,6 +2745,62 @@ function renderBalanceTable() {
   }).join('');
 
   if(qs('#bal-footer')) qs('#bal-footer').textContent = `แสดง ${rows.length} จาก ${_invItems.length} รายการ`;
+}
+
+// ─── Click Sort ───
+function balSortBy(col) {
+  if(_balSort.col === col) _balSort.dir = _balSort.dir==='asc'?'desc':'asc';
+  else { _balSort.col = col; _balSort.dir = 'asc'; }
+  renderBalanceTable();
+}
+
+// ─── Drag & Drop ───
+function balDragStart(e, id) {
+  _dragSrcId = id;
+  setTimeout(() => e.target.closest('tr')?.classList.add('opacity-40'), 0);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function balDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const tr = e.target.closest('tr');
+  document.querySelectorAll('#bal-tbody tr').forEach(r => r.classList.remove('border-t-2','border-blue-400'));
+  if(tr) tr.classList.add('border-t-2','border-blue-400');
+}
+
+function balDragEnd() {
+  document.querySelectorAll('#bal-tbody tr').forEach(r => {
+    r.classList.remove('opacity-40','border-t-2','border-blue-400');
+  });
+  _dragSrcId = null;
+}
+
+function balDrop(e, targetId) {
+  e.preventDefault();
+  if(!_dragSrcId || _dragSrcId === targetId) { balDragEnd(); return; }
+  const srcIdx = _invItems.findIndex(i => i.id === _dragSrcId);
+  const tgtIdx = _invItems.findIndex(i => i.id === targetId);
+  if(srcIdx < 0 || tgtIdx < 0) { balDragEnd(); return; }
+  // ย้ายตำแหน่ง
+  const [moved] = _invItems.splice(srcIdx, 1);
+  _invItems.splice(tgtIdx, 0, moved);
+  // อัพเดท sort_order ใน memory
+  _invItems.forEach((i, idx) => { i.sort_order = idx + 1; });
+  balDragEnd();
+  renderBalanceTable();
+  saveSortOrder();
+}
+
+async function saveSortOrder() {
+  try {
+    await Promise.all(_invItems.map((i, idx) =>
+      db.from('inventory_items').update({ sort_order: idx + 1 }).eq('id', i.id)
+    ));
+    showToast('บันทึกลำดับแล้ว','success');
+  } catch(err) {
+    showToast('บันทึกลำดับไม่สำเร็จ: '+err.message,'error');
+  }
 }
 
 async function reloadBalance() {
@@ -2614,6 +3164,8 @@ PAGE_RENDERERS['inv-qr'] = async function(el) {
           <option value="sm">QR เล็ก (50px)</option>
           <option value="md" selected>QR กลาง (70px)</option>
           <option value="lg">QR ใหญ่ (90px)</option>
+          <option value="xl">QR ใหญ่พิเศษ (130px)</option>
+          <option value="xxl">QR ขนาดพิมพ์ (180px)</option>
         </select>
         <select id="qr-filter-new" onchange="renderQRGrid()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
           <option value="">ทุกรายการ</option>
@@ -2641,9 +3193,12 @@ function renderQRGrid() {
   const size = qs('#qr-size')?.value||'md';
   const filterNew = parseInt(qs('#qr-filter-new')?.value||'0');
   const sort = qs('#qr-sort')?.value||'new';
-  const qrSize = size==='sm'?50 : size==='lg'?90 : 70;
-  const bcWidth = size==='sm'?1.0 : size==='lg'?1.8 : 1.4;
-  const bcHeight = size==='sm'?28 : size==='lg'?50 : 38;
+  const qrSizeMap  = {sm:50, md:70, lg:90, xl:130, xxl:180};
+  const bcWidthMap = {sm:1.0, md:1.4, lg:1.8, xl:2.2, xxl:2.8};
+  const bcHeightMap= {sm:28,  md:38,  lg:50,  xl:65,  xxl:80};
+  const qrSize  = qrSizeMap[size]  || 70;
+  const bcWidth = bcWidthMap[size] || 1.4;
+  const bcHeight= bcHeightMap[size]|| 38;
   const now = new Date();
 
   let items = _invItems.filter(i => {
@@ -2674,10 +3229,10 @@ function renderQRGrid() {
     <table class="w-full text-sm" id="qr-table">
       <thead>
         <tr class="bg-gray-50 border-b border-gray-200">
-          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold w-10">#</th>
-          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">รหัสวัสดุ</th>
-          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">ชื่อวัสดุ</th>
-          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold">โรงงาน</th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold w-10" title="ลากเพื่อจัดลำดับ">⠿</th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold cursor-pointer hover:bg-gray-100 select-none" onclick="qrSortBy('code')">รหัสวัสดุ <span id="qrsort-code"></span></th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold cursor-pointer hover:bg-gray-100 select-none" onclick="qrSortBy('name')">ชื่อวัสดุ <span id="qrsort-name"></span></th>
+          <th class="py-2.5 px-3 text-left text-xs text-gray-500 font-semibold cursor-pointer hover:bg-gray-100 select-none" onclick="qrSortBy('location')">โรงงาน <span id="qrsort-location"></span></th>
           <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold">QR Code</th>
           <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold">Barcode</th>
           <th class="py-2.5 px-3 text-center text-xs text-gray-500 font-semibold w-10">
@@ -2689,8 +3244,14 @@ function renderQRGrid() {
       <tbody>
         ${items.map((i, idx) => `
         <tr id="qlc-${i.id}" class="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors"
+            draggable="true"
+            data-id="${i.id}"
+            ondragstart="qrDragStart(event,'${i.id}')"
+            ondragover="qrDragOver(event)"
+            ondrop="qrDrop(event,'${i.id}')"
+            ondragend="qrDragEnd()"
             onclick="toggleQRSelect('${i.id}')">
-          <td class="py-2 px-3 text-xs text-gray-400 tabular-nums">${idx+1}</td>
+          <td class="py-2 px-3 text-gray-300 cursor-grab active:cursor-grabbing select-none text-center" onclick="event.stopPropagation()" title="ลากเพื่อจัดลำดับ">⠿</td>
           <td class="py-2 px-3">
             <span class="font-mono text-xs text-blue-700 font-semibold">${escapeHtml(i.code)}</span>
             ${(new Date()-new Date(i.created_at||0))/86400000<7?'<span class="ml-1 text-xs bg-green-100 text-green-700 px-1 py-0.5 rounded-full">ใหม่</span>':''}
@@ -2721,6 +3282,48 @@ function renderQRGrid() {
       } catch(e) {}
     });
   });
+}
+
+// ─── QR Click Sort ───
+function qrSortBy(col) {
+  if(_qrSort.col===col) _qrSort.dir=_qrSort.dir==='asc'?'desc':'asc';
+  else { _qrSort.col=col; _qrSort.dir='asc'; }
+  renderQRGrid();
+}
+
+// ─── QR Drag & Drop ───
+let _qrDragSrcId = null;
+function qrDragStart(e, id) {
+  _qrDragSrcId = id;
+  setTimeout(()=>e.target.closest('tr')?.classList.add('opacity-40'),0);
+  e.dataTransfer.effectAllowed='move';
+}
+function qrDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  const tr=e.target.closest('tr');
+  document.querySelectorAll('#qr-table tbody tr').forEach(r=>r.classList.remove('border-t-2','border-blue-400'));
+  if(tr) tr.classList.add('border-t-2','border-blue-400');
+}
+function qrDragEnd() {
+  document.querySelectorAll('#qr-table tbody tr').forEach(r=>{
+    r.classList.remove('opacity-40','border-t-2','border-blue-400');
+  });
+  _qrDragSrcId=null;
+}
+function qrDrop(e, targetId) {
+  e.preventDefault();
+  if(!_qrDragSrcId||_qrDragSrcId===targetId){qrDragEnd();return;}
+  const srcIdx=_invItems.findIndex(i=>i.id===_qrDragSrcId);
+  const tgtIdx=_invItems.findIndex(i=>i.id===targetId);
+  if(srcIdx<0||tgtIdx<0){qrDragEnd();return;}
+  const [moved]=_invItems.splice(srcIdx,1);
+  _invItems.splice(tgtIdx,0,moved);
+  _invItems.forEach((i,idx)=>{i.sort_order=idx+1;});
+  _qrSort={col:'',dir:'asc'}; // reset click sort เพื่อแสดง manual order
+  qrDragEnd();
+  renderQRGrid();
+  saveSortOrder();
 }
 
 function toggleQRSelect(id, force) {
@@ -2817,7 +3420,8 @@ function printSelectedLabels() {
         currentUser=p;
         await loadAllMasterData();
         startSessionTimer();
-        navigateTo('inv-dashboard');
+        const lastPage = sessionStorage.getItem('_sn_inv_page') || 'inv-dashboard';
+        navigateTo(lastPage);
         return;
       }
     }
