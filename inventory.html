@@ -270,9 +270,9 @@ const INV_MENUS_MAIN = [
   { key:'inv-dashboard',  label:'ภาพรวมคลัง',    icon:'layout-dashboard' },
   { key:'inv-chem',       label:'สารตกตะกอน',      icon:'flask-conical' },
   { key:'inv-balance',    label:'วัสดุคงเหลือ',   icon:'package-search' },
-  { key:'inv-qr',         label:'QR / Label',      icon:'qr-code' },
   { key:'inv-stock',      label:'รับวัสดุเข้า',   icon:'package-plus' },
   { key:'inv-withdraw',   label:'เบิกวัสดุ',       icon:'package-minus' },
+  { key:'inv-qr',         label:'QR / Label',      icon:'qr-code' },
   { key:'inv-approvals',  label:'รออนุมัติ',       icon:'clipboard-check', badge:true },
   { key:'inv-po',         label:'ใบสั่งซื้อ (PO)', icon:'file-text' },
   { key:'inv-report',     label:'รายงาน',           icon:'bar-chart-2' },
@@ -1068,8 +1068,8 @@ PAGE_RENDERERS['inv-dashboard'] = async function(el) {
           </select>
         </div>
         <div id="dash-custom" class="hidden flex gap-2">
-          <input id="dash-start" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
-          <input id="dash-end" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" />
+          <input id="dash-start" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" onchange="loadDashboard()" />
+          <input id="dash-end" type="date" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="${todayISO()}" onchange="loadDashboard()" />
         </div>
         <div class="self-end">
           <label class="text-xs text-gray-500 block mb-1">โรงงาน</label>
@@ -1079,7 +1079,6 @@ PAGE_RENDERERS['inv-dashboard'] = async function(el) {
           </div>
           <input type="hidden" id="dash-factory" value=""/>
         </div>
-        <button onclick="loadDashboard()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 self-end">แสดงผล</button>
       </div>
     </div>
     <!-- KPI cards -->
@@ -1128,7 +1127,9 @@ PAGE_RENDERERS['inv-dashboard'] = async function(el) {
 };
 
 function dashRangeChange() {
-  qs('#dash-custom')?.classList.toggle('hidden', qs('#dash-range')?.value !== 'custom');
+  const isCustom = qs('#dash-range')?.value === 'custom';
+  qs('#dash-custom')?.classList.toggle('hidden', !isCustom);
+  if (!isCustom) loadDashboard();
 }
 function dashSetFac(val){
   qs('#dash-factory').value=val;
