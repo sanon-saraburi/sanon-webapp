@@ -885,22 +885,28 @@ function renderShell() {
       <!-- Footer -->
       <div class="p-3 border-t border-white/10">
         <!-- System Switcher -->
-        <div class="mb-2">
-          <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-wide px-1 mb-1.5">เปลี่ยนระบบ</div>
-          <a href="index.html" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-300 text-sm hover:bg-white/10 transition cursor-pointer">
-            <i data-lucide="bar-chart-2" class="w-4 h-4 flex-shrink-0 text-blue-300"></i>
-            <span class="flex-1">ระบบผลิต</span>
-            <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-blue-300/50"></i>
+        <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-widest px-0.5 mb-2">เปลี่ยนระบบ</div>
+        <div class="flex gap-1.5 mb-3">
+          <a href="index.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">ผลิต</span>
           </a>
-          <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-white/15 border border-white/20">
-            <i data-lucide="package" class="w-4 h-4 flex-shrink-0 text-blue-400"></i>
-            <span class="flex-1 text-white font-medium">คลังวัสดุ</span>
-            <span class="text-blue-300/60 text-[10px]">ใช้งาน</span>
+          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
+               style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 2px 8px rgba(13,148,136,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="package" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </div>
-          <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 text-sm cursor-not-allowed">
-            <i data-lucide="wrench" class="w-4 h-4 flex-shrink-0"></i>
-            <span class="flex-1">PM เครื่องจักร</span>
-            <span class="text-gray-600 text-[10px]">เร็วๆ นี้</span>
+          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-not-allowed"
+               style="background:linear-gradient(135deg,#374151,#4b5563);box-shadow:0 2px 6px rgba(0,0,0,.3)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.1)">
+              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white/50"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white/40 leading-tight">PM</span>
           </div>
         </div>
         <a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 text-sm hover:bg-white/10 transition cursor-pointer"
@@ -932,21 +938,29 @@ function renderShell() {
         ${sidebarLinks.replace(/onclick="navigateTo\(/g, "onclick=\"closeSidebar();navigateTo(")}
       </nav>
       <div class="p-3 border-t border-white/10">
-        <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-wide px-1 mb-1.5">เปลี่ยนระบบ</div>
-        <a href="index.html" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-300 text-sm hover:bg-white/10 transition cursor-pointer">
-          <i data-lucide="bar-chart-2" class="w-4 h-4 flex-shrink-0 text-blue-300"></i>
-          <span class="flex-1">ระบบผลิต</span>
-          <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-blue-300/50"></i>
-        </a>
-        <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm bg-white/15 border border-white/20 my-0.5">
-          <i data-lucide="package" class="w-4 h-4 flex-shrink-0 text-blue-400"></i>
-          <span class="flex-1 text-white font-medium">คลังวัสดุ</span>
-          <span class="text-blue-300/60 text-[10px]">ใช้งาน</span>
-        </div>
-        <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 text-sm cursor-not-allowed mb-2">
-          <i data-lucide="wrench" class="w-4 h-4 flex-shrink-0"></i>
-          <span class="flex-1">PM เครื่องจักร</span>
-          <span class="text-gray-600 text-[10px]">เร็วๆ นี้</span>
+        <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-widest px-0.5 mb-2">เปลี่ยนระบบ</div>
+        <div class="flex gap-1.5 mb-3">
+          <a href="index.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">ผลิต</span>
+          </a>
+          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
+               style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 2px 8px rgba(13,148,136,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="package" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-not-allowed"
+               style="background:linear-gradient(135deg,#374151,#4b5563);box-shadow:0 2px 6px rgba(0,0,0,.3)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.1)">
+              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white/50"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white/40 leading-tight">PM</span>
+          </div>
         </div>
         <a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 text-sm hover:bg-white/10 transition cursor-pointer"
            onclick="closeSidebar();confirmLogout()">
