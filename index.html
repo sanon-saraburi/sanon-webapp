@@ -176,8 +176,9 @@ const DASHBOARD_MENUS = [
   { key: 'dash-sanon2',  label: 'Dashboard Sanon 2',     icon: 'mountain',       group: 'core' },
   { key: 'dash-drone',   label: 'สต็อคหินบินโดรน',        icon: 'plane',          group: 'extra' },
   { key: 'dash-sales',   label: 'ยอดขาย',                icon: 'banknote',       group: 'extra' },
-  { key: 'dash-loader',  label: 'รถตักไฟฟ้า',            icon: 'truck',          group: 'extra' },
-  { key: 'dash-water',   label: 'น้ำบาดาล',              icon: 'droplets',       group: 'extra' },
+  { key: 'dash-loader',      label: 'รถตักไฟฟ้า',        icon: 'truck',          group: 'extra' },
+  { key: 'dash-water',       label: 'น้ำบาดาล',          icon: 'droplets',       group: 'extra' },
+  { key: 'dash-electricity', label: 'ค่าไฟฟ้า',          icon: 'zap',            group: 'extra' },
 ];
 
 // หมวดหมู่ 2: เมนูจัดการข้อมูล (13 เมนู — รอบ 2 implement ครบแล้ว)
@@ -197,6 +198,7 @@ const MANAGE_MENUS = [
   { key: 'manage-electric-loader',label: 'รถตักไฟฟ้า',               icon: 'truck' },
   { key: 'manage-sales',          label: 'ยอดขาย',                  icon: 'banknote' },
   { key: 'manage-groundwater',    label: 'น้ำบาดาล',                 icon: 'droplets' },
+  { key: 'manage-electricity',    label: 'ค่าไฟฟ้า',                 icon: 'zap' },
   { key: 'manage-settings',       label: 'ตั้งค่าระบบ',              icon: 'settings' },
   // --- approval scope (approvalOnly: true → ไม่แสดงใน nav sidebar, ใช้เฉพาะ permission matrix) ---
   { key: 'approve-cde',    label: 'อนุมัติ CDE',       icon: 'check-circle', approvalOnly: true },
@@ -228,15 +230,15 @@ const PERM_TEMPLATES = [
   {
     id: 'manager-cde',
     label: 'Manager CDE/Propel',
-    dash: ['dash-cde','dash-propel','dash-drone','dash-sales','dash-loader','dash-water'],
-    manage: ['manage-reports','manage-prod-cde','manage-prod-propel','manage-groundwater','manage-machines','manage-water-sources','manage-approvals',
+    dash: ['dash-cde','dash-propel','dash-drone','dash-sales','dash-loader','dash-water','dash-electricity'],
+    manage: ['manage-reports','manage-prod-cde','manage-prod-propel','manage-groundwater','manage-electricity','manage-machines','manage-water-sources','manage-approvals',
              'approve-cde','approve-propel','approve-loader','approve-water'],
   },
   {
     id: 'manager-sanon',
     label: 'Manager Sanon1/Sanon2',
-    dash: ['dash-sanon1','dash-sanon2','dash-drone','dash-sales','dash-loader','dash-water'],
-    manage: ['manage-reports','manage-prod-sanon1','manage-prod-sanon2','manage-groundwater','manage-machines','manage-water-sources','manage-approvals',
+    dash: ['dash-sanon1','dash-sanon2','dash-drone','dash-sales','dash-loader','dash-water','dash-electricity'],
+    manage: ['manage-reports','manage-prod-sanon1','manage-prod-sanon2','manage-groundwater','manage-electricity','manage-machines','manage-water-sources','manage-approvals',
              'approve-sanon1','approve-sanon2','approve-loader','approve-water'],
   },
   // ─── Supervisor ────────────────────────────────────────────────────────
@@ -678,10 +680,10 @@ async function trySaveActiveForm() {
     const payload = {
       production_date: dateInput.value,
       raw_material: (document.getElementById('pf-rawmat')?.value || '').trim() || null,
-      start_hour: numOrNull(document.getElementById('pf-start-hour')?.value),
-      start_minute: numOrNull(document.getElementById('pf-start-minute')?.value),
-      stop_hour: numOrNull(document.getElementById('pf-stop-hour')?.value),
-      stop_minute: numOrNull(document.getElementById('pf-stop-minute')?.value),
+      start_hour:   numOrNull(document.getElementById('pf-start-hour')?.value),
+      start_minute: null,
+      stop_hour:    numOrNull(document.getElementById('pf-stop-hour')?.value),
+      stop_minute:  null,
       feed_ton: numOrNull(document.getElementById('pf-feed-ton')?.value),
       breakdown_detail: (document.getElementById('pf-breakdown')?.value || '').trim() || null,
       note: (document.getElementById('pf-note')?.value || '').trim() || null,
@@ -903,6 +905,9 @@ function renderPageContent(pageKey) {
     case 'dash-water':
       renderDashboardWater(container);
       break;
+    case 'dash-electricity':
+      renderDashboardElectricity(container);
+      break;
     // ===========================================================
     // หมวดหมู่ 2: จัดการข้อมูล (13 เมนู)
     // ===========================================================
@@ -947,6 +952,9 @@ function renderPageContent(pageKey) {
       break;
     case 'manage-groundwater':
       renderManageGroundwater(container);
+      break;
+    case 'manage-electricity':
+      renderManageElectricity(container);
       break;
     case 'manage-approvals':
       renderManageApprovals(container);
@@ -5330,8 +5338,8 @@ function openProductionForm(plantKey, editingRow) {
   const rawMatOptions = st.distinctRawMaterials || [];
   const curRawMat = editingRow ? (editingRow.raw_material || '') : '';
   const latest = (!editingRow) ? st.latestRow : null;
-  const defaultStartHour   = editingRow ? (editingRow.start_hour   ?? '') : (latest ? (latest.stop_hour   ?? '') : '');
-  const defaultStartMinute = editingRow ? (editingRow.start_minute ?? '') : (latest ? (latest.stop_minute ?? '') : '');
+  const defaultStartHour = editingRow ? (editingRow.start_hour ?? '') : (latest ? (latest.stop_hour ?? '') : '');
+  const defaultStopHour  = editingRow ? (editingRow.stop_hour  ?? '') : '';
   const defaultMeterStart  = editingRow ? (editingRow.meter_start  ?? '') : (latest ? (latest.meter_stop  ?? '') : '');
   const defaultMeterStop   = editingRow ? (editingRow.meter_stop   ?? '') : '';
   const initSilk = (() => {
@@ -5370,28 +5378,17 @@ function openProductionForm(plantKey, editingRow) {
               <input type="text" readonly disabled value="${currentUser ? escapeHtml(currentUser.full_name || '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 bg-secondary-50 text-secondary-500">
             </div>
             <div class="bg-secondary-50 rounded-xl p-3 space-y-3">
-              <p class="text-xs font-semibold text-secondary-500">เวลาเริ่มเดินเครื่อง</p>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-secondary-600 mb-1">${cfg.hourMeterMode ? 'ชม.เครื่อง (เริ่ม)' : 'ชม.เริ่ม'}</label>
-                  <input id="pf-start-hour" type="number" inputmode="numeric" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
-                </div>
-                <div>
-                  <label class="block text-secondary-600 mb-1">นาทีเริ่ม</label>
-                  <input id="pf-start-minute" type="number" inputmode="numeric" min="0" max="59" value="${defaultStartMinute}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
-                </div>
+              <div>
+                <label class="block text-secondary-600 mb-1">ชม.เครื่อง (เริ่ม)</label>
+                <input id="pf-start-hour" type="number" inputmode="decimal" min="0" step="0.1" value="${defaultStartHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
               </div>
-              <p class="text-xs font-semibold text-secondary-500">เวลาหยุดเครื่อง</p>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-secondary-600 mb-1">${cfg.hourMeterMode ? 'ชม.เครื่อง (หยุด)' : 'ชม.หยุด'}</label>
-                  <input id="pf-stop-hour" type="number" inputmode="numeric" min="0" ${cfg.hourMeterMode ? '' : 'max="23"'} value="${editingRow ? (editingRow.stop_hour ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
-                </div>
-                <div>
-                  <label class="block text-secondary-600 mb-1">นาทีหยุด</label>
-                  <input id="pf-stop-minute" type="number" inputmode="numeric" min="0" max="59" value="${editingRow ? (editingRow.stop_minute ?? '') : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
-                </div>
+              <div>
+                <label class="block text-secondary-600 mb-1">ชม.เครื่อง (หยุด)</label>
+                <input id="pf-stop-hour" type="number" inputmode="decimal" min="0" step="0.1" value="${defaultStopHour}" class="w-full border border-secondary-200 rounded-xl px-3 py-2">
               </div>
+              <p class="text-xs text-secondary-400">ชั่วโมงทำงาน = ชม.หยุด − ชม.เริ่ม</p>
+              <input type="hidden" id="pf-start-minute" value="">
+              <input type="hidden" id="pf-stop-minute" value="">
             </div>
             ${cfg.hasFlowmeter ? `
             <div class="grid grid-cols-2 gap-3">
@@ -5482,9 +5479,9 @@ function openProductionForm(plantKey, editingRow) {
       production_date: document.getElementById('pf-date').value,
       raw_material: document.getElementById('pf-rawmat').value.trim() || null,
       start_hour:   numOrNull(document.getElementById('pf-start-hour').value),
-      start_minute: numOrNull(document.getElementById('pf-start-minute').value),
+      start_minute: null,
       stop_hour:    numOrNull(document.getElementById('pf-stop-hour').value),
-      stop_minute:  numOrNull(document.getElementById('pf-stop-minute').value),
+      stop_minute:  null,
       feed_ton:     numOrNull(document.getElementById('pf-feed-ton').value),
       breakdown_detail: document.getElementById('pf-breakdown').value.trim() || null,
       note:         document.getElementById('pf-note').value.trim() || null,
@@ -8830,6 +8827,499 @@ function exportReportExcel() {
 }
 
 // =====================================================================
+// SECTION 18B: DASHBOARD ค่าไฟฟ้า
+// =====================================================================
+const ELEC_FACTORIES = [
+  { key: 'CDE',    label: 'CDE',    color: '#3b82f6' },
+  { key: 'Propel', label: 'Propel', color: '#8b5cf6' },
+  { key: 'Sanon1', label: 'Sanon 1',color: '#f59e0b' },
+  { key: 'Sanon2', label: 'Sanon 2',color: '#10b981' },
+];
+const ELEC_PROD_TABLES = { CDE:'production_cde', Propel:'production_propel', Sanon1:'production_sanon1', Sanon2:'production_sanon2' };
+const _elecRangeState = defaultRangeState();
+
+function renderDashboardElectricity(container) {
+  const yearNow = new Date().getFullYear();
+  const yearOpts = Array.from({length:5},(_,i)=>yearNow-i).map(y=>`<option value="${y}" ${y===yearNow?'selected':''}>${y+543}</option>`).join('');
+  container.innerHTML = `
+    <div class="dash-dark-bg -m-4 sm:-m-6 p-4 sm:p-6 min-h-full">
+    <div class="space-y-6 fade-in">
+      <!-- Header -->
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold dash-dark-text flex items-center gap-2">
+          <i data-lucide="zap" class="w-5 h-5 text-yellow-400"></i>ค่าไฟฟ้า 4 โรงงาน
+        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="elec-year" onchange="loadElecData()" class="dash-dark-input rounded-xl px-3 py-1.5 text-xs">${yearOpts}</select>
+        </div>
+      </div>
+      <!-- KPI Cards -->
+      <div id="elec-kpi-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-3">${[1,2,3,4].map(skeletonCardDark).join('')}</div>
+      <!-- Chart + Ranking row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div id="elec-chart-block" class="lg:col-span-2">${skeletonBlockDark('h-72')}</div>
+        <div id="elec-rank-block">${skeletonBlockDark('h-72')}</div>
+      </div>
+      <!-- Monthly table -->
+      <div id="elec-table-block">${skeletonBlockDark('h-60')}</div>
+    </div>
+    </div>`;
+  refreshIcons();
+  loadElecData();
+}
+
+async function loadElecData() {
+  const year = parseInt(document.getElementById('elec-year')?.value || new Date().getFullYear());
+  const kpiEl   = document.getElementById('elec-kpi-cards');
+  const chartEl = document.getElementById('elec-chart-block');
+  const rankEl  = document.getElementById('elec-rank-block');
+  const tableEl = document.getElementById('elec-table-block');
+  if (!kpiEl) return;
+
+  try {
+    // ดึงค่าไฟทั้งปี
+    const { data: elecData, error: elecErr } = await db.from('electricity_costs')
+      .select('factory,month,baht,kwh').eq('year', year).order('month');
+    if (elecErr) throw elecErr;
+
+    // ดึงยอดผลิตทั้ง 4 โรงงาน ทั้งปี
+    const thYear = year; // พ.ศ. stored as AD in DB
+    const dateFrom = `${year}-01-01`;
+    const dateTo   = `${year}-12-31`;
+    const prodResults = await Promise.all(
+      ELEC_FACTORIES.map(f =>
+        db.from(ELEC_PROD_TABLES[f.key])
+          .select('production_date,feed_ton')
+          .eq('status','approved')
+          .gte('production_date', dateFrom)
+          .lte('production_date', dateTo)
+      )
+    );
+
+    // สร้าง map: factory → month → {baht, kwh}
+    const elecMap = {}; // {CDE:{1:{baht,kwh},...},...}
+    ELEC_FACTORIES.forEach(f => { elecMap[f.key] = {}; });
+    (elecData||[]).forEach(r => {
+      elecMap[r.factory][r.month] = { baht: Number(r.baht)||0, kwh: Number(r.kwh)||0 };
+    });
+
+    // สร้าง map: factory → month → feed_ton
+    const prodMap = {};
+    ELEC_FACTORIES.forEach((f, fi) => {
+      prodMap[f.key] = {};
+      const rows = prodResults[fi].data || [];
+      rows.forEach(r => {
+        const m = parseInt((r.production_date||'').split('-')[1]) || 0;
+        if (m) prodMap[f.key][m] = (prodMap[f.key][m]||0) + (Number(r.feed_ton)||0);
+      });
+    });
+
+    const months = Array.from({length:12},(_,i)=>i+1);
+    const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+    // หาเดือนล่าสุดที่มีข้อมูลค่าไฟ
+    const latestMonth = Math.max(...(elecData||[]).map(r=>r.month), 0);
+
+    // คำนวณ บาท/ตัน รายเดือน แต่ละโรงงาน
+    // และยอดรวมทั้งปี
+    const summary = ELEC_FACTORIES.map(f => {
+      let totalBaht = 0, totalTon = 0;
+      months.forEach(m => {
+        totalBaht += elecMap[f.key][m]?.baht || 0;
+        totalTon  += prodMap[f.key][m] || 0;
+      });
+      const bahtPerTon = totalTon > 0 ? totalBaht/totalTon : 0;
+      // เดือนก่อน vs เดือนปัจจุบัน
+      const curM  = latestMonth;
+      const prevM = curM > 1 ? curM-1 : 0;
+      const curBPT  = prodMap[f.key][curM]  > 0 ? (elecMap[f.key][curM]?.baht||0)  / prodMap[f.key][curM]  : 0;
+      const prevBPT = prevM && prodMap[f.key][prevM] > 0 ? (elecMap[f.key][prevM]?.baht||0) / prodMap[f.key][prevM] : 0;
+      const pctChange = prevBPT > 0 ? (curBPT-prevBPT)/prevBPT*100 : 0;
+      return { ...f, totalBaht, totalTon, bahtPerTon, curBPT, prevBPT, pctChange, latestMonth: curM };
+    });
+
+    // ── KPI Cards ──
+    kpiEl.innerHTML = summary.map(s => {
+      const up   = s.pctChange > 0.5;
+      const down = s.pctChange < -0.5;
+      const arrowIcon = up ? '▲' : down ? '▼' : '–';
+      const arrowClr  = up ? '#fca5a5' : down ? '#6ee7b7' : '#94a3b8';
+      const arrowBg   = up ? 'rgba(239,68,68,.25)' : down ? 'rgba(16,185,129,.2)' : 'rgba(148,163,184,.12)';
+      const arrowBorder = up ? 'rgba(239,68,68,.4)' : down ? 'rgba(16,185,129,.35)' : 'rgba(148,163,184,.2)';
+      const pctTxt    = Math.abs(s.pctChange) > 0.1 ? `${Math.abs(s.pctChange).toFixed(1)}%` : 'คงที่';
+      const hex = s.color;
+      return `<div class="rounded-2xl relative overflow-hidden" style="
+        padding:20px 20px 16px;
+        background:linear-gradient(160deg, ${hex}55 0%, ${hex}30 50%, #0f1e35 100%);
+        border:1px solid ${hex}90;
+        box-shadow: 0 0 0 1px ${hex}30, 0 8px 32px ${hex}30, inset 0 1px 0 ${hex}60">
+        <!-- top glow bar -->
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,${hex},transparent)"></div>
+        <!-- corner glow -->
+        <div style="position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:${hex};opacity:.12;filter:blur(24px);pointer-events:none"></div>
+        <!-- lightning icon -->
+        <div style="position:absolute;bottom:14px;right:16px;font-size:42px;line-height:1;opacity:.08;transform:rotate(10deg)">⚡</div>
+
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${hex};box-shadow:0 0 8px ${hex}"></span>
+          <span style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${hex}">${s.label}</span>
+        </div>
+
+        <div style="font-size:30px;font-weight:800;color:#f1f5f9;line-height:1;margin-bottom:4px;
+          text-shadow:0 0 20px ${hex}60">
+          ${s.bahtPerTon>0 ? fmtNum(s.bahtPerTon,1) : '–'}
+        </div>
+        <div style="font-size:11px;color:${hex}bb;margin-bottom:14px;font-weight:500">บาท / ตัน · เฉลี่ยทั้งปี</div>
+
+        <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+          background:${arrowBg};border:1px solid ${arrowBorder};margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;color:${arrowClr}">${arrowIcon} ${pctTxt}</span>
+          <span style="font-size:10px;color:#64748b">vs เดือนก่อน</span>
+        </div>
+
+        <div style="padding-top:10px;border-top:1px solid ${hex}20;font-size:11px;color:#475569">
+          รวม <span style="color:#94a3b8;font-weight:600">฿${fmtNum(s.totalBaht,0)}</span>
+        </div>
+      </div>`;
+    }).join('');
+    refreshIcons();
+
+    // ── Line Chart (Chart.js) ──
+    const chartId = 'elec-line-chart';
+    chartEl.innerHTML = `<div class="rounded-2xl p-5" style="background:rgba(15,23,42,.6);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(4px)">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm font-semibold dash-dark-text">บาท/ตัน รายเดือน ปี ${year+543}</div>
+        <div class="flex flex-wrap gap-3">
+          ${ELEC_FACTORIES.map(f=>`<span class="flex items-center gap-1.5 text-xs dash-dark-text-muted"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${f.color};box-shadow:0 0 6px ${f.color}80"></span>${f.label}</span>`).join('')}
+        </div>
+      </div>
+      <canvas id="${chartId}" height="200"></canvas>
+    </div>`;
+    const ctx = document.getElementById(chartId)?.getContext('2d');
+    if (ctx) {
+      if (chartRegistry[chartId]) { chartRegistry[chartId].destroy(); delete chartRegistry[chartId]; }
+      chartRegistry[chartId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: MN,
+          datasets: ELEC_FACTORIES.map(f => ({
+            label: f.label,
+            data: months.map(m => {
+              const baht = elecMap[f.key][m]?.baht || 0;
+              const ton  = prodMap[f.key][m] || 0;
+              return (baht > 0 && ton > 0) ? parseFloat((baht/ton).toFixed(2)) : null;
+            }),
+            borderColor: f.color,
+            backgroundColor: f.color + '22',
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            tension: 0.3,
+            spanGaps: false,
+          })),
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? fmtNum(ctx.parsed.y,1)+' ฿/ต.' : 'ไม่มีข้อมูล'}`,
+              }
+            }
+          },
+          scales: {
+            x: { grid: { color:'rgba(255,255,255,.05)' }, ticks: { color:'#94a3b8', font:{size:10} } },
+            y: { grid: { color:'rgba(255,255,255,.05)' }, ticks: { color:'#94a3b8', font:{size:10}, callback: v=>`฿${v}` }, beginAtZero: false },
+          },
+        },
+      });
+    }
+
+    // ── Ranking Card ──
+    const ranked = [...summary].filter(s=>s.bahtPerTon>0).sort((a,b)=>a.bahtPerTon-b.bahtPerTon);
+    const maxBPT = Math.max(...ranked.map(s=>s.bahtPerTon), 1);
+    const medalBg  = ['rgba(251,191,36,.2)','rgba(148,163,184,.15)','rgba(180,131,68,.2)','rgba(100,116,139,.1)'];
+    const medalClr = ['#fbbf24','#94a3b8','#b4834a','#64748b'];
+    const medals   = ['🥇','🥈','🥉','4'];
+    rankEl.innerHTML = `<div class="rounded-2xl p-5 h-full" style="background:rgba(15,23,42,.6);border:1px solid rgba(255,255,255,.08)">
+      <div class="text-sm font-semibold dash-dark-text mb-1">🏆 Ranking ปี ${year+543}</div>
+      <div class="text-xs mb-5" style="color:#64748b">เฉลี่ยบาท/ตัน — ต่ำ = ประหยัดกว่า</div>
+      <div class="space-y-4">
+        ${ranked.map((s,i)=>`<div class="flex items-center gap-3">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+            style="background:${medalBg[i]};color:${medalClr[i]};border:1px solid ${medalClr[i]}40">${medals[i]}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between mb-1.5">
+              <span class="text-xs font-semibold" style="color:${s.color}">${s.label}</span>
+              <span class="text-xs font-bold" style="color:${s.color}">${fmtNum(s.bahtPerTon,1)} ฿/ต.</span>
+            </div>
+            <div class="h-1.5 rounded-full" style="background:rgba(255,255,255,.06)">
+              <div class="h-1.5 rounded-full transition-all" style="width:${(s.bahtPerTon/maxBPT*100).toFixed(0)}%;background:linear-gradient(90deg,${s.color},${s.color}90);box-shadow:0 0 8px ${s.color}60"></div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>
+      ${ranked.length > 0 ? `<div class="mt-5 pt-3 text-xs" style="border-top:1px solid rgba(255,255,255,.08);color:#64748b">
+        ✅ ดีที่สุด <span style="color:${ranked[0].color};font-weight:700">${ranked[0].label}</span> · ${fmtNum(ranked[0].bahtPerTon,1)} ฿/ต.
+        &nbsp;|&nbsp; สูงสุด <span style="color:${ranked[ranked.length-1].color};font-weight:600">${ranked[ranked.length-1].label}</span>
+      </div>` : ''}
+    </div>`;
+
+    // ── Monthly Comparison Table ──
+    const colHtml = ELEC_FACTORIES.map(f=>`<th class="px-3 py-2 text-right whitespace-nowrap" style="color:${f.color}">${f.label}</th><th class="px-2 py-2 text-center" style="font-size:10px;color:${f.color}">±%</th>`).join('');
+    const rowsHtml = months.map(m => {
+      const hasAny = ELEC_FACTORIES.some(f => elecMap[f.key][m]?.baht > 0);
+      const cells = ELEC_FACTORIES.map(f => {
+        const baht = elecMap[f.key][m]?.baht || 0;
+        const ton  = prodMap[f.key][m] || 0;
+        const bpt  = baht > 0 && ton > 0 ? baht/ton : 0;
+        const prevBaht = m>1 ? elecMap[f.key][m-1]?.baht||0 : 0;
+        const prevTon  = m>1 ? prodMap[f.key][m-1]||0 : 0;
+        const prevBpt  = prevBaht>0 && prevTon>0 ? prevBaht/prevTon : 0;
+        const pct      = prevBpt>0 && bpt>0 ? (bpt-prevBpt)/prevBpt*100 : null;
+        const up = pct !== null && pct > 0.5;
+        const dn = pct !== null && pct < -0.5;
+        const chipColor = up ? '#ef4444' : dn ? '#22c55e' : '#94a3b8';
+        const chipBg    = up ? 'rgba(239,68,68,.12)' : dn ? 'rgba(34,197,94,.12)' : 'rgba(148,163,184,.1)';
+        const arrow     = up ? '▲' : dn ? '▼' : '–';
+        const pctStr    = pct !== null ? `${arrow} ${Math.abs(pct).toFixed(1)}%` : '–';
+        return `<td class="px-3 py-2 text-right font-semibold dash-dark-text">${bpt>0 ? fmtNum(bpt,1) : '<span class="dash-dark-text-muted">–</span>'}</td>
+                <td class="px-2 py-2 text-center"><span style="font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:10px;background:${chipBg};color:${chipColor}">${pctStr}</span></td>`;
+      }).join('');
+      const isLatest = m === latestMonth;
+      return `<tr class="${isLatest?'bg-yellow-900 bg-opacity-20':''} border-b border-secondary-700">
+        <td class="px-3 py-2 font-semibold dash-dark-text whitespace-nowrap">${MN[m-1]}${isLatest?' <span class="text-xs text-yellow-400">●</span>':''}</td>
+        ${cells}
+      </tr>`;
+    }).join('');
+
+    tableEl.innerHTML = `<div class="rounded-2xl p-5" style="background:rgba(15,23,42,.6);border:1px solid rgba(255,255,255,.08)">
+      <div class="text-sm font-semibold dash-dark-text mb-4">📊 ตารางเปรียบเทียบรายเดือน — บาท/ตัน ปี ${year+543}</div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs border-collapse">
+          <thead><tr class="border-b-2 border-secondary-600">
+            <th class="px-3 py-2 text-left dash-dark-text-muted">เดือน</th>
+            ${colHtml}
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr class="border-t-2 border-secondary-500">
+            <td class="px-3 py-2 font-bold dash-dark-text">เฉลี่ย</td>
+            ${ELEC_FACTORIES.map(f=>{
+              const bpt = summary.find(s=>s.key===f.key)?.bahtPerTon||0;
+              return `<td class="px-3 py-2 text-right font-bold" style="color:${f.color}">${bpt>0?fmtNum(bpt,1):'–'}</td><td></td>`;
+            }).join('')}
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+
+  } catch(err) {
+    console.error('loadElecData error:', err);
+    kpiEl.innerHTML = `<div class="col-span-4 dash-dark-text-muted text-sm p-4">โหลดข้อมูลไม่สำเร็จ: ${err.message}</div>`;
+  }
+}
+
+// =====================================================================
+// SECTION 26C: MANAGE ค่าไฟฟ้า
+// =====================================================================
+const _elecManageFilter = { year: new Date().getFullYear() };
+
+function renderManageElectricity(container) {
+  const yearNow = new Date().getFullYear();
+  const yearOpts = Array.from({length:5},(_,i)=>yearNow-i).map(y=>`<option value="${y}" ${y===_elecManageFilter.year?'selected':''}>${y+543}</option>`).join('');
+  container.innerHTML = `
+    <div class="space-y-4 fade-in">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-xl font-semibold text-secondary-800 flex items-center gap-2">
+          <i data-lucide="zap" class="w-5 h-5 text-yellow-500"></i>ค่าไฟฟ้ารายเดือน
+        </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="elec-m-year" onchange="_elecManageFilter.year=parseInt(this.value);renderElecManageTable()" class="border border-secondary-200 rounded-xl px-3 py-2 text-sm">${yearOpts}</select>
+          <button onclick="openElecBulkModal()" class="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-xl text-sm font-semibold hover:bg-yellow-600 shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4"></i> บันทึก/แก้ไขค่าไฟ
+          </button>
+        </div>
+      </div>
+      <p class="text-xs text-secondary-400">กรอกค่าไฟฟ้า (บาท) แต่ละโรงงาน แล้วระบบจะคำนวณ บาท/ตัน อัตโนมัติจากยอดผลิต</p>
+      <div id="elec-m-table-block"></div>
+    </div>`;
+  refreshIcons();
+  renderElecManageTable();
+}
+
+async function renderElecManageTable() {
+  const el = document.getElementById('elec-m-table-block');
+  if (!el) return;
+  el.innerHTML = `<div class="text-center py-8 text-secondary-400 text-sm">กำลังโหลด...</div>`;
+  const year = _elecManageFilter.year;
+  try {
+    const dateFrom = `${year}-01-01`;
+    const dateTo   = `${year}-12-31`;
+    const [{ data: elecData }, ...prodResults] = await Promise.all([
+      db.from('electricity_costs').select('factory,month,baht,kwh').eq('year',year).order('month'),
+      ...ELEC_FACTORIES.map(f =>
+        db.from(ELEC_PROD_TABLES[f.key]).select('production_date,feed_ton').eq('status','approved')
+          .gte('production_date',dateFrom).lte('production_date',dateTo)
+      ),
+    ]);
+    const elecMap = {};
+    ELEC_FACTORIES.forEach(f => { elecMap[f.key] = {}; });
+    (elecData||[]).forEach(r => { elecMap[r.factory][r.month] = { baht:Number(r.baht)||0, kwh:Number(r.kwh)||0 }; });
+    const prodMap = {};
+    ELEC_FACTORIES.forEach((f, fi) => {
+      prodMap[f.key] = {};
+      (prodResults[fi].data||[]).forEach(r => {
+        const m = parseInt((r.production_date||'').split('-')[1])||0;
+        if (m) prodMap[f.key][m] = (prodMap[f.key][m]||0)+(Number(r.feed_ton)||0);
+      });
+    });
+    const months = Array.from({length:12},(_,i)=>i+1);
+    const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const theadCols = ELEC_FACTORIES.map(f=>`<th class="px-3 py-2 text-right whitespace-nowrap" style="color:${f.color}">${f.label}<br><span class="font-normal text-secondary-400" style="font-size:9px">บาท · ฿/ต.</span></th>`).join('');
+    const rows = months.map(m => {
+      const cells = ELEC_FACTORIES.map(f => {
+        const baht = elecMap[f.key][m]?.baht || 0;
+        const ton  = prodMap[f.key][m] || 0;
+        const bpt  = baht>0 && ton>0 ? (baht/ton).toFixed(1) : '';
+        const hasBaht = baht > 0;
+        return `<td class="px-3 py-2 text-right">
+          <div class="${hasBaht?'font-semibold text-secondary-800':'text-secondary-300'}">${hasBaht?fmtNum(baht,0):'–'}</div>
+          ${bpt ? `<div class="text-xs" style="color:${f.color}">${bpt} ฿/ต.</div>` : `<div class="text-xs text-secondary-300">${ton>0?fmtNum(ton,0)+' ต.':'–'}</div>`}
+        </td>`;
+      }).join('');
+      return `<tr class="border-b border-secondary-100 hover:bg-secondary-50 cursor-pointer" onclick="openElecMonthModal(${m},${year})">
+        <td class="px-3 py-2 font-medium text-secondary-700 whitespace-nowrap">${MN[m-1]}</td>
+        ${cells}
+        <td class="px-3 py-2 text-center">
+          <button class="text-xs px-2 py-1 rounded-lg border border-secondary-200 text-secondary-500 hover:bg-secondary-100">แก้ไข</button>
+        </td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-secondary-100 overflow-x-auto">
+      <table class="w-full text-sm border-collapse">
+        <thead class="bg-secondary-50">
+          <tr>
+            <th class="px-3 py-2 text-left text-secondary-500 text-xs">เดือน</th>
+            ${theadCols}
+            <th class="px-3 py-2 text-center text-secondary-400 text-xs">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  } catch(err) {
+    el.innerHTML = `<div class="text-red-500 text-sm p-4">โหลดข้อมูลไม่สำเร็จ: ${err.message}</div>`;
+  }
+}
+
+async function openElecMonthModal(month, year) {
+  const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const fields = ELEC_FACTORIES.map(f => `
+    <div>
+      <label class="text-xs font-semibold mb-1 block" style="color:${f.color}">${f.label}</label>
+      <div class="flex gap-2">
+        <input id="elec-baht-${f.key}" type="number" inputmode="decimal" min="0" step="1" placeholder="ค่าไฟ (บาท)"
+          class="flex-1 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
+        <input id="elec-kwh-${f.key}" type="number" inputmode="decimal" min="0" step="1" placeholder="หน่วย kWh"
+          class="w-28 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
+      </div>
+    </div>`).join('');
+  showModal({
+    title: `ค่าไฟฟ้า ${MN[month-1]} ${year+543}`,
+    bodyHtml: `<div class="space-y-4">
+      <p class="text-xs text-secondary-400">กรอกค่าไฟฟ้า (บาท) และหน่วยไฟฟ้า (kWh) ถ้ามี ของแต่ละโรงงาน</p>
+      ${fields}
+    </div>`,
+    confirmText: 'บันทึก',
+    onConfirm: () => saveElecMonth(month, year),
+  });
+  // โหลดค่าเดิมหลัง modal เปิด
+  const { data } = await db.from('electricity_costs').select('factory,baht,kwh').eq('year',year).eq('month',month);
+  (data||[]).forEach(r => {
+    const b = document.getElementById(`elec-baht-${r.factory}`);
+    const k = document.getElementById(`elec-kwh-${r.factory}`);
+    if (b) b.value = r.baht || '';
+    if (k) k.value = r.kwh || '';
+  });
+}
+
+async function saveElecMonth(month, year) {
+  const rows = ELEC_FACTORIES.map(f => {
+    const bahtEl = document.getElementById(`elec-baht-${f.key}`);
+    const kwhEl  = document.getElementById(`elec-kwh-${f.key}`);
+    const baht = parseFloat(bahtEl?.value || '') || null;
+    const kwh  = parseFloat(kwhEl?.value  || '') || null;
+    return { factory: f.key, year, month, baht, kwh };
+  }).filter(r => r.baht !== null);
+
+  if (rows.length === 0) { showToast('ไม่มีข้อมูลที่จะบันทึก','warn'); return; }
+  try {
+    const { error } = await db.from('electricity_costs').upsert(
+      rows.map(r => ({ ...r, created_by: currentUser?.id || null })),
+      { onConflict: 'factory,year,month' }
+    );
+    if (error) throw error;
+    showToast(`บันทึกค่าไฟ ${rows.length} โรงงาน เรียบร้อย`, 'success');
+    renderElecManageTable();
+  } catch(err) {
+    showToast('บันทึกไม่สำเร็จ: ' + err.message, 'error');
+  }
+}
+
+// Bulk modal: เลือกเดือนแล้วกรอก
+function openElecBulkModal() {
+  const year = _elecManageFilter.year;
+  const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const curMonth = new Date().getMonth() + 1;
+  const monthOpts = MN.map((n,i)=>`<option value="${i+1}" ${i+1===curMonth?'selected':''}>${n}</option>`).join('');
+  showModal({
+    title: `บันทึกค่าไฟฟ้า ปี ${year+543}`,
+    bodyHtml: `<div class="space-y-4">
+      <div>
+        <label class="text-xs font-semibold text-secondary-600 mb-1 block">เดือน</label>
+        <select id="elec-bulk-month" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">${monthOpts}</select>
+      </div>
+      ${ELEC_FACTORIES.map(f=>`
+      <div>
+        <label class="text-xs font-semibold mb-1 block" style="color:${f.color}">${f.label}</label>
+        <div class="flex gap-2">
+          <input id="elec-bulk-baht-${f.key}" type="number" inputmode="decimal" min="0" step="1" placeholder="ค่าไฟ (บาท) *"
+            class="flex-1 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
+          <input id="elec-bulk-kwh-${f.key}" type="number" inputmode="decimal" min="0" step="1" placeholder="หน่วย kWh"
+            class="w-28 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
+        </div>
+      </div>`).join('')}
+    </div>`,
+    confirmText: 'บันทึก',
+    onConfirm: () => saveElecBulk(year),
+  });
+}
+
+async function saveElecBulk(year) {
+  const month = parseInt(document.getElementById('elec-bulk-month')?.value || '0');
+  if (!month) { showToast('กรุณาเลือกเดือน', 'warn'); return; }
+  const rows = ELEC_FACTORIES.map(f => {
+    const baht = parseFloat(document.getElementById(`elec-bulk-baht-${f.key}`)?.value || '') || null;
+    const kwh  = parseFloat(document.getElementById(`elec-bulk-kwh-${f.key}`)?.value  || '') || null;
+    return { factory: f.key, year, month, baht, kwh };
+  }).filter(r => r.baht !== null);
+  if (rows.length === 0) { showToast('กรุณากรอกค่าไฟอย่างน้อย 1 โรงงาน', 'warn'); return; }
+  try {
+    const { error } = await db.from('electricity_costs').upsert(
+      rows.map(r => ({ ...r, created_by: currentUser?.id || null })),
+      { onConflict: 'factory,year,month' }
+    );
+    if (error) throw error;
+    showToast(`บันทึกค่าไฟ ${rows.length} โรงงาน เรียบร้อย`, 'success');
+    renderElecManageTable();
+  } catch(err) {
+    showToast('บันทึกไม่สำเร็จ: ' + err.message, 'error');
+  }
+}
+
+// =====================================================================
 // SECTION 19: APP BOOTSTRAP
 // =====================================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -9066,6 +9556,32 @@ async function fetchExecReportData(fromDate, toDate) {
     results._water = { byWell, total:wtot, wellCount:Object.keys(byWell).length };
   } catch(_) { results._water = { byWell:{}, total:0, wellCount:0 }; }
 
+  // Electricity costs — ดึงตามปี/เดือนที่อยู่ในช่วง
+  try {
+    const elecRows = [];
+    for (let y = fy; y <= ty; y++) {
+      const mStart = (y === fy) ? fm : 1;
+      const mEnd   = (y === ty) ? parseInt(toDate.split('-')[1]) : 12;
+      const { data: er } = await db.from('electricity_costs').select('factory,year,month,baht')
+        .eq('year', y).gte('month', mStart).lte('month', mEnd);
+      (er || []).forEach(r => elecRows.push(r));
+    }
+    // รวมตาม factory
+    const byFactory = {}; let elecTotal = 0;
+    ELEC_FACTORIES.forEach(f => { byFactory[f.key] = { baht:0, label:f.label, color:f.color }; });
+    elecRows.forEach(r => {
+      if (byFactory[r.factory]) byFactory[r.factory].baht += Number(r.baht)||0;
+      elecTotal += Number(r.baht)||0;
+    });
+    // คำนวณ บาท/ตัน per factory
+    ELEC_FACTORIES.forEach(f => {
+      const totalTon = results[f.key.toLowerCase()]?.totalFeed || 0;
+      byFactory[f.key].ton   = totalTon;
+      byFactory[f.key].bpt   = (totalTon > 0 && byFactory[f.key].baht > 0) ? byFactory[f.key].baht / totalTon : 0;
+    });
+    results._electricity = { byFactory, total: elecTotal };
+  } catch(_) { results._electricity = { byFactory:{}, total:0 }; }
+
   return results;
 }
 
@@ -9113,6 +9629,7 @@ async function generateExecutiveReport(fromDate, toDate, company) {
   if (failPlants.length)  summaryLines.push(`🔴 ต่ำกว่าเป้า: ${failPlants.join(', ')} — ต้องติดตาม`);
   if (totalBd > 0) summaryLines.push(`⚠️ พบ Breakdown รวม ${totalBd} วัน ใน ${plants.filter(pk=>data[pk].breakdownCount>0).map(pk=>EXEC_REPORT_LABELS[pk]).join(', ')}`);
   summaryLines.push(`💰 ยอดขาย ${fmtExN(data._sales.totalValue,0)} บาท (${fmtExN(data._sales.totalTon,1)} ตัน)`);
+  if (data._electricity?.total > 0) summaryLines.push(`⚡ ค่าไฟฟ้ารวม 4 โรงงาน ${fmtExN(data._electricity.total,0)} บาท`);
 
   // ── ตาราง Overview (พร้อม Traffic Light + Trend) ──
   const overviewRows = plants.map(pk => {
@@ -9292,6 +9809,41 @@ ${plantSections}
 </div>
 <table><thead><tr style="background:#0891B2"><th>แหล่งน้ำ</th><th style="text-align:right">ปริมาณ (ม³)</th><th style="text-align:center">%</th></tr></thead>
 <tbody>${mkRows(wtEntries,data._water.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._water.total,2)}</td><td class="c">100%</td></tr></tbody></table>
+
+${data._electricity && data._electricity.total > 0 ? (() => {
+  const elFacs = ELEC_FACTORIES;
+  const elRows = elFacs.map(f => {
+    const d = data._electricity.byFactory[f.key] || {};
+    const baht = d.baht || 0;
+    const bpt  = d.bpt  || 0;
+    const ton  = d.ton  || 0;
+    if (!baht) return `<tr><td style="color:${f.color};font-weight:600">${f.label}</td><td class="c" style="color:#94a3b8">–</td><td class="c" style="color:#94a3b8">–</td><td class="c" style="color:#94a3b8">–</td></tr>`;
+    const bptColor = bpt > 10 ? '#DC2626' : bpt > 7 ? '#D97706' : '#059669';
+    return `<tr><td style="color:${f.color};font-weight:600">${f.label}</td>
+      <td class="r">${fmtExN(baht,0)}</td>
+      <td class="r">${fmtExN(ton,1)}</td>
+      <td class="r" style="font-weight:700;color:${bptColor}">${bpt>0?fmtExN(bpt,2):'–'}</td>
+    </tr>`;
+  }).join('');
+  const totalBPT = data._electricity.total > 0 && data[Object.keys(data).filter(k=>!k.startsWith('_')).reduce((s,k)=>s+(data[k].totalFeed||0),0)] ? '' : '';
+  const totalTon = elFacs.reduce((s,f)=>(data._electricity.byFactory[f.key]?.ton||0)+s,0);
+  const overallBPT = totalTon > 0 ? data._electricity.total / totalTon : 0;
+  return `<h2 style="background:#CA8A04;color:#fff;padding:6px 12px;border-radius:6px;border:none">⚡ ค่าไฟฟ้าโรงงาน</h2>
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtExN(data._electricity.total,0)} บาท</div><div class="kl">ค่าไฟรวมทุกโรงงาน</div></div>
+  <div class="kc"><div class="kv">${overallBPT>0?fmtExN(overallBPT,2):'–'} ฿/ต.</div><div class="kl">เฉลี่ยรวม (บาท/ตัน)</div></div>
+  <div class="kc"><div class="kv">${fmtExN(totalTon,1)} ตัน</div><div class="kl">ยอดผลิตรวม (ที่มีค่าไฟ)</div></div>
+</div>
+<table><thead><tr style="background:#CA8A04">
+  <th>โรงงาน</th>
+  <th style="text-align:right">ค่าไฟ (บาท)</th>
+  <th style="text-align:right">ผลิต (ตัน)</th>
+  <th style="text-align:right">บาท/ตัน</th>
+</tr></thead>
+<tbody>${elRows}
+<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._electricity.total,0)}</td><td class="r">${fmtExN(totalTon,1)}</td><td class="r">${overallBPT>0?fmtExN(overallBPT,2):'–'}</td></tr>
+</tbody></table>`;
+})() : ''}
 
 </body></html>`;
 
