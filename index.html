@@ -9234,7 +9234,7 @@ ${plantSections}
   <div class="kc"><div class="kv">${Object.keys(data._drone.byType).length} ชนิด</div><div class="kl">ประเภทหิน</div></div>
   <div class="kc"><div class="kv">${Object.keys(data._drone.byFactory).length} โรง</div><div class="kl">จำนวนโรงงาน</div></div>
 </div>
-<table><thead><tr style="background:#065A82"><th>ประเภทหิน</th><th>ปริมาณ (ตัน)</th><th>%</th></tr></thead>
+<table><thead><tr style="background:#065A82"><th>ประเภทหิน</th><th style="text-align:right">ปริมาณ (ตัน)</th><th style="text-align:center">%</th></tr></thead>
 <tbody>${mkRows(droneEntries,data._drone.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._drone.total,1)}</td><td class="c">100%</td></tr></tbody></table>
 
 <h2 style="background:#1D9E75;color:#fff;padding:6px 12px;border-radius:6px;border:none">💰 ยอดขาย</h2>
@@ -9242,7 +9242,7 @@ ${plantSections}
   <div class="kc"><div class="kv">${fmtExN(data._sales.totalTon,1)} ตัน</div><div class="kl">ยอดขายรวม</div></div>
   <div class="kc"><div class="kv">${fmtExN(data._sales.totalValue,0)} บาท</div><div class="kl">มูลค่ารวม</div></div>
 </div>
-<table><thead><tr style="background:#1D9E75"><th>ประเภทหิน</th><th>ตัน</th><th>%</th></tr></thead>
+<table><thead><tr style="background:#1D9E75"><th>ประเภทหิน</th><th style="text-align:right">ตัน</th><th style="text-align:center">%</th></tr></thead>
 <tbody>${mkRows(stEntries,data._sales.totalTon)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._sales.totalTon,1)}</td><td class="c">100%</td></tr></tbody></table>
 
 <h2 style="background:#BA7517;color:#fff;padding:6px 12px;border-radius:6px;border:none">⚡ รถตักไฟฟ้า</h2>
@@ -9252,7 +9252,7 @@ ${plantSections}
   <div class="kc"><div class="kv">${fmtExN(data._loader.totalCost,0)} บาท</div><div class="kl">ค่าไฟรวม</div></div>
   <div class="kc"><div class="kv">${fmtExN(data._loader.costPerHour,2)} บ./ชม.</div><div class="kl">ค่าไฟต่อชั่วโมง</div></div>
 </div>
-<table><thead><tr style="background:#BA7517"><th>ชื่อรถตัก</th><th>ชั่วโมงทำงาน</th><th>ชาร์จ (นาที)</th><th>ค่าไฟ (บาท)</th></tr></thead>
+<table><thead><tr style="background:#BA7517"><th>ชื่อรถตัก</th><th style="text-align:right">ชั่วโมงทำงาน</th><th style="text-align:right">ชาร์จ (นาที)</th><th style="text-align:right">ค่าไฟ (บาท)</th></tr></thead>
 <tbody>${loaderRows}</tbody></table>
 
 <h2 style="background:#0891B2;color:#fff;padding:6px 12px;border-radius:6px;border:none">💧 น้ำบาดาล</h2>
@@ -9260,7 +9260,7 @@ ${plantSections}
   <div class="kc"><div class="kv">${fmtExN(data._water.total,2)} ม³</div><div class="kl">ปริมาณใช้รวม</div></div>
   <div class="kc"><div class="kv">${data._water.wellCount} บ่อ</div><div class="kl">จำนวนแหล่งน้ำ</div></div>
 </div>
-<table><thead><tr style="background:#0891B2"><th>แหล่งน้ำ</th><th>ปริมาณ (ม³)</th><th>%</th></tr></thead>
+<table><thead><tr style="background:#0891B2"><th>แหล่งน้ำ</th><th style="text-align:right">ปริมาณ (ม³)</th><th style="text-align:center">%</th></tr></thead>
 <tbody>${mkRows(wtEntries,data._water.total)}<tr class="tf"><td>รวม</td><td class="r">${fmtExN(data._water.total,2)}</td><td class="c">100%</td></tr></tbody></table>
 
 </body></html>`;
