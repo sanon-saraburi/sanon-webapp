@@ -1441,8 +1441,26 @@ function renderAppShell() {
           </button>`).join('')}
         ` : ''}
       </nav>
-      <div class="p-3 border-t border-secondary-100">
-        <div class="flex items-center gap-2 px-2 py-2">
+      <div class="p-3 border-t border-secondary-100 space-y-1">
+        <!-- System Switcher -->
+        <p class="px-2 text-[10px] font-semibold text-secondary-400 uppercase tracking-wide mb-1">เปลี่ยนระบบ</p>
+        <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm bg-primary-50 border border-primary-200">
+          <i data-lucide="bar-chart-2" class="w-4 h-4 flex-shrink-0 text-primary-600"></i>
+          <span class="flex-1 text-primary-700 font-medium">ระบบผลิต</span>
+          <span class="text-primary-400 text-[10px]">ใช้งาน</span>
+        </div>
+        <a href="inventory.html" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-secondary-600 hover:bg-secondary-50 transition cursor-pointer">
+          <i data-lucide="package" class="w-4 h-4 flex-shrink-0 text-secondary-400"></i>
+          <span class="flex-1">คลังวัสดุ</span>
+          <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-secondary-300"></i>
+        </a>
+        <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-secondary-300 cursor-not-allowed">
+          <i data-lucide="wrench" class="w-4 h-4 flex-shrink-0"></i>
+          <span class="flex-1">PM เครื่องจักร</span>
+          <span class="text-secondary-300 text-[10px]">เร็วๆ นี้</span>
+        </div>
+        <!-- User info -->
+        <div class="flex items-center gap-2 px-2 py-2 mt-1 border-t border-secondary-100 pt-3">
           <div class="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-semibold text-sm flex-shrink-0">
             ${escapeHtml((currentUser.full_name || currentUser.username || '?').slice(0,1).toUpperCase())}
           </div>
