@@ -529,6 +529,15 @@ async function doLogin(username, password) {
       currentUser._extraDashboards = [];
       currentUser._extraManage = [];
     }
+    // ตรวจสิทธิ์เข้าระบบ Production
+    if (!canAccessSystem(currentUser)) {
+      currentUser = null;
+      try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
+      closeModal();
+      renderAccessDenied();
+      return;
+    }
+
     closeModal();
     try { localStorage.setItem('_sn_last_username', username); } catch (_) {}
     showToast(`ยินดีต้อนรับ ${data.full_name || data.username}`, 'success');
@@ -565,6 +574,46 @@ function defaultPageForUser(user) {
   return allowed.dashboards.length > 0 ? allowed.dashboards[0] : 'landing';
 }
 
+function canAccessSystem(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const allowed = getAllowedMenus(user);
+  return allowed.dashboards.length > 0 || allowed.manage.length > 0;
+}
+
+function renderAccessDenied() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = `
+  <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+      <div class="inline-flex w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
+        <i data-lucide="shield-off" class="w-8 h-8 text-red-500"></i>
+      </div>
+      <h2 class="text-xl font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าใช้งาน</h2>
+      <p class="text-sm text-gray-500 mb-1">บัญชีของคุณไม่ได้รับสิทธิ์เข้าใช้</p>
+      <p class="text-sm font-semibold text-gray-700 mb-5">ระบบการผลิต (Production)</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 text-left text-sm text-amber-800">
+        <div class="flex gap-2 items-start">
+          <span class="mt-0.5 flex-shrink-0">ℹ️</span>
+          <div>กรุณาติดต่อผู้ดูแลระบบ (Admin) เพื่อขอสิทธิ์เข้าใช้งาน</div>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button onclick="doLogout()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+          ลองเข้าสู่ระบบด้วยบัญชีอื่น
+        </button>
+        <div class="flex gap-2 mt-1 justify-center text-xs text-slate-400">
+          <a href="inventory.html" class="hover:text-blue-400">คลังวัสดุ</a>
+          <span>|</span>
+          <a href="pm.html" class="hover:text-blue-400">PM เครื่องจักร</a>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
 function confirmLogout() {
   showModal({
     title: 'ออกจากระบบ',
@@ -582,6 +631,8 @@ function doLogout() {
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
+  try { sessionStorage.removeItem('_sn_inv_sess'); } catch (_) {}
+  try { sessionStorage.removeItem('_sn_pm_sess'); } catch (_) {}
   showToast('ออกจากระบบเรียบร้อย', 'info');
   navigateTo('landing');
 }
@@ -9325,13 +9376,21 @@ async function saveElecBulk(year) {
 document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     try {
-      const _saved = sessionStorage.getItem('_sn_sess');
-      if (_saved) {
-        const { user, page, loginAt } = JSON.parse(_saved);
-        if (user && user.id) {
-          const elapsed = Math.floor((Date.now() - loginAt) / 1000);
-          const remaining = SESSION_TIMEOUT_SECONDS - elapsed;
-          if (user.role === 'admin' || remaining > 0) {
+      // ลอง _sn_sess ก่อน — fallback ไป _sn_inv_sess, _sn_pm_sess
+      const tryParse = key => { try { const r=sessionStorage.getItem(key); return r?JSON.parse(r):null; } catch(_){ return null; } };
+      let user = null, page = null, loginAt = Date.now();
+      const own = tryParse('_sn_sess');
+      if (own?.user?.id) { user = own.user; page = own.page; loginAt = own.loginAt || Date.now(); }
+      else {
+        for (const key of ['_sn_inv_sess','_sn_pm_sess']) {
+          const p = tryParse(key);
+          if (p?.id && p?.username) { user = p; break; }
+        }
+      }
+      if (user && user.id) {
+        const elapsed = Math.floor((Date.now() - loginAt) / 1000);
+        const remaining = SESSION_TIMEOUT_SECONDS - elapsed;
+        if (user.role === 'admin' || remaining > 0) {
             currentUser = user;
             // re-fetch permissions จาก DB ทุกครั้งที่ restore session เพื่อให้สิทธิ์อัปเดตทันที
             try {
@@ -9346,6 +9405,13 @@ document.addEventListener('DOMContentLoaded', () => {
               currentUser._extraDashboards = [...new Set([...roleDash, ...userDash])];
               currentUser._extraManage     = [...new Set([...roleManage, ...userManage])];
             } catch (_) {}
+            // ตรวจสิทธิ์เข้าระบบ Production
+            if (!canAccessSystem(currentUser)) {
+              currentUser = null;
+              try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
+              renderAccessDenied();
+              return;
+            }
             await fetchPendingApprovalCount();
             startSessionTimer(user.role === 'admin' ? undefined : remaining);
             startApprovalCountPolling();
@@ -9353,7 +9419,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
         }
-      }
     } catch (_) {}
     render();
   })();

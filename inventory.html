@@ -284,8 +284,9 @@ const INV_MENUS_MAIN = [
 const ROLE_DEFAULT_MENUS = {
   admin      : INV_MENUS_MAIN.map(m=>m.key),
   manager    : ['inv-dashboard','inv-balance','inv-qr','inv-stock','inv-withdraw','inv-approvals','inv-po','inv-chem','inv-report'],
-  user       : ['inv-dashboard','inv-balance','inv-qr','inv-withdraw','inv-chem'],
-  management : ['inv-dashboard','inv-balance','inv-qr','inv-report'],
+  // role อื่น ต้องได้รับสิทธิ์ inv- จาก admin โดยตรง ถึงจะเข้าได้
+  user       : [],
+  management : [],
 };
 
 // =====================================================================
@@ -307,8 +308,41 @@ function canAccess(menuKey) {
   return getAllowedInvMenus(currentUser).includes(menuKey);
 }
 
-function isAdmin()   { return currentUser && currentUser.role === 'admin'; }
-function isManager() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || canAccess('inv-approvals')); }
+function isAdmin()            { return currentUser && currentUser.role === 'admin'; }
+function isManager()          { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager' || canAccess('inv-approvals')); }
+function canAccessInvSystem() { return currentUser && getAllowedInvMenus(currentUser).length > 0; }
+
+// หน้า Access Denied
+function renderAccessDenied() {
+  qs('#app-root').innerHTML = `
+  <div class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-800 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+      <div class="inline-flex w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
+        <i data-lucide="shield-off" class="w-8 h-8 text-red-500"></i>
+      </div>
+      <h2 class="text-xl font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าใช้งาน</h2>
+      <p class="text-sm text-gray-500 mb-1">บัญชีของคุณไม่ได้รับสิทธิ์เข้าใช้</p>
+      <p class="text-sm font-semibold text-gray-700 mb-5">ระบบคลังวัสดุ (Inventory)</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 text-left text-sm text-amber-800">
+        <div class="flex gap-2 items-start">
+          <i data-lucide="info" class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600"></i>
+          <div>กรุณาติดต่อผู้ดูแลระบบ (Admin) เพื่อขอสิทธิ์เข้าใช้งาน</div>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button onclick="renderLanding()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+          ลองเข้าสู่ระบบด้วยบัญชีอื่น
+        </button>
+        <div class="flex gap-2 mt-1 justify-center text-xs text-slate-400">
+          <a href="index.html" class="hover:text-emerald-400">Production System</a>
+          <span>|</span>
+          <a href="pm.html" class="hover:text-emerald-400">PM เครื่องจักร</a>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+}
 
 // =====================================================================
 // SECTION 4: UTILS
@@ -501,12 +535,15 @@ async function doLogin(username, password) {
       department: data.department || '',
       _extraManage: extraManage,
     }));
-    // เขียน cross-system session — ให้ System 1 (index.html) รู้จัก session นี้ด้วย
-    sessionStorage.setItem('_sn_sess', JSON.stringify({
-      user: { id: data.id, username: data.username, full_name: data.full_name, role: data.role },
-      page: null,
-      loginAt: Date.now()
-    }));
+    // เขียน cross-system session ทุก key เพื่อ SSO ข้ามระบบ
+    const base = {
+      id: data.id, username: data.username, display_name: data.display_name,
+      full_name: data.full_name, role: data.role, status: data.status,
+      factory: data.factory || '', department: data.department || '',
+      _extraManage: extraManage,
+    };
+    sessionStorage.setItem('_sn_pm_sess', JSON.stringify(base));
+    sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() }));
   } catch(_) {}
 
   return { data: currentUser };
@@ -520,8 +557,27 @@ async function doLogout() {
   _suppliers  = [];
   _invConfig  = { factories:[], categories:[], units:[], locations:[], departments:[] };
   try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
+  try { sessionStorage.removeItem('_sn_pm_sess'); } catch(_) {}
+  try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
   stopSessionTimer();
   navigateTo('landing');
+}
+
+// เขียน session ทุก key ก่อนเปลี่ยนระบบ (SSO)
+function gotoSystem(url) {
+  if (currentUser) {
+    const base = {
+      id: currentUser.id, username: currentUser.username,
+      display_name: currentUser.display_name, full_name: currentUser.full_name,
+      role: currentUser.role, status: currentUser.status,
+      factory: currentUser.factory || '', department: currentUser.department || '',
+      _extraManage: currentUser._extraManage || [],
+    };
+    try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_pm_sess',  JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  }
+  window.location.href = url;
 }
 
 function confirmLogout() {
@@ -769,9 +825,11 @@ function renderLanding() {
           </button>
         </form>
 
-        <p class="text-center text-xs text-gray-400 mt-5">
-          <a href="index.html" class="text-blue-500 hover:underline">← กลับหน้าระบบผลิต (System 1)</a>
-        </p>
+        <div class="flex justify-center gap-4 mt-5 text-xs text-gray-400">
+          <a href="index.html" class="text-blue-500 hover:underline">← ระบบผลิต</a>
+          <span>|</span>
+          <a href="pm.html" class="text-amber-500 hover:underline">PM เครื่องจักร →</a>
+        </div>
       </div>
 
       <p class="text-center text-xs text-blue-400/60 mt-4">Inventory Management v2.0</p>
@@ -808,6 +866,14 @@ async function handleLogin(e) {
     errEl.classList.remove('hidden');
     btn.disabled = false;
     btn.textContent = 'เข้าสู่ระบบ';
+    return;
+  }
+
+  // ตรวจสิทธิ์เข้าระบบ Inventory
+  if (!canAccessInvSystem()) {
+    currentUser = null;
+    try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
+    renderAccessDenied();
     return;
   }
 
@@ -888,7 +954,7 @@ function renderShell() {
         <!-- System Switcher -->
         <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-widest px-0.5 mb-2">เปลี่ยนระบบ</div>
         <div class="flex gap-1.5 mb-3">
-          <a href="index.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="gotoSystem('index.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.4)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
@@ -902,13 +968,13 @@ function renderShell() {
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </div>
-          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-not-allowed"
-               style="background:linear-gradient(135deg,#374151,#4b5563);box-shadow:0 2px 6px rgba(0,0,0,.3)">
-            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.1)">
-              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white/50"></i>
+          <a href="#" onclick="gotoSystem('pm.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+               style="background:linear-gradient(135deg,#d97706,#ea580c);box-shadow:0 2px 8px rgba(217,119,6,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
             </div>
-            <span class="text-[10px] font-bold text-white/40 leading-tight">PM</span>
-          </div>
+            <span class="text-[10px] font-bold text-white leading-tight">PM</span>
+          </a>
         </div>
         <a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 text-sm hover:bg-white/10 transition cursor-pointer"
            onclick="confirmLogout()">
@@ -941,7 +1007,7 @@ function renderShell() {
       <div class="p-3 border-t border-white/10">
         <div class="text-blue-300/50 text-[10px] font-semibold uppercase tracking-widest px-0.5 mb-2">เปลี่ยนระบบ</div>
         <div class="flex gap-1.5 mb-3">
-          <a href="index.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="gotoSystem('index.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.4)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
@@ -955,13 +1021,13 @@ function renderShell() {
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </div>
-          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-not-allowed"
-               style="background:linear-gradient(135deg,#374151,#4b5563);box-shadow:0 2px 6px rgba(0,0,0,.3)">
-            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.1)">
-              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white/50"></i>
+          <a href="#" onclick="gotoSystem('pm.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+               style="background:linear-gradient(135deg,#d97706,#ea580c);box-shadow:0 2px 8px rgba(217,119,6,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
             </div>
-            <span class="text-[10px] font-bold text-white/40 leading-tight">PM</span>
-          </div>
+            <span class="text-[10px] font-bold text-white leading-tight">PM</span>
+          </a>
         </div>
         <a class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 text-sm hover:bg-white/10 transition cursor-pointer"
            onclick="closeSidebar();confirmLogout()">
@@ -3863,20 +3929,52 @@ function printSelectedLabels() {
 // SECTION 19: BOOTSTRAP
 // =====================================================================
 (async function initApp(){
-  try{
-    const saved=sessionStorage.getItem(SESSION_KEY);
-    if(saved){
-      const p=JSON.parse(saved);
-      if(p?.id&&p?.username){
-        currentUser=p;
-        await loadAllMasterData();
-        startSessionTimer();
-        const lastPage = sessionStorage.getItem('_sn_inv_page') || 'inv-dashboard';
-        navigateTo(lastPage);
+  const tryParse = key => { try { const r=sessionStorage.getItem(key); return r?JSON.parse(r):null; } catch(_){ return null; } };
+
+  // helper: re-fetch inv- permissions แล้วตั้ง currentUser
+  async function loadInvUser(u) {
+    let extraManage = u._extraManage || [];
+    const {data:perm} = await db.from('user_permissions').select('extra_manage').eq('user_id',u.id).maybeSingle();
+    if (perm?.extra_manage?.length) extraManage = perm.extra_manage;
+    const {data:rp} = await db.from('role_permissions').select('extra_manage').eq('role_name',u.role).maybeSingle();
+    if (rp?.extra_manage?.length) {
+      const roleInv = rp.extra_manage.filter(k=>k.startsWith('inv-'));
+      extraManage = [...new Set([...extraManage,...roleInv])];
+    }
+    currentUser = {...u, _extraManage: extraManage};
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(_) {}
+  }
+
+  try {
+    // 1. ลอง session ของตัวเอง
+    let userData = null;
+    const own = tryParse(SESSION_KEY);
+    if (own?.id && own?.username) {
+      userData = own;
+    } else {
+      // 2. Fallback — session จากระบบอื่น
+      for (const key of ['_sn_pm_sess','_sn_sess']) {
+        const p = tryParse(key);
+        const u = p?.user || p;
+        if (u?.id && u?.username) { userData = u; break; }
+      }
+      if (userData) await loadInvUser(userData);
+    }
+
+    if (currentUser?.id) {
+      if (!canAccessInvSystem()) {
+        currentUser = null;
+        try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
+        renderAccessDenied();
         return;
       }
+      await loadAllMasterData();
+      startSessionTimer();
+      const lastPage = sessionStorage.getItem('_sn_inv_page') || 'inv-dashboard';
+      navigateTo(lastPage);
+      return;
     }
-  }catch(_){}
+  } catch(_) {}
   renderLanding();
 })();
 </script>

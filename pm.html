@@ -1,0 +1,3913 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0" />
+<title>PM เครื่องจักร — สานนท์ จำกัด</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{font-family:'Kanit',sans-serif;box-sizing:border-box;}
+html{scroll-behavior:smooth;font-size:14px;}
+body{overflow-x:hidden;background:#f1f5f9;}
+
+/* Sidebar */
+.sidebar{width:240px;min-width:240px;background:#1a2e4a;}
+.main-content{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
+@media(min-width:769px){
+  #main-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0;scrollbar-width:none;}
+  #main-sidebar::-webkit-scrollbar{display:none;}
+  .main-content{height:100vh;}
+}
+.tbl-wrap{overflow:auto;max-height:calc(100vh - 200px);}
+.tbl-wrap thead th{position:sticky;top:0;z-index:20;background:#f8fafc;box-shadow:0 1px 0 #e2e8f0;}
+
+/* Nav */
+.nav-link{transition:background .12s,color .12s;border-radius:8px;}
+.nav-link.active{background:#2d5a9b;color:#fff!important;}
+.nav-link:not(.active):hover{background:rgba(255,255,255,.08);}
+
+/* Status badges */
+.badge-overdue {background:#fee2e2;color:#991b1b;}
+.badge-alert   {background:#fef3c7;color:#92400e;}
+.badge-ok      {background:#d1fae5;color:#065f46;}
+.badge-pending {background:#e0e7ff;color:#3730a3;}
+.badge-done    {background:#d1fae5;color:#065f46;}
+
+/* PM row colors */
+tr.pm-overdue td{background:#fff0f0!important;}
+tr.pm-alert   td{background:#fffbeb!important;}
+tr.pm-ok      td{background:#f0fdf4!important;}
+
+/* Toast */
+#toast-container{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none;}
+.toast-item{padding:.75rem 1.1rem;border-radius:10px;font-size:.9rem;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);opacity:1;transition:opacity .4s;pointer-events:all;min-width:240px;}
+.toast-success{background:#d1fae5;color:#065f46;border-left:4px solid #10b981;}
+.toast-error  {background:#fee2e2;color:#991b1b;border-left:4px solid #ef4444;}
+.toast-info   {background:#dbeafe;color:#1e40af;border-left:4px solid #3b82f6;}
+.toast-warn   {background:#fef3c7;color:#92400e;border-left:4px solid #f59e0b;}
+
+/* Modal */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;align-items:center;justify-content:center;padding:1rem;}
+#modal-overlay:not(.hidden){display:flex;}
+#modal-box{background:#fff;border-radius:14px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+
+/* Animations */
+.animate-spin{animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* KPI */
+.kpi-card{background:#fff;border-radius:14px;padding:1.2rem 1.4rem;box-shadow:0 2px 12px rgba(0,0,0,.06);}
+.kpi-val{font-size:1.8rem;font-weight:700;line-height:1;}
+.kpi-label{font-size:.82rem;color:#64748b;margin-top:.2rem;}
+
+/* Tables */
+table{border-collapse:collapse;width:100%;}
+th{white-space:nowrap;}
+tbody tr:hover{background:#f8fafc;}
+.table-sticky-last td:last-child,.table-sticky-last th:last-child{position:sticky;right:0;background:#fff;z-index:1;}
+.table-sticky-last thead th:last-child{background:#f8fafc;}
+
+/* Progress ring */
+.ring-overdue{color:#ef4444;}
+.ring-alert  {color:#f59e0b;}
+.ring-ok     {color:#10b981;}
+
+/* Session bar */
+#session-bar{font-size:12px;}
+#session-bar.warn{color:#f59e0b!important;font-weight:600;}
+
+/* Sticky topbar */
+#topbar{position:sticky;top:0;z-index:100;}
+
+@media(max-width:768px){
+  input,select,textarea{font-size:16px!important;}
+  .sidebar{position:fixed;top:0;bottom:0;left:0;z-index:1000;transform:translateX(-100%);transition:transform .25s;overflow-y:auto;}
+  .sidebar.open{transform:translateX(0);}
+  .main-content{margin-left:0!important;width:100%!important;}
+  .hide-mobile{display:none!important;}
+  #modal-overlay{align-items:flex-end;padding:0;}
+  #modal-box{border-radius:20px 20px 0 0;max-height:92vh;overflow-x:hidden;width:100vw;max-width:100vw!important;}
+  button,.btn{min-height:42px;}
+  canvas{max-height:200px!important;}
+  #page-content{padding-bottom:80px!important;}
+}
+@media(min-width:769px){
+  .show-mobile-only{display:none!important;}
+  #mobile-nav{display:none!important;}
+}
+
+/* Bottom nav */
+#mobile-nav{position:fixed;bottom:0;left:0;right:0;z-index:900;background:#1a2e4a;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:stretch;}
+#mobile-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px 8px;color:rgba(255,255,255,.6);font-size:11px;text-decoration:none;transition:.15s;}
+#mobile-nav a.active,#mobile-nav a:hover{color:#fff;}
+
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  .no-print{display:none!important;}
+  .sidebar,#topbar,#mobile-nav{display:none!important;}
+  .main-content{margin:0!important;padding:0!important;}
+}
+@page{size:A4 landscape;margin:10mm;}
+</style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="hidden">
+  <div id="modal-box" style="max-width:680px;">
+    <div class="flex items-center justify-between p-4 border-b">
+      <h3 id="modal-title" class="text-lg font-semibold text-gray-800"></h3>
+      <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div id="modal-body" class="p-4"></div>
+    <div id="modal-footer" class="flex justify-end gap-2 p-4 border-t bg-gray-50 rounded-b-2xl"></div>
+  </div>
+</div>
+
+<div id="app-root"></div>
+<div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-50" onclick="closeSidebar()"></div>
+
+<script>
+'use strict';
+// =====================================================================
+// SECTION 0: CONFIG & SUPABASE CLIENT
+// =====================================================================
+const SUPABASE_URL      = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const SESSION_KEY  = '_sn_pm_sess';
+const SESSION_SECS = 7200;
+
+// =====================================================================
+// SECTION 1: GLOBAL STATE
+// =====================================================================
+let currentUser          = null;
+let currentPage          = 'landing';
+let sessionTimerInterval = null;
+let sessionSecondsLeft   = 0;
+let sessionWarnShown     = false;
+let chartRegistry        = {};
+let _isSidebarOpen       = false;
+
+let _pmMachines   = [];  // pm_machines[]
+let _pmItems      = [];  // pm_items[] (all)
+let _pmLogs       = [];  // pm_logs[] (recent)
+let _pmDowntime   = [];  // pm_downtime[] (recent)
+let _pmCategories = ['screen','crusher','conveyor','pump','loader','truck','other']; // โหลดจาก pm_config
+let _pmTypes      = ['เปลี่ยนน้ำมันเครื่อง','ตรวจสอบใบตะแกรง','ล้างกรอง Hydraulic','เปลี่ยนสายพาน','ตรวจสอบระบบไฟฟ้า','เปลี่ยนลูกปืน']; // โหลดจาก pm_config
+let _pmFactories  = ['CDE','Propel','Sanon1','Sanon2','ทั่วไป']; // โหลดจาก pm_config
+let _pmParts      = [];  // pm_parts[]
+let _pmRepairs    = [];  // pm_repair_logs[]
+
+// =====================================================================
+// SECTION 2: MENU DEFINITIONS  (prefix: pm-)
+// =====================================================================
+const PM_MENUS = [
+  { key:'pm-dashboard',    label:'ตารางรอบ PM',        icon:'layout-dashboard' },
+  { key:'pm-log',          label:'บันทึก PM',           icon:'clipboard-check' },
+  { key:'pm-meter',        label:'บันทึกเลขมิเตอร์',   icon:'gauge' },
+  { key:'pm-meter-add',    label:'เพิ่มเครื่องจักร',    icon:'plus-circle', action:true },
+  { key:'pm-downtime',     label:'Downtime Log',        icon:'alert-triangle' },
+  { key:'pm-history',      label:'ประวัติต่อเครื่อง',   icon:'history' },
+  { key:'pm-items',        label:'รายการ PM',            icon:'list-checks' },
+  { key:'pm-repair',       label:'บันทึกซ่อม',          icon:'wrench' },
+  { key:'pm-parts',        label:'คลังอะไหล่',          icon:'package' },
+  { key:'pm-machines',     label:'เครื่องจักร',         icon:'settings-2' },
+  { key:'pm-settings',     label:'ตั้งค่า',              icon:'settings' },
+];
+
+const ROLE_DEFAULT_MENUS = {
+  admin      : PM_MENUS.map(m=>m.key),
+  manager    : ['pm-dashboard','pm-log','pm-meter','pm-meter-add','pm-downtime','pm-history','pm-items','pm-repair','pm-parts','pm-machines'],
+  // role อื่น ต้องได้รับสิทธิ์ pm- จาก admin โดยตรง ถึงจะเข้าได้
+  user       : [],
+  management : [],
+};
+
+// =====================================================================
+// SECTION 3: RBAC
+// =====================================================================
+function getAllowedPmMenus(user) {
+  if (!user) return [];
+  if (user.role === 'admin') return PM_MENUS.map(m => m.key);
+  const extra = (user._extraManage || []).filter(k => k.startsWith('pm-'));
+  if (extra.length > 0) return extra;
+  return ROLE_DEFAULT_MENUS[user.role] || ['pm-dashboard'];
+}
+function canAccess(key)      { return getAllowedPmMenus(currentUser).includes(key); }
+function isAdmin()           { return currentUser && currentUser.role === 'admin'; }
+function isManager()         { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager'); }
+function canAccessPmSystem() { return currentUser && getAllowedPmMenus(currentUser).length > 0; }
+
+// =====================================================================
+// SECTION 4: UTILS
+// =====================================================================
+function fmtNum(n, dec=0) {
+  if (n===null||n===undefined||n===''||isNaN(Number(n))) return '0';
+  return Number(n).toLocaleString('th-TH',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function fmtDate(d) {
+  if (!d) return '-';
+  try {
+    const dt = new Date(d);
+    const y = dt.getFullYear()+543;
+    const m = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][dt.getMonth()];
+    return `${dt.getDate()} ${m} ${y}`;
+  } catch { return String(d); }
+}
+function fmtDateShort(d) {
+  if (!d) return '-';
+  try {
+    const dt = new Date(d);
+    return `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()+543}`;
+  } catch { return String(d); }
+}
+function todayISO() { return new Date().toISOString().slice(0,10); }
+function pad2(n)    { return String(n).padStart(2,'0'); }
+function escapeHtml(s) {
+  if (s==null) return '';
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function qs(sel,p)  { return (p||document).querySelector(sel); }
+function qsa(sel,p) { return Array.from((p||document).querySelectorAll(sel)); }
+function destroyChart(key) {
+  if (chartRegistry[key]) { try{chartRegistry[key].destroy();}catch(_){} delete chartRegistry[key]; }
+}
+function refreshIcons() { if (window.lucide) lucide.createIcons(); }
+
+// คำนวณ PM status จาก remaining
+function pmStatus(remaining, threshold) {
+  if (remaining === null || remaining === undefined) return 'ok';
+  if (remaining < 0)          return 'overdue';
+  if (remaining <= threshold) return 'alert';
+  return 'ok';
+}
+function pmStatusLabel(status) {
+  return {overdue:'เกินกำหนด', alert:'ใกล้ถึง', ok:'ปกติ'}[status] || '';
+}
+function pmStatusBadge(status) {
+  const cls = {overdue:'badge-overdue', alert:'badge-alert', ok:'badge-ok'}[status]||'';
+  return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${pmStatusLabel(status)}</span>`;
+}
+function pmRowClass(status) {
+  return {overdue:'pm-overdue', alert:'pm-alert', ok:'pm-ok'}[status]||'';
+}
+
+// คำนวณ remaining จาก item + machine.current_meter
+function calcRemaining(item, machine) {
+  const next = (item.last_pm_meter||0) + (item.interval_value||0);
+  const cur  = machine ? (machine.current_meter||0) : 0;
+  return next - cur;
+}
+function calcNextDue(item) {
+  return (item.last_pm_meter||0) + (item.interval_value||0);
+}
+
+// =====================================================================
+// SECTION 5: TOAST
+// =====================================================================
+function showToast(msg, type='info', dur=3000) {
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.textContent = msg;
+  qs('#toast-container').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(), 400); }, dur);
+}
+
+// =====================================================================
+// SECTION 6: MODAL
+// =====================================================================
+function openModal(title, bodyHtml, footerHtml='', width='680px') {
+  qs('#modal-title').textContent = title;
+  qs('#modal-body').innerHTML = bodyHtml;
+  qs('#modal-footer').innerHTML = footerHtml;
+  qs('#modal-box').style.maxWidth = width;
+  qs('#modal-overlay').classList.remove('hidden');
+  refreshIcons();
+}
+function closeModal() { qs('#modal-overlay').classList.add('hidden'); }
+
+// =====================================================================
+// SECTION 7: AUTH
+// =====================================================================
+async function doLogin(username, password) {
+  username = (username || '').trim().toLowerCase();
+  if (!username || !password) return false;
+
+  const { data: rows, error } = await db.from('app_users')
+    .select('*')
+    .ilike('username', username)
+    .eq('password', password);
+
+  const data = rows?.[0] || null;
+  if (error || !data) return false;
+  if (data.status === 'pending' || data.status === 'inactive') return false;
+
+  // ดึง extra_manage จาก user_permissions
+  let extraManage = data.extra_manage || [];
+  const { data: perm } = await db.from('user_permissions')
+    .select('extra_manage').eq('user_id', data.id).maybeSingle();
+  if (perm?.extra_manage?.length) extraManage = perm.extra_manage;
+
+  // รวม pm- จาก role_permissions
+  const { data: rp } = await db.from('role_permissions')
+    .select('extra_manage').eq('role_name', data.role).maybeSingle();
+  if (rp?.extra_manage?.length) {
+    const rolePm = rp.extra_manage.filter(k => k.startsWith('pm-'));
+    extraManage = [...new Set([...extraManage, ...rolePm])];
+  }
+
+  currentUser = { ...data, _extraManage: extraManage };
+  const base = {
+    id: data.id, username: data.username, display_name: data.display_name,
+    full_name: data.full_name, role: data.role, status: data.status,
+    factory: data.factory || '', department: data.department || '',
+    _extraManage: extraManage,
+  };
+  try { sessionStorage.setItem(SESSION_KEY,  JSON.stringify(base)); } catch(_) {}
+  try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+  try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  return true;
+}
+
+function doLogout() {
+  currentUser = null;
+  try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
+  try { sessionStorage.removeItem('_sn_inv_sess'); } catch(_) {}
+  try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
+  clearInterval(sessionTimerInterval);
+  navigateTo('landing');
+}
+
+// เขียน session ทุก key ก่อนเปลี่ยนระบบ (SSO)
+function gotoSystem(url) {
+  if (currentUser) {
+    const base = {
+      id: currentUser.id, username: currentUser.username,
+      display_name: currentUser.display_name, full_name: currentUser.full_name,
+      role: currentUser.role, status: currentUser.status,
+      factory: currentUser.factory || '', department: currentUser.department || '',
+      _extraManage: currentUser._extraManage || [],
+    };
+    try { sessionStorage.setItem('_sn_pm_sess',  JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  }
+  window.location.href = url;
+}
+
+// Restore session — ตรวจ key ของตัวเอง → fallback key ระบบอื่น → re-fetch permissions
+async function restoreSession() {
+  const tryParse = key => { try { const r = sessionStorage.getItem(key); return r ? JSON.parse(r) : null; } catch(_) { return null; } };
+
+  // 1. ลอง session ของระบบ PM เอง
+  const own = tryParse(SESSION_KEY);
+  if (own?.id && own?.username) { currentUser = own; return true; }
+
+  // 2. Fallback — ลอง session จากระบบอื่น แล้ว re-fetch pm- permissions
+  const fallbacks = ['_sn_inv_sess', '_sn_sess'];
+  for (const key of fallbacks) {
+    const parsed = tryParse(key);
+    const u = parsed?.user || parsed; // _sn_sess ห่อด้วย { user: ... }
+    if (!u?.id || !u?.username) continue;
+    try {
+      let extraManage = u._extraManage || [];
+      const { data: perm } = await db.from('user_permissions')
+        .select('extra_manage').eq('user_id', u.id).maybeSingle();
+      if (perm?.extra_manage?.length) extraManage = perm.extra_manage;
+      const { data: rp } = await db.from('role_permissions')
+        .select('extra_manage').eq('role_name', u.role).maybeSingle();
+      if (rp?.extra_manage?.length) {
+        const rolePm = rp.extra_manage.filter(k => k.startsWith('pm-'));
+        extraManage = [...new Set([...extraManage, ...rolePm])];
+      }
+      currentUser = { ...u, _extraManage: extraManage };
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(_) {}
+      return true;
+    } catch(_) {}
+  }
+  return false;
+}
+
+// =====================================================================
+// SECTION 7B: SESSION TIMEOUT
+// =====================================================================
+function startSessionTimer() {
+  if (!currentUser || currentUser.role === 'admin') return;
+  sessionSecondsLeft = SESSION_SECS;
+  sessionWarnShown = false;
+  clearInterval(sessionTimerInterval);
+  sessionTimerInterval = setInterval(() => {
+    sessionSecondsLeft--;
+    const bar = qs('#session-bar');
+    if (!bar) return;
+    const m = Math.floor(sessionSecondsLeft/60), s = sessionSecondsLeft%60;
+    bar.textContent = `หมดเวลา: ${m}:${pad2(s)}`;
+    if (sessionSecondsLeft <= 300) bar.classList.add('warn');
+    if (sessionSecondsLeft <= 0)   { clearInterval(sessionTimerInterval); showToast('หมดเวลา Session','warn'); doLogout(); }
+  }, 1000);
+}
+
+// =====================================================================
+// SECTION 8: APP SHELL
+// =====================================================================
+function renderShell() {
+  const menus = PM_MENUS.filter(m => canAccess(m.key));
+  const mobileMenus = menus.slice(0, 4);
+
+  const sideLinks = menus.map(m => {
+    if (m.action) {
+      // เมนูที่เป็น action (ไม่ navigate — เปิด modal)
+      return `
+      <a href="#" class="nav-link flex items-center gap-3 px-3 py-2 text-sm text-green-300 hover:text-green-100 ml-4"
+         onclick="event.preventDefault();navigateTo('pm-meter').then(()=>setTimeout(openAddMeterMachineModal,150))">
+        <i data-lucide="${m.icon}" class="w-3.5 h-3.5 flex-shrink-0"></i>
+        <span>${m.label}</span>
+      </a>`;
+    }
+    return `
+    <a href="#" class="nav-link flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white"
+       data-page="${m.key}" onclick="navTo(event,'${m.key}')">
+      <i data-lucide="${m.icon}" class="w-4 h-4 flex-shrink-0"></i>
+      <span>${m.label}</span>
+    </a>`;
+  }).join('');
+
+  const mobileLinks = mobileMenus.map(m => `
+    <a href="#" data-page="${m.key}" onclick="navTo(event,'${m.key}')">
+      <i data-lucide="${m.icon}" class="w-6 h-6"></i>
+      <span>${m.label}</span>
+    </a>`).join('');
+
+  qs('#app-root').innerHTML = `
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar desktop -->
+    <div id="main-sidebar" class="sidebar hidden md:flex flex-col no-print">
+      <div class="flex items-center gap-3 px-4 py-4 border-b border-white/10">
+        <div class="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">PM</div>
+        <div>
+          <div class="text-white text-sm font-semibold leading-tight">สานนท์ PM</div>
+          <div class="text-slate-400 text-xs">Maintenance System</div>
+        </div>
+      </div>
+      <nav class="flex-1 px-3 py-3 space-y-0.5">${sideLinks}</nav>
+      <div class="px-4 py-3 border-t border-white/10 text-xs text-slate-400">
+        <div class="flex items-center gap-2 mb-1">
+          <i data-lucide="user" class="w-3 h-3"></i>
+          <span>${escapeHtml(currentUser?.display_name||currentUser?.username||'')}</span>
+        </div>
+        <div id="session-bar"></div>
+        <div class="mt-2 flex gap-2">
+          <a href="#" onclick="gotoSystem('index.html')" class="text-amber-400 hover:text-amber-300 text-xs">System 1</a>
+          <span class="text-slate-600">|</span>
+          <a href="#" onclick="gotoSystem('inventory.html')" class="text-amber-400 hover:text-amber-300 text-xs">คลังวัสดุ</a>
+          <span class="text-slate-600">|</span>
+          <button onclick="doLogout()" class="text-red-400 hover:text-red-300 text-xs">ออกจากระบบ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main-content">
+      <!-- Topbar -->
+      <div id="topbar" class="bg-white border-b px-4 py-2.5 flex items-center gap-3 shadow-sm flex-shrink-0 no-print">
+        <button onclick="toggleSidebar()" class="md:hidden p-1.5 rounded-lg hover:bg-gray-100 text-gray-600">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="flex-1">
+          <span id="page-title" class="font-semibold text-gray-800 text-base"></span>
+        </div>
+        <span id="session-bar-mobile" class="text-xs text-slate-400 md:hidden"></span>
+        <button onclick="doLogout()" class="hidden md:flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-500 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>ออกจากระบบ
+        </button>
+      </div>
+      <!-- Page content -->
+      <div id="page-content" class="flex-1 overflow-y-auto p-4 md:p-6"></div>
+    </div>
+  </div>
+
+  <!-- Mobile nav -->
+  <nav id="mobile-nav" class="show-mobile-only no-print">${mobileLinks}</nav>
+  `;
+  refreshIcons();
+  updateActiveNav(currentPage);
+  startSessionTimer();
+}
+
+function toggleSidebar() {
+  const sb = qs('#main-sidebar');
+  if (!sb) return;
+  sb.classList.toggle('open');
+  sb.classList.toggle('hidden');
+  qs('#sidebar-overlay').classList.toggle('hidden');
+  _isSidebarOpen = !_isSidebarOpen;
+}
+function closeSidebar() {
+  const sb = qs('#main-sidebar');
+  if (sb) { sb.classList.add('hidden'); sb.classList.remove('open'); }
+  qs('#sidebar-overlay').classList.add('hidden');
+  _isSidebarOpen = false;
+}
+function updateActiveNav(page) {
+  qsa('.nav-link[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page===page));
+  qsa('#mobile-nav a[data-page]').forEach(el => el.classList.toggle('active', el.dataset.page===page));
+}
+function navTo(e, page) {
+  e.preventDefault();
+  closeSidebar();
+  navigateTo(page);
+}
+
+// =====================================================================
+// SECTION 9: ROUTER
+// =====================================================================
+const PAGE_KEY = '_sn_pm_page';
+
+async function navigateTo(page) {
+  if (!currentUser && page !== 'landing') { renderLanding(); return; }
+  currentPage = page;
+  // บันทึกหน้าล่าสุด — กู้คืนเมื่อ refresh
+  if (page !== 'landing') {
+    try { sessionStorage.setItem(PAGE_KEY, page); } catch(_) {}
+  }
+  updateActiveNav(page);
+
+  const titleMap = {
+    'landing':'เข้าสู่ระบบ','pm-dashboard':'ตารางรอบ PM','pm-log':'บันทึก PM',
+    'pm-meter':'บันทึกเลขมิเตอร์',
+    'pm-downtime':'Downtime Log','pm-history':'ประวัติต่อเครื่อง',
+    'pm-items':'รายการ PM','pm-repair':'บันทึกซ่อม','pm-parts':'คลังอะไหล่',
+    'pm-machines':'เครื่องจักร','pm-settings':'ตั้งค่า',
+  };
+  const titleEl = qs('#page-title');
+  if (titleEl) titleEl.textContent = titleMap[page]||page;
+
+  const content = qs('#page-content');
+  if (content) content.innerHTML = `<div class="flex items-center gap-2 text-gray-400 py-10 justify-center"><i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i><span>กำลังโหลด...</span></div>`;
+  refreshIcons();
+
+  switch(page) {
+    case 'landing':        return renderLanding();
+    case 'pm-dashboard':   return renderDashboard();
+    case 'pm-log':         return renderLogPage();
+    case 'pm-downtime':    return renderDowntimePage();
+    case 'pm-history':     return renderHistoryPage();
+    case 'pm-items':       return renderPmItemsPage();
+    case 'pm-meter':       return renderMeterPage();
+    case 'pm-repair':      return renderRepairPage();
+    case 'pm-parts':       return renderPartsPage();
+    case 'pm-machines':    return renderMachinesPage();
+    case 'pm-settings':    return renderSettingsPage();
+    default:               renderDashboard();
+  }
+}
+
+// =====================================================================
+// SECTION 10: LANDING PAGE (Login)
+// =====================================================================
+function renderLanding() {
+  qs('#app-root').innerHTML = `
+  <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
+      <div class="text-center mb-6">
+        <div class="inline-flex w-16 h-16 rounded-2xl bg-amber-500 items-center justify-center text-white font-bold text-2xl mb-3">PM</div>
+        <h1 class="text-xl font-bold text-gray-800">ระบบ PM เครื่องจักร</h1>
+        <p class="text-sm text-gray-500 mt-1">สานนท์ จำกัด — Maintenance System</p>
+      </div>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้</label>
+          <input id="inp-user" type="text" autocomplete="username" required
+            class="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="username" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+          <input id="inp-pass" type="password" autocomplete="current-password" required
+            class="w-full border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="password" />
+        </div>
+        <div id="login-err" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2.5 rounded-xl transition-colors">
+          เข้าสู่ระบบ
+        </button>
+      </form>
+      <div class="mt-4 flex justify-center gap-4 text-xs text-slate-400">
+        <a href="index.html" class="hover:text-amber-500">← Production</a>
+        <a href="inventory.html" class="hover:text-amber-500">คลังวัสดุ</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const u = qs('#inp-user').value.trim();
+  const p = qs('#inp-pass').value;
+  const errEl = qs('#login-err');
+  errEl.classList.add('hidden');
+
+  const btn = e.submitter;
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+
+  const ok = await doLogin(u, p);
+
+  if (btn) { btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ'; }
+
+  if (!ok) {
+    errEl.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชีถูกระงับ';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // ตรวจสิทธิ์เข้าระบบ PM
+  if (!canAccessPmSystem()) {
+    currentUser = null;
+    sessionStorage.removeItem(SESSION_KEY);
+    renderAccessDenied();
+    return;
+  }
+
+  await loadPmData();
+  renderShell();
+  navigateTo('pm-dashboard');
+}
+
+// หน้า Access Denied
+function renderAccessDenied(fromSession = false) {
+  qs('#app-root').innerHTML = `
+  <div class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+      <div class="inline-flex w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
+        <i data-lucide="shield-off" class="w-8 h-8 text-red-500"></i>
+      </div>
+      <h2 class="text-xl font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าใช้งาน</h2>
+      <p class="text-sm text-gray-500 mb-1">บัญชีของคุณไม่ได้รับสิทธิ์เข้าใช้</p>
+      <p class="text-sm font-semibold text-gray-700 mb-5">ระบบ PM เครื่องจักร</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 text-left text-sm text-amber-800">
+        <div class="flex gap-2 items-start">
+          <i data-lucide="info" class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600"></i>
+          <div>กรุณาติดต่อผู้ดูแลระบบ (Admin) เพื่อขอสิทธิ์เข้าใช้งาน</div>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button onclick="renderLanding()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+          ลองเข้าสู่ระบบด้วยบัญชีอื่น
+        </button>
+        <div class="flex gap-2 mt-1 justify-center text-xs text-slate-400">
+          <a href="index.html" class="hover:text-amber-500">Production System</a>
+          <span>|</span>
+          <a href="inventory.html" class="hover:text-amber-500">คลังวัสดุ</a>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+// =====================================================================
+// SECTION 11: DASHBOARD — ตารางรอบ PM
+// =====================================================================
+async function renderDashboard() {
+  const content = qs('#page-content');
+
+  // โหลดข้อมูลและ sync ชั่วโมงจาก System 1
+  await loadPmData();
+  await syncCurrentMeters();
+
+  // group items by machine
+  const machineMap = {};
+  _pmMachines.filter(m=>m.is_active).sort((a,b)=>(a.sort_order-b.sort_order)||(a.factory||'').localeCompare(b.factory||''))
+    .forEach(m => { machineMap[m.id] = { machine: m, items: [] }; });
+  _pmItems.filter(i=>i.is_active).sort((a,b)=>a.sort_order-b.sort_order)
+    .forEach(item => {
+      if (machineMap[item.pm_machine_id]) machineMap[item.pm_machine_id].items.push(item);
+    });
+
+  // stats
+  let totalOverdue=0, totalAlert=0, totalOk=0;
+  Object.values(machineMap).forEach(({machine, items}) => {
+    items.forEach(item => {
+      const rem = calcRemaining(item, machine);
+      const st  = pmStatus(rem, machine.alert_threshold||100);
+      if (st==='overdue') totalOverdue++;
+      else if (st==='alert') totalAlert++;
+      else totalOk++;
+    });
+  });
+
+  const groups = Object.values(machineMap);
+
+  // สร้าง rows ของตาราง
+  let tableRows = '';
+  if (groups.length === 0) {
+    tableRows = `<tr><td colspan="9" class="text-center py-12 text-gray-400">ยังไม่มีข้อมูลเครื่องจักร <a href="#" onclick="navigateTo('pm-machines')" class="text-amber-500 underline">เพิ่มเครื่องจักร</a></td></tr>`;
+  } else {
+    groups.forEach(({machine, items}) => {
+      if (!items.length) {
+        tableRows += `<tr><td class="px-3 py-2 font-medium text-slate-700 border-b align-top">${escapeHtml(machine.name)}<div class="text-xs text-slate-400">${machine.factory||''}</div></td><td colspan="8" class="px-3 py-2 text-gray-400 text-sm border-b">ยังไม่มีรายการ PM</td></tr>`;
+        return;
+      }
+      items.forEach((item, idx) => {
+        const rem     = calcRemaining(item, machine);
+        const next    = calcNextDue(item);
+        const st      = pmStatus(rem, machine.alert_threshold||100);
+        const rowCls  = pmRowClass(st);
+        const remStr  = rem >= 0 ? `+${fmtNum(rem)}` : fmtNum(rem);
+        const remColor= st==='overdue' ? 'text-red-600 font-bold' : st==='alert' ? 'text-amber-600 font-semibold' : 'text-green-700';
+        const unit    = machine.meter_type==='km' ? 'กม.' : 'ชม.';
+
+        tableRows += `<tr class="${rowCls} border-b">
+          ${idx===0 ? `<td class="px-3 py-2 font-semibold text-slate-700 align-top border-r" rowspan="${items.length}">
+            ${escapeHtml(machine.name)}
+            <div class="text-xs text-slate-400 font-normal">${machine.factory||''}</div>
+            <div class="text-xs text-blue-600 font-semibold mt-1 flex items-center gap-1">
+              ${fmtNum(machine.current_meter)} ${unit}
+              ${machine.sync_source && machine.sync_source !== 'manual'
+                ? `<span title="ดึงอัตโนมัติจาก System 1 (${machine.sync_source})" class="text-green-500"><i data-lucide="refresh-cw" class="w-3 h-3 inline"></i></span>`
+                : ''}
+            </div>
+            ${isManager()?`<button onclick="openUpdateMeterModal('${machine.id}')" class="mt-1 text-xs text-amber-600 hover:underline">แก้ไข Meter</button>`:''}
+          </td>` : ''}
+          <td class="px-3 py-2 text-sm">${escapeHtml(item.pm_type)}</td>
+          <td class="px-3 py-2 text-sm text-center">${fmtNum(item.interval_value)} ${unit}</td>
+          <td class="px-3 py-2 text-sm text-center font-semibold">${fmtNum(next)}</td>
+          <td class="px-3 py-2 text-sm text-center font-bold ${remColor}">${remStr}</td>
+          <td class="px-3 py-2 text-sm text-center">${fmtNum(item.last_pm_meter)}</td>
+          <td class="px-3 py-2 text-sm text-center">${fmtDateShort(item.last_pm_date)}</td>
+          <td class="px-3 py-2 text-sm text-center">${pmStatusBadge(st)}</td>
+          <td class="px-3 py-2 text-sm text-center">${item.notes?`<span class="text-xs text-gray-500">${escapeHtml(item.notes)}</span>`:''}</td>
+        </tr>`;
+      });
+    });
+  }
+
+  // ===== จัดกลุ่มตามโรงงาน =====
+  const factoryMap = {};
+  groups.forEach(({ machine, items }) => {
+    const fac = machine.factory || 'ทั่วไป';
+    if (!factoryMap[fac]) factoryMap[fac] = [];
+    factoryMap[fac].push({ machine, items });
+  });
+
+  const STATUS_PRIORITY = { overdue: 0, alert: 1, ok: 2 };
+  const factories = Object.keys(factoryMap);
+
+  // ===== Alert Grid: เฉพาะโรงงานที่มีรายการค้าง =====
+  const alertFactories = factories.filter(fac => {
+    return factoryMap[fac].some(({ machine, items }) =>
+      items.some(item => {
+        const st = pmStatus(calcRemaining(item, machine), machine.alert_threshold || 100);
+        return st === 'overdue' || st === 'alert';
+      })
+    );
+  });
+
+  const alertColsHtml = alertFactories.map(fac => {
+    const machineGroups = factoryMap[fac];
+    const facAlerts = [];
+    machineGroups.forEach(({ machine, items }) => {
+      items.forEach(item => {
+        const rem = calcRemaining(item, machine);
+        const st  = pmStatus(rem, machine.alert_threshold || 100);
+        if (st === 'overdue' || st === 'alert') facAlerts.push({ machine, item, rem, st });
+      });
+    });
+    facAlerts.sort((a,b) => {
+      if (a.st !== b.st) return a.st === 'overdue' ? -1 : 1;
+      return a.rem - b.rem;
+    });
+
+    // สถานะโรงงาน
+    let facOv=0, facAl=0;
+    machineGroups.forEach(({ machine, items }) => items.forEach(item => {
+      const st = pmStatus(calcRemaining(item, machine), machine.alert_threshold||100);
+      if (st==='overdue') facOv++; else if (st==='alert') facAl++;
+    }));
+    const facSt = facOv>0?'overdue':facAl>0?'alert':'ok';
+    const colBorderCls = facSt==='overdue'?'border-red-300 bg-red-50/30':facSt==='alert'?'border-amber-300 bg-amber-50/30':'border-green-300 bg-green-50/20';
+    const colHeadCls   = facSt==='overdue'?'bg-red-100 text-red-800':facSt==='alert'?'bg-amber-100 text-amber-800':'bg-green-100 text-green-800';
+    const facIcon = facSt==='overdue'?'🔴':facSt==='alert'?'🟡':'🟢';
+
+    const itemsHtml = facAlerts.length === 0
+      ? `<div class="px-3 py-4 text-center text-xs text-green-600 flex flex-col items-center gap-1">
+           <span class="text-2xl">✅</span>ไม่มีรายการค้างดำเนินการ
+         </div>`
+      : facAlerts.map(({ machine, item, rem, st }) => {
+          const unit = machine.meter_type==='km'?'กม.':'ชม.';
+          const next = calcNextDue(item);
+          const isOv = st==='overdue';
+          return `<div class="px-3 py-2 border-b last:border-0 ${isOv?'bg-red-50/60':'bg-amber-50/40'}">
+            <div class="flex items-start gap-1.5">
+              <span class="mt-0.5 flex-shrink-0">${isOv?'🔴':'🟡'}</span>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-semibold text-gray-700 truncate">${escapeHtml(machine.name)}</div>
+                <div class="text-xs text-gray-500 truncate">${escapeHtml(item.pm_type)}</div>
+                <div class="flex justify-between mt-1">
+                  <span class="text-xs text-gray-400">ถัดไป ${fmtNum(next)}</span>
+                  <span class="text-xs font-bold ${isOv?'text-red-600':'text-amber-600'}">
+                    ${isOv?'เกิน '+fmtNum(Math.abs(rem)):'เหลือ '+fmtNum(rem)} ${unit}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+    return `
+    <div class="flex flex-col rounded-xl border ${colBorderCls} overflow-hidden">
+      <div class="px-3 py-2 ${colHeadCls} flex items-center justify-between flex-shrink-0">
+        <span class="font-semibold text-sm">${facIcon} ${escapeHtml(fac)}</span>
+        <span class="text-xs opacity-75">${facAlerts.length} รายการ</span>
+      </div>
+      <div class="flex-1 overflow-y-auto" style="max-height:280px;">${itemsHtml}</div>
+    </div>`;
+  }).join('');
+
+  // ===== Factory Detail (ปุ่มเลือก + ตาราง) =====
+  const facBtns = [`<button onclick="dashSetFac('')" id="fac-btn-all"
+    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-700 text-white border-slate-700">
+    ทั้งหมด
+  </button>`].concat(factories.map(fac => {
+    let fov=0,fal=0;
+    factoryMap[fac].forEach(({machine,items})=>items.forEach(item=>{
+      const st=pmStatus(calcRemaining(item,machine),machine.alert_threshold||100);
+      if(st==='overdue')fov++;else if(st==='alert')fal++;
+    }));
+    const dot=fov>0?'🔴':fal>0?'🟡':'🟢';
+    return `<button onclick="dashSetFac('${escapeHtml(fac)}')" id="fac-btn-${escapeHtml(fac)}"
+      class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors border-slate-300 text-slate-600 hover:bg-slate-100">
+      ${dot} ${escapeHtml(fac)}
+    </button>`;
+  })).join('');
+
+  const buildFactoryTable = (fac) => {
+    const entries = fac ? (factoryMap[fac] ? [[fac, factoryMap[fac]]] : []) : Object.entries(factoryMap);
+    return entries.map(([f, machineGroups]) => {
+      const machineRows = machineGroups.map(({ machine, items }) => {
+        const unit = machine.meter_type==='km'?'กม.':'ชม.';
+        if (!items.length) return `<tr class="border-b"><td class="px-3 py-2 text-sm font-medium border-r">${escapeHtml(machine.name)}</td><td colspan="5" class="px-3 py-2 text-xs text-gray-400">ยังไม่มีรายการ PM</td></tr>`;
+        const sorted = [...items].sort((a,b)=>{
+          const sA=STATUS_PRIORITY[pmStatus(calcRemaining(a,machine),machine.alert_threshold||100)]??2;
+          const sB=STATUS_PRIORITY[pmStatus(calcRemaining(b,machine),machine.alert_threshold||100)]??2;
+          return sA!==sB?sA-sB:a.sort_order-b.sort_order;
+        });
+        return sorted.map((item,idx)=>{
+          const rem=calcRemaining(item,machine), next=calcNextDue(item);
+          const st=pmStatus(rem,machine.alert_threshold||100);
+          const remColor=st==='overdue'?'text-red-600 font-bold':st==='alert'?'text-amber-600 font-semibold':'text-green-700';
+          return `<tr class="${pmRowClass(st)} border-b">
+            ${idx===0?`<td class="px-3 py-2 text-sm font-semibold text-slate-700 align-top border-r" rowspan="${sorted.length}">
+              ${escapeHtml(machine.name)}
+              <div class="text-xs text-blue-600 mt-0.5">${fmtNum(machine.current_meter)} ${unit}
+                ${machine.sync_source&&machine.sync_source!=='manual'?`<i data-lucide="refresh-cw" class="w-2.5 h-2.5 inline text-green-500"></i>`:''}
+              </div>
+            </td>`:''}
+            <td class="px-3 py-2 text-xs">${escapeHtml(item.pm_type)}</td>
+            <td class="px-3 py-2 text-xs text-center">${fmtNum(item.interval_value)} ${unit}</td>
+            <td class="px-3 py-2 text-xs text-center font-semibold text-blue-700">${fmtNum(next)} ${unit}</td>
+            <td class="px-3 py-2 text-xs text-center font-bold ${remColor}">${rem>=0?'+':''}${fmtNum(rem)} ${unit}</td>
+            <td class="px-3 py-2 text-center">${pmStatusBadge(st)}</td>
+          </tr>`;
+        }).join('');
+      }).join('');
+
+      let fov2=0,fal2=0,fok2=0;
+      machineGroups.forEach(({machine,items})=>items.forEach(item=>{
+        const st=pmStatus(calcRemaining(item,machine),machine.alert_threshold||100);
+        if(st==='overdue')fov2++;else if(st==='alert')fal2++;else fok2++;
+      }));
+      const fst=fov2>0?'overdue':fal2>0?'alert':'ok';
+      const fcol=fst==='overdue'?'border-red-400':fst==='alert'?'border-amber-400':'border-green-400';
+      return `
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3 border-l-4 ${fcol}">
+        <div class="flex items-center justify-between px-4 py-2.5 border-b bg-gray-50">
+          <div class="flex items-center gap-2">
+            <span>${fst==='overdue'?'🔴':fst==='alert'?'🟡':'🟢'}</span>
+            <span class="font-semibold text-gray-800 text-sm">โรงงาน ${escapeHtml(f)}</span>
+            <span class="text-xs text-gray-400">${machineGroups.length} เครื่อง</span>
+          </div>
+          <div class="flex gap-1.5 text-xs">
+            ${fov2?`<span class="badge-overdue px-2 py-0.5 rounded-full">${fov2} เกินกำหนด</span>`:''}
+            ${fal2?`<span class="badge-alert px-2 py-0.5 rounded-full">${fal2} ใกล้ถึง</span>`:''}
+            ${fok2?`<span class="badge-ok px-2 py-0.5 rounded-full">${fok2} ปกติ</span>`:''}
+          </div>
+        </div>
+        <div class="tbl-wrap" style="max-height:280px;overflow-y:auto;">
+          <table class="text-sm w-full">
+            <thead><tr class="text-xs text-gray-400 bg-gray-50 border-b sticky top-0">
+              <th class="px-3 py-2 text-left border-r w-36">เครื่องจักร</th>
+              <th class="px-3 py-2 text-left">ประเภท PM</th>
+              <th class="px-3 py-2 text-center">ระยะ PM</th>
+              <th class="px-3 py-2 text-center text-blue-600">รอบถัดไป</th>
+              <th class="px-3 py-2 text-center">คงเหลือ</th>
+              <th class="px-3 py-2 text-center">สถานะ</th>
+            </tr></thead>
+            <tbody>${machineRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  // คำนวณ grid cols สำหรับ Alert (ตามจำนวนโรงงานที่มีรายการค้าง)
+  const numFac = alertFactories.length;
+  const gridCols = numFac <= 1 ? 'grid-cols-1' : numFac === 2 ? 'grid-cols-2' : numFac === 3 ? 'grid-cols-3' : numFac === 4 ? 'grid-cols-4' : 'grid-cols-3 md:grid-cols-5';
+
+  content.innerHTML = `
+  <!-- KPI cards -->
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="kpi-card border-l-4 border-red-400"><div class="kpi-val text-red-600">${totalOverdue}</div><div class="kpi-label">🔴 เกินกำหนด</div></div>
+    <div class="kpi-card border-l-4 border-amber-400"><div class="kpi-val text-amber-600">${totalAlert}</div><div class="kpi-label">🟡 ใกล้ถึงกำหนด</div></div>
+    <div class="kpi-card border-l-4 border-green-400"><div class="kpi-val text-green-600">${totalOk}</div><div class="kpi-label">🟢 ปกติ</div></div>
+  </div>
+
+  <!-- Alert Grid: แยกคอลัมน์ตามโรงงาน -->
+  ${alertFactories.length === 0 ? `
+  <div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-green-700 text-sm">
+    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+    <span>ไม่มีรายการ PM ที่ค้างดำเนินการ — ทุกเครื่องอยู่ในสถานะปกติ ✅</span>
+  </div>` : `
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+    <div class="flex items-center gap-2 px-4 py-2.5 border-b bg-slate-50">
+      <i data-lucide="bell-ring" class="w-4 h-4 text-red-500"></i>
+      <span class="font-semibold text-slate-700 text-sm">รายการ PM ที่ต้องดำเนินการ — แยกตามโรงงาน</span>
+      <span class="ml-auto text-xs text-slate-400">${totalOverdue+totalAlert} รายการ | ${alertFactories.length} โรงงาน</span>
+    </div>
+    <div class="p-3 grid ${gridCols} gap-3">${alertColsHtml}</div>
+  </div>`}
+
+  <!-- Factory Filter Buttons -->
+  <div class="flex items-center gap-2 mb-3 flex-wrap">
+    <span class="text-xs text-gray-500 font-medium">เลือกโรงงาน:</span>
+    <div class="flex gap-2 flex-wrap" id="fac-btn-group">${facBtns}</div>
+    <div class="ml-auto flex gap-2">
+      <button onclick="printPmTable()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50">
+        <i data-lucide="printer" class="w-3.5 h-3.5"></i>พิมพ์
+      </button>
+      ${canAccess('pm-log')?`<button onclick="openAddLogModal(null)" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>บันทึก PM
+      </button>`:''}
+    </div>
+  </div>
+
+  <!-- Factory Detail -->
+  <div id="factory-detail">
+    ${groups.length === 0
+      ? `<div class="bg-white rounded-xl shadow-sm p-10 text-center text-gray-400">ยังไม่มีข้อมูลเครื่องจักร</div>`
+      : buildFactoryTable('')}
+  </div>`;
+
+  refreshIcons();
+
+  // inject buildFactoryTable เป็น global สำหรับ dashSetFac
+  window._dashBuildTable = buildFactoryTable;
+  window._dashFactoryMap  = factoryMap;
+}
+
+let _dashSelectedFac = '';
+function dashSetFac(fac) {
+  _dashSelectedFac = fac;
+  // อัปเดตปุ่ม active
+  document.querySelectorAll('[id^="fac-btn-"]').forEach(btn => {
+    btn.className = btn.className
+      .replace('bg-slate-700 text-white border-slate-700','border-slate-300 text-slate-600 hover:bg-slate-100')
+      .replace('bg-amber-500 text-white border-amber-500','border-slate-300 text-slate-600 hover:bg-slate-100');
+  });
+  const active = document.getElementById(fac ? `fac-btn-${fac}` : 'fac-btn-all');
+  if (active) {
+    active.className = active.className
+      .replace('border-slate-300 text-slate-600 hover:bg-slate-100','bg-slate-700 text-white border-slate-700');
+  }
+  // อัปเดตตาราง
+  const detail = qs('#factory-detail');
+  if (detail && window._dashBuildTable) detail.innerHTML = window._dashBuildTable(fac);
+  refreshIcons();
+}
+
+function printPmTable() {
+  window.print();
+}
+
+// Modal: อัปเดต current_meter
+function openUpdateMeterModal(machineId) {
+  const m = _pmMachines.find(x=>x.id===machineId);
+  if (!m) return;
+  const unit = m.meter_type==='km'?'กม.':'ชม.';
+  openModal(`แก้ไข Meter — ${escapeHtml(m.name)}`,`
+    <div class="space-y-3">
+      <div class="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">ค่า Meter ปัจจุบัน: <strong>${fmtNum(m.current_meter)} ${unit}</strong></div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ค่า Meter ใหม่ (${unit})</label>
+        <input id="inp-meter" type="number" step="0.1" min="0" value="${m.current_meter}"
+          class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ (ถ้ามี)</label>
+        <input id="inp-meter-note" type="text" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveUpdateMeter('${machineId}')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก</button>`,
+    '440px'
+  );
+}
+async function saveUpdateMeter(machineId) {
+  const val = parseFloat(qs('#inp-meter').value);
+  if (isNaN(val)||val<0) { showToast('กรุณากรอกค่า Meter ที่ถูกต้อง','error'); return; }
+  const { error } = await db.from('pm_machines').update({ current_meter: val }).eq('id', machineId);
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  const m = _pmMachines.find(x=>x.id===machineId);
+  if (m) m.current_meter = val;
+  closeModal();
+  showToast('บันทึก Meter สำเร็จ','success');
+  renderDashboard();
+}
+
+// =====================================================================
+// SECTION 12: PM LOG — บันทึกการทำ PM
+// =====================================================================
+async function renderLogPage() {
+  const content = qs('#page-content');
+  const { data: logs, error } = await db.from('pm_logs')
+    .select('*').order('done_date', {ascending:false}).limit(200);
+  if (error) { content.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`; return; }
+  _pmLogs = logs || [];
+
+  const rows = _pmLogs.length === 0
+    ? `<tr><td colspan="8" class="text-center py-10 text-gray-400">ยังไม่มีบันทึก PM</td></tr>`
+    : _pmLogs.map(log => {
+        const parts = (log.parts_used||[]).map(p=>`${p.name} ${p.qty}${p.unit||''}`).join(', ');
+        return `<tr class="border-b hover:bg-gray-50">
+          <td class="px-3 py-2 text-sm">${fmtDate(log.done_date)}</td>
+          <td class="px-3 py-2 text-sm font-medium">${escapeHtml(log.machine_name||'')}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${escapeHtml(log.factory||'')}</td>
+          <td class="px-3 py-2 text-sm">${escapeHtml(log.pm_type||'')}</td>
+          <td class="px-3 py-2 text-sm text-center">${fmtNum(log.done_meter)}</td>
+          <td class="px-3 py-2 text-xs text-slate-500 max-w-xs truncate">${escapeHtml(parts)}</td>
+          <td class="px-3 py-2 text-sm text-center">${log.total_cost?fmtNum(log.total_cost,2)+' ฿':'-'}</td>
+          <td class="px-3 py-2 text-sm">${escapeHtml(log.done_by||'-')}</td>
+          <td class="px-3 py-2 text-center whitespace-nowrap">
+            <button onclick="openEditLogModal('${log.id}')" class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-50">แก้ไข</button>
+            <button onclick="deleteLog('${log.id}')" class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50">ลบ</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+  content.innerHTML = `
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="font-semibold text-gray-800">ประวัติการทำ PM</h2>
+      <button onclick="openAddLogModal(null)" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>บันทึก PM ใหม่
+      </button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="text-sm">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-3 py-2 text-left">วันที่</th>
+          <th class="px-3 py-2 text-left">เครื่องจักร</th>
+          <th class="px-3 py-2 text-left">โรงงาน</th>
+          <th class="px-3 py-2 text-left">ประเภท PM</th>
+          <th class="px-3 py-2 text-center">Meter ที่ทำ</th>
+          <th class="px-3 py-2 text-left">อะไหล่ที่ใช้</th>
+          <th class="px-3 py-2 text-center">ค่าใช้จ่าย</th>
+          <th class="px-3 py-2 text-left">ผู้ทำ</th>
+          <th class="px-3 py-2 text-center">จัดการ</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+// Modal บันทึก PM จริง
+function openAddLogModal(pmItemId) {
+  const machineOpts = _pmMachines.filter(m=>m.is_active)
+    .map(m=>`<option value="${m.id}">${escapeHtml(m.name)} (${m.factory||''})</option>`).join('');
+
+  openModal('บันทึกการทำ PM',`
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร *</label>
+          <select id="log-machine" onchange="fillItemOpts(this.value)" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+            <option value="">-- เลือกเครื่องจักร --</option>
+            ${machineOpts}
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภท PM *</label>
+          <select id="log-item" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+            <option value="">-- เลือกเครื่องจักรก่อน --</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ทำ PM *</label>
+          <input id="log-date" type="date" value="${todayISO()}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" id="log-meter-label">Meter ที่ทำ (ชม.) *</label>
+          <input id="log-meter" type="number" step="0.1" min="0" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Downtime (ชม.)</label>
+          <input id="log-downtime" type="number" step="0.1" min="0" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ผู้ทำ PM</label>
+          <input id="log-by" type="text" value="${escapeHtml(currentUser?.display_name||currentUser?.username||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+        </div>
+      </div>
+      <!-- อะไหล่ -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-medium text-gray-700">อะไหล่ที่ใช้</label>
+          <button type="button" onclick="addPartRow()" class="text-xs text-amber-600 hover:underline">+ เพิ่มรายการ</button>
+        </div>
+        <div id="parts-list" class="space-y-1.5"></div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+        <textarea id="log-notes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="รายละเอียดเพิ่มเติม"></textarea>
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveLog()" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก PM</button>`,
+    '680px'
+  );
+  if (pmItemId) {
+    // pre-select item
+    const item = _pmItems.find(i=>i.id===pmItemId);
+    if (item) {
+      qs('#log-machine').value = item.pm_machine_id;
+      fillItemOpts(item.pm_machine_id);
+      setTimeout(()=>{ const sel=qs('#log-item'); if(sel) sel.value=pmItemId; }, 100);
+    }
+  }
+}
+
+function fillItemOpts(machineId) {
+  const sel = qs('#log-item');
+  if (!sel) return;
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  const unit = machine?.meter_type==='km'?'กม.':'ชม.';
+  const label = qs('#log-meter-label');
+  if (label) label.textContent = `Meter ที่ทำ (${unit}) *`;
+  if (machine) {
+    const meterEl = qs('#log-meter');
+    if (meterEl) meterEl.value = machine.current_meter || '';
+  }
+  const items = _pmItems.filter(i=>i.pm_machine_id===machineId && i.is_active);
+  if (items.length === 0) {
+    sel.innerHTML = `<option value="">-- ยังไม่มีรายการ PM สำหรับเครื่องนี้ --</option>`;
+    // แสดง hint ใต้ dropdown
+    let hint = qs('#log-item-hint');
+    if (!hint) {
+      hint = document.createElement('p');
+      hint.id = 'log-item-hint';
+      hint.className = 'text-xs text-amber-600 mt-1';
+      sel.parentNode.appendChild(hint);
+    }
+    const machine = _pmMachines.find(m=>m.id===machineId);
+    hint.innerHTML = `⚠️ ต้องเพิ่มรายการ PM ให้เครื่องนี้ก่อน →
+      <a href="#" onclick="event.preventDefault();closeModal();navigateTo('pm-machines')"
+         class="underline font-medium">ไปหน้าเครื่องจักร</a>`;
+  } else {
+    const hint = qs('#log-item-hint');
+    if (hint) hint.remove();
+    sel.innerHTML = `<option value="">-- เลือกประเภท PM --</option>`
+      + items.map(i=>`<option value="${i.id}">${escapeHtml(i.pm_type)}</option>`).join('');
+  }
+}
+
+let _partRows = 0;
+function addPartRow() {
+  const list = qs('#parts-list');
+  if (!list) return;
+  const idx = _partRows++;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-center';
+  div.id = `part-row-${idx}`;
+  div.innerHTML = `
+    <input type="text" placeholder="ชื่ออะไหล่" data-field="name"
+      class="flex-1 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500" />
+    <input type="number" step="0.01" placeholder="จำนวน" data-field="qty" style="width:70px"
+      class="border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500" />
+    <input type="text" placeholder="หน่วย" data-field="unit" style="width:55px"
+      class="border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500" />
+    <input type="number" step="0.01" placeholder="ราคา/หน่วย" data-field="unit_cost" style="width:85px"
+      class="border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500" />
+    <button type="button" onclick="qs('#part-row-${idx}').remove()" class="text-red-400 hover:text-red-600 flex-shrink-0">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>`;
+  list.appendChild(div);
+  refreshIcons();
+}
+
+async function saveLog() {
+  const machineId = qs('#log-machine')?.value;
+  const itemId    = qs('#log-item')?.value;
+  const date      = qs('#log-date')?.value;
+  const meter     = parseFloat(qs('#log-meter')?.value||'');
+  const downtime  = parseFloat(qs('#log-downtime')?.value||'0')||0;
+  const by        = qs('#log-by')?.value?.trim()||'';
+  const notes     = qs('#log-notes')?.value?.trim()||'';
+
+  if (!machineId) { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
+  if (!date)      { showToast('กรุณาระบุวันที่','error'); return; }
+  if (isNaN(meter)||meter<0) { showToast('กรุณาระบุค่า Meter','error'); return; }
+
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  const item    = itemId ? _pmItems.find(i=>i.id===itemId) : null;
+
+  // รวมอะไหล่
+  const partRows = qsa('#parts-list [id^="part-row-"]');
+  const parts = [];
+  let totalCost = 0;
+  for (const row of partRows) {
+    const name      = row.querySelector('[data-field="name"]')?.value?.trim();
+    const qty       = parseFloat(row.querySelector('[data-field="qty"]')?.value||'0');
+    const unit      = row.querySelector('[data-field="unit"]')?.value?.trim()||'';
+    const unit_cost = parseFloat(row.querySelector('[data-field="unit_cost"]')?.value||'0');
+    if (name) {
+      parts.push({name, qty, unit, unit_cost});
+      totalCost += qty * unit_cost;
+    }
+  }
+
+  const logData = {
+    pm_item_id   : itemId||null,
+    pm_machine_id: machineId,
+    machine_name : machine?.name||'',
+    factory      : machine?.factory||'',
+    pm_type      : item?.pm_type||'',
+    done_date    : date,
+    done_meter   : meter,
+    done_by      : by,
+    parts_used   : parts,
+    total_cost   : totalCost,
+    downtime_hours: downtime||null,
+    notes        : notes,
+    created_by   : currentUser?.username||'',
+  };
+
+  const { error: logErr } = await db.from('pm_logs').insert(logData);
+  if (logErr) { showToast('บันทึกไม่สำเร็จ: '+logErr.message,'error'); return; }
+
+  // อัปเดต pm_items.last_pm_date, last_pm_meter
+  if (itemId) {
+    await db.from('pm_items').update({ last_pm_date: date, last_pm_meter: meter }).eq('id', itemId);
+    const it = _pmItems.find(i=>i.id===itemId);
+    if (it) { it.last_pm_date = date; it.last_pm_meter = meter; }
+  }
+
+  // อัปเดต current_meter ถ้า meter ใหม่ > เดิม
+  if (machine && meter > (machine.current_meter||0)) {
+    await db.from('pm_machines').update({ current_meter: meter }).eq('id', machineId);
+    machine.current_meter = meter;
+  }
+
+  // บันทึก downtime ถ้าระบุ
+  if (downtime > 0) {
+    await db.from('pm_downtime').insert({
+      pm_machine_id: machineId,
+      machine_name : machine?.name||'',
+      factory      : machine?.factory||'',
+      start_time   : new Date(date).toISOString(),
+      end_time     : new Date(date).toISOString(),
+      duration_hours: downtime,
+      type         : 'planned_pm',
+      created_by   : currentUser?.username||'',
+    });
+  }
+
+  closeModal();
+  showToast('บันทึก PM สำเร็จ','success');
+  if (currentPage === 'pm-log') renderLogPage();
+  else if (currentPage === 'pm-dashboard') renderDashboard();
+}
+
+function openEditLogModal(id) {
+  const log = _pmLogs.find(l => l.id === id);
+  if (!log) { showToast('ไม่พบข้อมูล','error'); return; }
+
+  openModal('แก้ไขบันทึก PM', `
+    <div class="space-y-3">
+      <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+        <b>เครื่องจักร:</b> ${escapeHtml(log.machine_name||'')} &nbsp;|&nbsp;
+        <b>ประเภท PM:</b> ${escapeHtml(log.pm_type||'')}
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-700">วันที่ทำ PM *</label>
+          <input id="el-date" type="date" value="${log.done_date||''}"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-700">Meter ที่ทำ *</label>
+          <input id="el-meter" type="number" step="0.1" value="${log.done_meter||0}"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-700">Downtime (ชม.)</label>
+          <input id="el-downtime" type="number" step="0.1" value="${log.downtime_hours||0}"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-700">ผู้ทำ PM</label>
+          <input id="el-by" type="text" value="${escapeHtml(log.done_by||'')}"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs font-medium text-gray-700">หมายเหตุ</label>
+          <textarea id="el-notes" rows="2"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-amber-500">${escapeHtml(log.notes||'')}</textarea>
+        </div>
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="updateLog('${id}')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก</button>`,
+    '500px'
+  );
+}
+
+async function updateLog(id) {
+  const date     = qs('#el-date')?.value;
+  const meter    = parseFloat(qs('#el-meter')?.value||'');
+  const downtime = parseFloat(qs('#el-downtime')?.value||'0')||null;
+  const by       = qs('#el-by')?.value?.trim()||'';
+  const notes    = qs('#el-notes')?.value?.trim()||'';
+
+  if (!date) { showToast('กรุณาระบุวันที่','error'); return; }
+  if (isNaN(meter)) { showToast('กรุณาระบุค่า Meter','error'); return; }
+
+  const { error } = await db.from('pm_logs').update({
+    done_date: date, done_meter: meter,
+    downtime_hours: downtime, done_by: by, notes
+  }).eq('id', id);
+
+  if (error) { showToast('แก้ไขไม่สำเร็จ: '+error.message,'error'); return; }
+
+  // อัปเดต pm_items ถ้าเป็น log ล่าสุดของ item นั้น
+  const log = _pmLogs.find(l => l.id === id);
+  if (log?.pm_item_id) {
+    const sameItemLogs = _pmLogs.filter(l => l.pm_item_id === log.pm_item_id)
+      .sort((a,b) => new Date(b.done_date) - new Date(a.done_date));
+    if (sameItemLogs[0]?.id === id) {
+      await db.from('pm_items').update({ last_pm_date: date, last_pm_meter: meter }).eq('id', log.pm_item_id);
+    }
+  }
+
+  closeModal();
+  showToast('แก้ไขสำเร็จ','success');
+  renderLogPage();
+}
+
+async function deleteLog(id) {
+  if (!confirm('ลบบันทึก PM นี้?')) return;
+  const { error } = await db.from('pm_logs').delete().eq('id', id);
+  if (error) { showToast('ลบไม่สำเร็จ: '+error.message,'error'); return; }
+  showToast('ลบสำเร็จ','success');
+  renderLogPage();
+}
+
+// =====================================================================
+// SECTION 13: DOWNTIME LOG
+// =====================================================================
+async function renderDowntimePage() {
+  const content = qs('#page-content');
+  const { data: rows, error } = await db.from('pm_downtime')
+    .select('*').order('start_time',{ascending:false}).limit(300);
+  if (error) { content.innerHTML=`<div class="text-red-500 p-4">${error.message}</div>`; return; }
+  _pmDowntime = rows||[];
+
+  // stats
+  const totalHours = _pmDowntime.reduce((s,r)=>s+(r.duration_hours||0),0);
+  const bdCount    = _pmDowntime.filter(r=>r.type==='breakdown').length;
+
+  const typeLabel = {breakdown:'เสียขัดข้อง',planned_pm:'PM แผน',setup:'ตั้งเครื่อง',other:'อื่นๆ'};
+  const typeBadge = {
+    breakdown:`<span class="badge-overdue px-2 py-0.5 rounded-full text-xs">เสียขัดข้อง</span>`,
+    planned_pm:`<span class="badge-ok px-2 py-0.5 rounded-full text-xs">PM แผน</span>`,
+    setup:`<span class="badge-pending px-2 py-0.5 rounded-full text-xs">ตั้งเครื่อง</span>`,
+    other:`<span class="badge-alert px-2 py-0.5 rounded-full text-xs">อื่นๆ</span>`,
+  };
+
+  const tableRows = _pmDowntime.length === 0
+    ? `<tr><td colspan="8" class="text-center py-10 text-gray-400">ยังไม่มีบันทึก Downtime</td></tr>`
+    : _pmDowntime.map(r=>{
+        const dur = r.duration_hours!=null ? fmtNum(r.duration_hours,2)+' ชม.' : '-';
+        return `<tr class="border-b hover:bg-gray-50">
+          <td class="px-3 py-2 text-sm">${r.start_time ? fmtDate(r.start_time) : '-'}</td>
+          <td class="px-3 py-2 text-sm font-medium">${escapeHtml(r.machine_name||'')}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${escapeHtml(r.factory||'')}</td>
+          <td class="px-3 py-2 text-center">${typeBadge[r.type]||r.type}</td>
+          <td class="px-3 py-2 text-sm text-center font-semibold">${dur}</td>
+          <td class="px-3 py-2 text-sm max-w-xs">${escapeHtml(r.cause||'-')}</td>
+          <td class="px-3 py-2 text-sm max-w-xs">${escapeHtml(r.action_taken||'-')}</td>
+          <td class="px-3 py-2 text-center">
+            ${isManager()?`<button onclick="deleteDowntime('${r.id}')" class="text-red-400 hover:text-red-600"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+          </td>
+        </tr>`;
+      }).join('');
+
+  content.innerHTML = `
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+    <div class="kpi-card border-l-4 border-red-400">
+      <div class="kpi-val text-red-600">${fmtNum(totalHours,1)}</div>
+      <div class="kpi-label">ชม. Downtime รวม</div>
+    </div>
+    <div class="kpi-card border-l-4 border-orange-400">
+      <div class="kpi-val text-orange-600">${bdCount}</div>
+      <div class="kpi-label">ครั้ง Breakdown</div>
+    </div>
+    <div class="kpi-card border-l-4 border-blue-400">
+      <div class="kpi-val text-blue-600">${_pmDowntime.length}</div>
+      <div class="kpi-label">รายการทั้งหมด</div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="font-semibold text-gray-800">Downtime Log</h2>
+      ${isManager()?`<button onclick="openAddDowntimeModal()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600">
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>บันทึก Downtime
+      </button>`:''}
+    </div>
+    <div class="tbl-wrap">
+      <table class="text-sm">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-3 py-2 text-left">วันที่</th>
+          <th class="px-3 py-2 text-left">เครื่องจักร</th>
+          <th class="px-3 py-2 text-left">โรงงาน</th>
+          <th class="px-3 py-2 text-center">ประเภท</th>
+          <th class="px-3 py-2 text-center">ระยะเวลา</th>
+          <th class="px-3 py-2 text-left">สาเหตุ</th>
+          <th class="px-3 py-2 text-left">การแก้ไข</th>
+          <th class="px-3 py-2 text-center w-10"></th>
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+function openAddDowntimeModal() {
+  const machineOpts = _pmMachines.filter(m=>m.is_active)
+    .map(m=>`<option value="${m.id}" data-factory="${m.factory||''}">${escapeHtml(m.name)} (${m.factory||''})</option>`).join('');
+  const now = new Date();
+  const localDT = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+
+  openModal('บันทึก Downtime',`
+    <div class="space-y-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร *</label>
+        <select id="dt-machine" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+          <option value="">-- เลือกเครื่องจักร --</option>${machineOpts}
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">เวลาเริ่มหยุด *</label>
+          <input id="dt-start" type="datetime-local" value="${localDT}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">เวลาเดินเครื่องใหม่</label>
+          <input id="dt-end" type="datetime-local" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">หรือระบุระยะเวลา (ชม.)</label>
+          <input id="dt-dur" type="number" step="0.1" min="0" placeholder="0.5" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ประเภท *</label>
+          <select id="dt-type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+            <option value="breakdown">เสียขัดข้อง</option>
+            <option value="planned_pm">PM แผน</option>
+            <option value="setup">ตั้งเครื่อง</option>
+            <option value="other">อื่นๆ</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">สาเหตุ</label>
+        <input id="dt-cause" type="text" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="สาเหตุที่เครื่องหยุด" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">การแก้ไข</label>
+        <textarea id="dt-action" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="วิธีแก้ไข"></textarea>
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveDowntime()" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">บันทึก</button>`,
+    '560px'
+  );
+}
+
+async function saveDowntime() {
+  const machineId  = qs('#dt-machine')?.value;
+  const startTime  = qs('#dt-start')?.value;
+  const endTime    = qs('#dt-end')?.value||null;
+  const durInput   = parseFloat(qs('#dt-dur')?.value||'');
+  const type       = qs('#dt-type')?.value||'breakdown';
+  const cause      = qs('#dt-cause')?.value?.trim()||'';
+  const action     = qs('#dt-action')?.value?.trim()||'';
+
+  if (!machineId)  { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
+  if (!startTime)  { showToast('กรุณาระบุเวลาเริ่ม','error'); return; }
+
+  let durationHours = durInput || null;
+  if (!durationHours && endTime) {
+    const ms = new Date(endTime) - new Date(startTime);
+    durationHours = Math.max(0, ms/3600000);
+  }
+
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  const { error } = await db.from('pm_downtime').insert({
+    pm_machine_id : machineId,
+    machine_name  : machine?.name||'',
+    factory       : machine?.factory||'',
+    start_time    : new Date(startTime).toISOString(),
+    end_time      : endTime ? new Date(endTime).toISOString() : null,
+    duration_hours: durationHours,
+    type, cause, action_taken: action,
+    created_by: currentUser?.username||'',
+  });
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  closeModal();
+  showToast('บันทึก Downtime สำเร็จ','success');
+  renderDowntimePage();
+}
+
+async function deleteDowntime(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  const { error } = await db.from('pm_downtime').delete().eq('id',id);
+  if (error) { showToast('ลบไม่สำเร็จ','error'); return; }
+  showToast('ลบแล้ว','success');
+  renderDowntimePage();
+}
+
+// =====================================================================
+// SECTION 14: HISTORY — ประวัติต่อเครื่อง
+// =====================================================================
+async function renderHistoryPage() {
+  const content = qs('#page-content');
+  const machineOpts = _pmMachines.filter(m=>m.is_active)
+    .map(m=>`<option value="${m.id}">${escapeHtml(m.name)} (${m.factory||''})</option>`).join('');
+
+  content.innerHTML = `
+  <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+    <div class="flex items-center gap-3">
+      <label class="text-sm font-medium text-gray-700">เครื่องจักร:</label>
+      <select id="hist-machine" onchange="loadHistory(this.value)"
+        class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 flex-1 max-w-xs">
+        <option value="">-- เลือกเครื่องจักร --</option>${machineOpts}
+      </select>
+    </div>
+  </div>
+  <div id="hist-content" class="text-gray-400 text-sm text-center py-8">เลือกเครื่องจักรเพื่อดูประวัติ</div>`;
+  refreshIcons();
+}
+
+async function loadHistory(machineId) {
+  if (!machineId) return;
+  const content = qs('#hist-content');
+  if (!content) return;
+  content.innerHTML = `<div class="flex items-center gap-2 justify-center py-6 text-gray-400"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> โหลด...</div>`;
+  refreshIcons();
+
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  const unit    = machine?.meter_type==='km'?'กม.':'ชม.';
+
+  const [{ data: logs }, { data: downtimes }] = await Promise.all([
+    db.from('pm_logs').select('*').eq('pm_machine_id', machineId).order('done_date',{ascending:false}).limit(100),
+    db.from('pm_downtime').select('*').eq('pm_machine_id', machineId).order('start_time',{ascending:false}).limit(100),
+  ]);
+
+  // items ของเครื่องนี้
+  const items = _pmItems.filter(i=>i.pm_machine_id===machineId);
+
+  const logRows = (logs||[]).length===0
+    ? `<tr><td colspan="6" class="text-center py-6 text-gray-400">ไม่มีประวัติ PM</td></tr>`
+    : (logs||[]).map(l=>`<tr class="border-b hover:bg-gray-50">
+        <td class="px-3 py-2 text-sm">${fmtDate(l.done_date)}</td>
+        <td class="px-3 py-2 text-sm">${escapeHtml(l.pm_type||'')}</td>
+        <td class="px-3 py-2 text-sm text-center">${fmtNum(l.done_meter)} ${unit}</td>
+        <td class="px-3 py-2 text-sm">${escapeHtml(l.done_by||'-')}</td>
+        <td class="px-3 py-2 text-sm text-center">${l.total_cost?fmtNum(l.total_cost,2)+' ฿':'-'}</td>
+        <td class="px-3 py-2 text-sm text-gray-500">${escapeHtml(l.notes||'-')}</td>
+      </tr>`).join('');
+
+  const dtRows = (downtimes||[]).length===0
+    ? `<tr><td colspan="4" class="text-center py-6 text-gray-400">ไม่มีบันทึก Downtime</td></tr>`
+    : (downtimes||[]).map(d=>`<tr class="border-b hover:bg-gray-50">
+        <td class="px-3 py-2 text-sm">${fmtDate(d.start_time)}</td>
+        <td class="px-3 py-2 text-sm">${{breakdown:'เสียขัดข้อง',planned_pm:'PM แผน',setup:'ตั้งเครื่อง',other:'อื่นๆ'}[d.type]||d.type}</td>
+        <td class="px-3 py-2 text-sm text-center">${d.duration_hours!=null?fmtNum(d.duration_hours,2)+' ชม.':'-'}</td>
+        <td class="px-3 py-2 text-sm">${escapeHtml(d.cause||'-')}</td>
+      </tr>`).join('');
+
+  // current PM status
+  const statusCards = items.map(item => {
+    const rem = calcRemaining(item, machine);
+    const st  = pmStatus(rem, machine?.alert_threshold||100);
+    const next = calcNextDue(item);
+    return `<div class="flex items-center justify-between p-3 rounded-lg border ${st==='overdue'?'border-red-200 bg-red-50':st==='alert'?'border-amber-200 bg-amber-50':'border-green-200 bg-green-50'}">
+      <div>
+        <div class="text-sm font-medium">${escapeHtml(item.pm_type)}</div>
+        <div class="text-xs text-gray-500">รอบถัดไป: ${fmtNum(next)} ${unit} | ล่าสุด: ${fmtDateShort(item.last_pm_date)}</div>
+      </div>
+      <div class="text-right">
+        ${pmStatusBadge(st)}
+        <div class="text-xs mt-1 ${st==='overdue'?'text-red-600':st==='alert'?'text-amber-600':'text-green-700'} font-semibold">
+          ${rem>=0?'+'+fmtNum(rem):fmtNum(rem)} ${unit}
+        </div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="text-gray-400 text-sm text-center py-4">ยังไม่มีรายการ PM</div>';
+
+  content.innerHTML = `
+  <!-- Machine info -->
+  <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+    <div class="flex items-start justify-between">
+      <div>
+        <h3 class="font-semibold text-gray-800 text-lg">${escapeHtml(machine?.name||'')}</h3>
+        <div class="text-sm text-gray-500 mt-0.5">โรงงาน: ${machine?.factory||'-'} | หมวด: ${machine?.category||'-'} | ${machine?.brand||''} ${machine?.model||''}</div>
+      </div>
+      <div class="text-right">
+        <div class="text-2xl font-bold text-blue-600">${fmtNum(machine?.current_meter||0)}</div>
+        <div class="text-xs text-gray-400">${unit}ทำงานปัจจุบัน</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PM Status per item -->
+  <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+    <h4 class="font-semibold text-gray-700 mb-3 text-sm">สถานะ PM ปัจจุบัน</h4>
+    <div class="space-y-2">${statusCards}</div>
+  </div>
+
+  <!-- PM History -->
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+    <div class="px-4 py-3 border-b font-semibold text-gray-700 text-sm">ประวัติการทำ PM (${(logs||[]).length} รายการ)</div>
+    <div class="tbl-wrap" style="max-height:300px;">
+      <table class="text-sm">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-3 py-2 text-left">วันที่</th><th class="px-3 py-2 text-left">ประเภท PM</th>
+          <th class="px-3 py-2 text-center">${unit}ที่ทำ</th><th class="px-3 py-2 text-left">ผู้ทำ</th>
+          <th class="px-3 py-2 text-center">ค่าใช้จ่าย</th><th class="px-3 py-2 text-left">หมายเหตุ</th>
+        </tr></thead>
+        <tbody>${logRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Downtime History -->
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="px-4 py-3 border-b font-semibold text-gray-700 text-sm">ประวัติ Downtime (${(downtimes||[]).length} รายการ)</div>
+    <div class="tbl-wrap" style="max-height:250px;">
+      <table class="text-sm">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-3 py-2 text-left">วันที่</th><th class="px-3 py-2 text-left">ประเภท</th>
+          <th class="px-3 py-2 text-center">ระยะเวลา</th><th class="px-3 py-2 text-left">สาเหตุ</th>
+        </tr></thead>
+        <tbody>${dtRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+// =====================================================================
+// SECTION 13B: PARTS — คลังอะไหล่เครื่องจักร
+// =====================================================================
+const PART_CATS = {
+  motor:'มอเตอร์/เกียร์', pump:'ปั้ม/ไฮดรอลิค',
+  belt:'สายพาน/ลูกปืน', screen:'ใบตะแกรง/Wear Part',
+  electrical:'ระบบไฟฟ้า', other:'อื่นๆ'
+};
+
+async function renderPartsPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+  const { data } = await db.from('pm_parts').select('*').order('category').order('name');
+  _pmParts = data || [];
+
+  const lowStock = _pmParts.filter(p => p.is_active && p.stock_qty <= p.min_stock && p.min_stock > 0);
+  const alertBanner = lowStock.length ? `
+    <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-red-700 text-sm">
+      <i data-lucide="alert-triangle" class="w-4 h-4 flex-shrink-0"></i>
+      <span>อะไหล่ใกล้หมด/หมด <strong>${lowStock.length} รายการ</strong>: ${lowStock.map(p=>escapeHtml(p.name)).join(', ')}</span>
+    </div>` : '';
+
+  // KPI
+  const totalParts = _pmParts.filter(p=>p.is_active).length;
+  const totalValue = _pmParts.reduce((s,p)=>(p.is_active?(s + (p.stock_qty||0)*(p.unit_price||0)):s), 0);
+
+  // กลุ่มตาม category
+  const grouped = {};
+  _pmParts.filter(p=>p.is_active).forEach(p => {
+    const c = p.category || 'other';
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push(p);
+  });
+
+  const tables = Object.entries(grouped).map(([cat, parts]) => {
+    const catLabel = PART_CATS[cat] || cat;
+    const rows = parts.map(p => {
+      const low = p.min_stock > 0 && p.stock_qty <= p.min_stock;
+      const zero = p.stock_qty <= 0;
+      const badge = zero ? `<span class="px-2 py-0.5 rounded-full text-xs badge-overdue">หมด</span>`
+        : low ? `<span class="px-2 py-0.5 rounded-full text-xs badge-alert">ใกล้หมด</span>`
+        : `<span class="px-2 py-0.5 rounded-full text-xs badge-ok">ปกติ</span>`;
+      return `<tr class="border-b hover:bg-gray-50">
+        <td class="px-3 py-2 text-sm font-medium">${escapeHtml(p.name)}</td>
+        <td class="px-3 py-2 text-xs text-slate-500">${p.code||'-'}</td>
+        <td class="px-3 py-2 text-sm text-center font-semibold ${zero?'text-red-600':low?'text-amber-600':'text-gray-800'}">${fmtNum(p.stock_qty,2)} ${p.unit||'ชิ้น'}</td>
+        <td class="px-3 py-2 text-sm text-center text-gray-500">${fmtNum(p.min_stock,2)}</td>
+        <td class="px-3 py-2 text-sm text-center">${fmtNum(p.unit_price,2)} ฿</td>
+        <td class="px-3 py-2 text-sm text-center">${fmtNum((p.stock_qty||0)*(p.unit_price||0),2)} ฿</td>
+        <td class="px-3 py-2 text-xs text-gray-400">${p.location||'-'}</td>
+        <td class="px-3 py-2 text-center">${badge}</td>
+        <td class="px-3 py-2 text-center">
+          <div class="flex gap-1 justify-center">
+            <button onclick="openPartStockInModal('${p.id}')" class="p-1 hover:bg-green-50 rounded text-green-600" title="รับเข้า"><i data-lucide="plus-circle" class="w-3.5 h-3.5"></i></button>
+            <button onclick="openEditPartModal('${p.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+            ${isAdmin()?`<button onclick="deletePart('${p.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    return `
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+      <div class="px-4 py-2.5 border-b bg-slate-50 font-semibold text-slate-700 text-sm">${catLabel}</div>
+      <div class="tbl-wrap" style="max-height:350px;">
+        <table class="text-sm w-full">
+          <thead><tr class="text-xs text-gray-500 bg-gray-50 border-b">
+            <th class="px-3 py-2 text-left">ชื่ออะไหล่</th><th class="px-3 py-2 text-left">รหัส</th>
+            <th class="px-3 py-2 text-center">สต็อก</th><th class="px-3 py-2 text-center">ขั้นต่ำ</th>
+            <th class="px-3 py-2 text-center">ราคา/หน่วย</th><th class="px-3 py-2 text-center">มูลค่าสต็อก</th>
+            <th class="px-3 py-2 text-left">ที่เก็บ</th><th class="px-3 py-2 text-center">สถานะ</th>
+            <th class="px-3 py-2 text-center">จัดการ</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('') || `<div class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">ยังไม่มีอะไหล่ — กด "+ เพิ่มอะไหล่"</div>`;
+
+  content.innerHTML = `
+  ${alertBanner}
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold text-blue-600">${totalParts}</div>
+      <div class="text-xs text-gray-500 mt-1">รายการอะไหล่</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold text-red-500">${lowStock.length}</div>
+      <div class="text-xs text-gray-500 mt-1">ใกล้หมด/หมด</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center col-span-2 md:col-span-1">
+      <div class="text-xl font-bold text-green-600">${fmtNum(totalValue,2)} ฿</div>
+      <div class="text-xs text-gray-500 mt-1">มูลค่าสต็อกรวม</div>
+    </div>
+  </div>
+  <div class="flex justify-end mb-3">
+    ${isManager()?`<button onclick="openAddPartModal()" class="flex items-center gap-1.5 text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+      <i data-lucide="plus" class="w-4 h-4"></i>เพิ่มอะไหล่
+    </button>`:''}
+  </div>
+  ${tables}`;
+  refreshIcons();
+}
+
+function partFormHtml(p) {
+  const catOpts = Object.entries(PART_CATS).map(([v,l])=>
+    `<option value="${v}" ${p?.category===v?'selected':''}>${l}</option>`).join('');
+  return `<div class="space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <div class="col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่ออะไหล่ *</label>
+        <input id="part-name" type="text" value="${escapeHtml(p?.name||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เช่น มอเตอร์เกียร์สายพานบน" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสอะไหล่</label>
+        <input id="part-code" type="text" value="${escapeHtml(p?.code||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เช่น MTR-001" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+        <select id="part-cat" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          ${catOpts}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">หน่วย</label>
+        <input id="part-unit" type="text" value="${escapeHtml(p?.unit||'ชิ้น')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ราคาต่อหน่วย (฿)</label>
+        <input id="part-price" type="number" step="0.01" min="0" value="${p?.unit_price||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">สต็อกปัจจุบัน</label>
+        <input id="part-stock" type="number" step="0.01" min="0" value="${p?.stock_qty||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" ${p?'readonly':''} />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">สต็อกขั้นต่ำ (แจ้งเตือน)</label>
+        <input id="part-min" type="number" step="0.01" min="0" value="${p?.min_stock||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ที่เก็บ</label>
+        <input id="part-loc" type="text" value="${escapeHtml(p?.location||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เช่น ชั้น A3" />
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+      <input id="part-notes" type="text" value="${escapeHtml(p?.notes||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+  </div>`;
+}
+
+function openAddPartModal() {
+  openModal('เพิ่มอะไหล่', partFormHtml(null),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePart(null)" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">บันทึก</button>`,
+    '560px');
+}
+
+function openEditPartModal(id) {
+  const p = _pmParts.find(x => x.id === id);
+  if (!p) return;
+  openModal('แก้ไขอะไหล่', partFormHtml(p),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePart('${id}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">บันทึก</button>`,
+    '560px');
+}
+
+async function savePart(id) {
+  const name = qs('#part-name')?.value?.trim();
+  if (!name) { showToast('กรุณากรอกชื่ออะไหล่','error'); return; }
+  const data = {
+    name, code: qs('#part-code')?.value?.trim()||null,
+    category: qs('#part-cat')?.value||'other',
+    unit: qs('#part-unit')?.value?.trim()||'ชิ้น',
+    unit_price: parseFloat(qs('#part-price')?.value||0)||0,
+    min_stock:  parseFloat(qs('#part-min')?.value||0)||0,
+    location:   qs('#part-loc')?.value?.trim()||null,
+    notes:      qs('#part-notes')?.value?.trim()||null,
+    is_active:  true,
+  };
+  if (!id) data.stock_qty = parseFloat(qs('#part-stock')?.value||0)||0;
+  let err;
+  if (id) {
+    ({ error: err } = await db.from('pm_parts').update(data).eq('id', id));
+  } else {
+    ({ error: err } = await db.from('pm_parts').insert(data));
+    // บันทึก stock_log ถ้าเริ่มต้นมีสต็อก
+    if (!err && data.stock_qty > 0) {
+      const { data: inserted } = await db.from('pm_parts').select('id').eq('name', name).order('created_at',{ascending:false}).limit(1).maybeSingle();
+      if (inserted) await db.from('pm_parts_stock_log').insert({
+        part_id: inserted.id, type:'in', qty: data.stock_qty,
+        unit_price: data.unit_price, reference:'ยอดเริ่มต้น', done_by: currentUser?.username
+      });
+    }
+  }
+  if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
+  closeModal();
+  showToast(id?'แก้ไขอะไหล่สำเร็จ':'เพิ่มอะไหล่สำเร็จ','success');
+  renderPartsPage();
+}
+
+async function deletePart(id) {
+  if (!confirm('ลบอะไหล่นี้?')) return;
+  await db.from('pm_parts').update({ is_active: false }).eq('id', id);
+  showToast('ลบอะไหล่สำเร็จ','success');
+  renderPartsPage();
+}
+
+function openPartStockInModal(id) {
+  const p = _pmParts.find(x => x.id === id);
+  if (!p) return;
+  openModal(`รับเข้าอะไหล่ — ${escapeHtml(p.name)}`,`
+    <div class="space-y-3">
+      <div class="bg-blue-50 rounded-lg px-4 py-2 text-sm text-blue-700">สต็อกปัจจุบัน: <strong>${fmtNum(p.stock_qty,2)} ${p.unit||'ชิ้น'}</strong></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">จำนวนรับเข้า *</label>
+          <input id="sin-qty" type="number" step="0.01" min="0.01" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ราคา/หน่วย (฿)</label>
+          <input id="sin-price" type="number" step="0.01" min="0" value="${p.unit_price||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">อ้างอิง (เลขที่ PO/ใบส่งของ)</label>
+        <input id="sin-ref" type="text" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="เช่น PO-2026-0123" />
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveStockIn('${id}','${p.stock_qty}')" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">รับเข้า</button>`,
+    '440px');
+}
+
+async function saveStockIn(partId, currentQty) {
+  const qty = parseFloat(qs('#sin-qty')?.value||0);
+  if (!qty || qty <= 0) { showToast('กรุณากรอกจำนวน','error'); return; }
+  const price = parseFloat(qs('#sin-price')?.value||0)||0;
+  const ref   = qs('#sin-ref')?.value?.trim()||null;
+  const newQty = (parseFloat(currentQty)||0) + qty;
+  const [r1, r2] = await Promise.all([
+    db.from('pm_parts').update({ stock_qty: newQty, unit_price: price||undefined }).eq('id', partId),
+    db.from('pm_parts_stock_log').insert({ part_id: partId, type:'in', qty, unit_price: price, reference: ref, done_by: currentUser?.username })
+  ]);
+  if (r1.error) { showToast('บันทึกไม่สำเร็จ: '+r1.error.message,'error'); return; }
+  closeModal();
+  showToast(`รับเข้า ${fmtNum(qty,2)} หน่วยสำเร็จ`, 'success');
+  renderPartsPage();
+}
+
+// =====================================================================
+// SECTION 13C: REPAIR LOG — บันทึกการซ่อม
+// =====================================================================
+const REPAIR_TYPES = { breakdown:'เสียขัดข้อง (Breakdown)', planned:'ซ่อมตามแผน (Planned)', inspection:'ตรวจสอบ (Inspection)' };
+
+async function renderRepairPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+  const [{ data: repairs }, { data: parts }] = await Promise.all([
+    db.from('pm_repair_logs').select('*, pm_machines(name,factory)').order('repair_date',{ascending:false}).limit(200),
+    db.from('pm_parts').select('*').eq('is_active',true).order('name'),
+  ]);
+  _pmRepairs = repairs || [];
+  _pmParts   = parts   || [];
+  if (!_pmMachines.length) await loadPmData();
+
+  // KPI
+  const totalCost = _pmRepairs.reduce((s,r) => s + (r.total_cost||0), 0);
+  const breakdowns = _pmRepairs.filter(r => r.type === 'breakdown').length;
+  const thisMonth  = _pmRepairs.filter(r => r.repair_date?.startsWith(new Date().toISOString().slice(0,7))).length;
+
+  const rows = _pmRepairs.length === 0
+    ? `<tr><td colspan="8" class="text-center py-10 text-gray-400">ยังไม่มีบันทึกการซ่อม</td></tr>`
+    : _pmRepairs.map(r => {
+        const typeBadge = r.type === 'breakdown'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs badge-overdue">Breakdown</span>`
+          : r.type === 'planned'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs badge-ok">แผน</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-xs badge-alert">ตรวจ</span>`;
+        const machineName = r.pm_machines?.name || '-';
+        const factory     = r.pm_machines?.factory || '';
+        return `<tr class="border-b hover:bg-gray-50 cursor-pointer" onclick="openRepairDetailModal('${r.id}')">
+          <td class="px-3 py-2 text-sm">${fmtDate(r.repair_date)}</td>
+          <td class="px-3 py-2 text-sm font-medium">${escapeHtml(machineName)}<span class="text-xs text-gray-400 ml-1">${factory}</span></td>
+          <td class="px-3 py-2 text-center">${typeBadge}</td>
+          <td class="px-3 py-2 text-sm text-gray-600 max-w-xs truncate">${escapeHtml(r.symptoms||'-')}</td>
+          <td class="px-3 py-2 text-sm text-center">${r.duration_hours!=null?fmtNum(r.duration_hours,1)+' ชม.':'-'}</td>
+          <td class="px-3 py-2 text-sm text-center">${r.parts_cost>0?fmtNum(r.parts_cost,2)+' ฿':'-'}</td>
+          <td class="px-3 py-2 text-sm text-center font-semibold text-red-600">${r.total_cost>0?fmtNum(r.total_cost,2)+' ฿':'-'}</td>
+          <td class="px-3 py-2 text-sm text-gray-400">${escapeHtml(r.technician||'-')}</td>
+        </tr>`;
+      }).join('');
+
+  content.innerHTML = `
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold text-slate-700">${_pmRepairs.length}</div>
+      <div class="text-xs text-gray-500 mt-1">บันทึกทั้งหมด</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold text-red-500">${breakdowns}</div>
+      <div class="text-xs text-gray-500 mt-1">Breakdown</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-xl font-bold text-orange-500">${fmtNum(totalCost,0)} ฿</div>
+      <div class="text-xs text-gray-500 mt-1">ค่าซ่อมรวม</div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="font-semibold text-gray-800">ประวัติการซ่อม <span class="text-xs text-gray-400 ml-1">(คลิกแถวเพื่อดูรายละเอียด)</span></h2>
+      ${isManager()?`<button onclick="openAddRepairModal()" class="flex items-center gap-1.5 text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+        <i data-lucide="plus" class="w-4 h-4"></i>บันทึกการซ่อม
+      </button>`:''}
+    </div>
+    <div class="tbl-wrap" style="max-height:calc(100vh - 320px);">
+      <table class="text-sm w-full">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50 border-b">
+          <th class="px-3 py-2 text-left sticky top-0 bg-gray-50">วันที่</th>
+          <th class="px-3 py-2 text-left sticky top-0 bg-gray-50">เครื่องจักร</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">ประเภท</th>
+          <th class="px-3 py-2 text-left sticky top-0 bg-gray-50">อาการ</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">ระยะเวลา</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">ค่าอะไหล่</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">รวมค่าซ่อม</th>
+          <th class="px-3 py-2 text-left sticky top-0 bg-gray-50">ช่าง</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+let _repairPartRows = 0;
+function addRepairPartRow(partId='', qty=1, price=0) {
+  _repairPartRows++;
+  const partOpts = _pmParts.map(p =>
+    `<option value="${p.id}" data-price="${p.unit_price||0}" ${p.id===partId?'selected':''}>${escapeHtml(p.name)} (${fmtNum(p.stock_qty,1)} ${p.unit||'ชิ้น'})</option>`
+  ).join('');
+  const row = document.createElement('tr');
+  row.id = `rp-row-${_repairPartRows}`;
+  row.className = 'border-b';
+  row.innerHTML = `
+    <td class="px-2 py-1.5">
+      <select onchange="onRepairPartChange(this)" class="w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-400">
+        <option value="">-- เลือกอะไหล่ --</option>${partOpts}
+      </select>
+    </td>
+    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0.01" value="${qty}" onchange="calcRepairTotal()" class="w-20 border rounded px-2 py-1 text-xs text-center" /></td>
+    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0" value="${price}" onchange="calcRepairTotal()" class="w-24 border rounded px-2 py-1 text-xs text-center rp-price" /></td>
+    <td class="px-2 py-1.5 text-center"><button onclick="this.closest('tr').remove();calcRepairTotal()" class="text-red-400 hover:text-red-600"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>`;
+  qs('#repair-parts-body')?.appendChild(row);
+  refreshIcons();
+}
+
+function onRepairPartChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const price = parseFloat(opt.dataset.price||0);
+  const priceInput = sel.closest('tr')?.querySelector('.rp-price');
+  if (priceInput) priceInput.value = price;
+  calcRepairTotal();
+}
+
+function calcRepairTotal() {
+  let partsTotal = 0;
+  qs('#repair-parts-body')?.querySelectorAll('tr').forEach(tr => {
+    const qty   = parseFloat(tr.querySelectorAll('input')[0]?.value||0)||0;
+    const price = parseFloat(tr.querySelectorAll('input')[1]?.value||0)||0;
+    partsTotal += qty * price;
+  });
+  const labor = parseFloat(qs('#repair-labor')?.value||0)||0;
+  if (qs('#repair-parts-cost')) qs('#repair-parts-cost').textContent = fmtNum(partsTotal,2) + ' ฿';
+  if (qs('#repair-total-cost')) qs('#repair-total-cost').textContent = fmtNum(partsTotal + labor,2) + ' ฿';
+}
+
+function repairFormHtml(r=null) {
+  const machineOpts = _pmMachines.filter(m=>m.is_active)
+    .map(m=>`<option value="${m.id}" ${r?.machine_id===m.id?'selected':''}>${escapeHtml(m.name)} (${m.factory||''})</option>`).join('');
+  const typeOpts = Object.entries(REPAIR_TYPES)
+    .map(([v,l])=>`<option value="${v}" ${(r?.type||'breakdown')===v?'selected':''}>${l}</option>`).join('');
+  return `<div class="space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <div class="col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร *</label>
+        <select id="repair-machine" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+          <option value="">-- เลือกเครื่องจักร --</option>${machineOpts}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ซ่อม *</label>
+        <input id="repair-date" type="date" value="${r?.repair_date||new Date().toISOString().slice(0,10)}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการซ่อม</label>
+        <select id="repair-type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">${typeOpts}</select>
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">อาการ / ปัญหาที่พบ</label>
+      <input id="repair-symptoms" type="text" value="${escapeHtml(r?.symptoms||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" placeholder="เช่น มอเตอร์ร้อน สายพานหลุด" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">สาเหตุ (Root Cause)</label>
+      <input id="repair-cause" type="text" value="${escapeHtml(r?.root_cause||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" placeholder="เช่น ลูกปืนสึกหรอ น้ำมันหมด" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">วิธีแก้ไข</label>
+      <input id="repair-action" type="text" value="${escapeHtml(r?.action_taken||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" placeholder="เช่น เปลี่ยนลูกปืน ปรับสายพาน" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ช่าง/ผู้ซ่อม</label>
+        <input id="repair-tech" type="text" value="${escapeHtml(r?.technician||currentUser?.username||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ระยะเวลาซ่อม (ชม.)</label>
+        <input id="repair-duration" type="number" step="0.5" min="0" value="${r?.duration_hours||''}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" placeholder="0" />
+      </div>
+    </div>
+    <!-- อะไหล่ที่ใช้ -->
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <label class="text-sm font-medium text-gray-700">อะไหล่ที่ใช้</label>
+        <button type="button" onclick="addRepairPartRow()" class="text-xs text-blue-600 hover:underline flex items-center gap-1"><i data-lucide="plus" class="w-3 h-3"></i>เพิ่มอะไหล่</button>
+      </div>
+      <div class="border rounded-lg overflow-hidden">
+        <table class="text-xs w-full">
+          <thead><tr class="bg-gray-50 text-gray-500">
+            <th class="px-2 py-1.5 text-left">อะไหล่</th>
+            <th class="px-2 py-1.5 text-center">จำนวน</th>
+            <th class="px-2 py-1.5 text-center">ราคา/หน่วย (฿)</th>
+            <th class="px-2 py-1.5"></th>
+          </tr></thead>
+          <tbody id="repair-parts-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ค่าใช้จ่าย -->
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ค่าแรง (฿)</label>
+        <input id="repair-labor" type="number" step="0.01" min="0" value="${r?.labor_cost||0}" onchange="calcRepairTotal()" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+      </div>
+      <div class="bg-gray-50 rounded-lg px-3 py-2 text-sm">
+        <div class="text-gray-500 text-xs">ค่าอะไหล่: <span id="repair-parts-cost">0.00 ฿</span></div>
+        <div class="font-semibold text-red-600 mt-0.5">รวม: <span id="repair-total-cost">0.00 ฿</span></div>
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+      <textarea id="repair-notes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">${escapeHtml(r?.notes||'')}</textarea>
+    </div>
+  </div>`;
+}
+
+function openAddRepairModal() {
+  _repairPartRows = 0;
+  openModal('บันทึกการซ่อม', repairFormHtml(null),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveRepair(null)" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">บันทึก</button>`,
+    '640px');
+  refreshIcons();
+}
+
+async function saveRepair(id) {
+  const machine_id = qs('#repair-machine')?.value;
+  const repair_date = qs('#repair-date')?.value;
+  if (!machine_id) { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
+  if (!repair_date) { showToast('กรุณากรอกวันที่','error'); return; }
+
+  // รวบรวมอะไหล่
+  const partRows = [];
+  let partsCost = 0;
+  let hasStockError = false;
+  qs('#repair-parts-body')?.querySelectorAll('tr').forEach(tr => {
+    const sel   = tr.querySelector('select');
+    const inputs = tr.querySelectorAll('input');
+    const partId = sel?.value;
+    const qty    = parseFloat(inputs[0]?.value||0)||0;
+    const price  = parseFloat(inputs[1]?.value||0)||0;
+    if (partId && qty > 0) {
+      const part = _pmParts.find(p => p.id === partId);
+      if (part && part.stock_qty < qty) {
+        showToast(`สต็อก "${part.name}" ไม่เพียงพอ (มี ${fmtNum(part.stock_qty,2)}, ต้องการ ${fmtNum(qty,2)})`, 'error');
+        hasStockError = true;
+      }
+      partRows.push({ part_id: partId, part_name: _pmParts.find(p=>p.id===partId)?.name||'', qty_used: qty, unit_price: price });
+      partsCost += qty * price;
+    }
+  });
+  if (hasStockError) return;
+
+  const laborCost = parseFloat(qs('#repair-labor')?.value||0)||0;
+  const data = {
+    machine_id, repair_date,
+    type:         qs('#repair-type')?.value||'breakdown',
+    symptoms:     qs('#repair-symptoms')?.value?.trim()||null,
+    root_cause:   qs('#repair-cause')?.value?.trim()||null,
+    action_taken: qs('#repair-action')?.value?.trim()||null,
+    technician:   qs('#repair-tech')?.value?.trim()||null,
+    duration_hours: parseFloat(qs('#repair-duration')?.value||0)||null,
+    labor_cost:   laborCost,
+    parts_cost:   partsCost,
+    total_cost:   laborCost + partsCost,
+    notes:        qs('#repair-notes')?.value?.trim()||null,
+    created_by:   currentUser?.username,
+  };
+
+  let repairId = id;
+  if (!id) {
+    const { data: inserted, error } = await db.from('pm_repair_logs').insert(data).select('id').single();
+    if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+    repairId = inserted.id;
+  } else {
+    const { error } = await db.from('pm_repair_logs').update(data).eq('id', id);
+    if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+    await db.from('pm_repair_parts').delete().eq('repair_id', id);
+  }
+
+  // บันทึกอะไหล่ + หักสต็อก
+  if (partRows.length) {
+    const rp = partRows.map(r => ({ ...r, repair_id: repairId }));
+    await db.from('pm_repair_parts').insert(rp);
+    // หักสต็อก
+    await Promise.all(partRows.map(async r => {
+      const part = _pmParts.find(p => p.id === r.part_id);
+      if (!part) return;
+      const newQty = (part.stock_qty||0) - r.qty_used;
+      await db.from('pm_parts').update({ stock_qty: newQty }).eq('id', r.part_id);
+      await db.from('pm_parts_stock_log').insert({
+        part_id: r.part_id, type:'out', qty: r.qty_used,
+        unit_price: r.unit_price, reference: `ซ่อม ${repair_date}`, done_by: currentUser?.username
+      });
+    }));
+  }
+
+  closeModal();
+  showToast('บันทึกการซ่อมสำเร็จ','success');
+  renderRepairPage();
+}
+
+async function openRepairDetailModal(id) {
+  const r = _pmRepairs.find(x => x.id === id);
+  if (!r) return;
+  const { data: parts } = await db.from('pm_repair_parts').select('*, pm_parts(name,unit)').eq('repair_id', id);
+  const machine = _pmMachines.find(m => m.id === r.machine_id);
+  const partsHtml = (parts||[]).length === 0 ? '<div class="text-gray-400 text-sm">ไม่มีอะไหล่</div>'
+    : (parts||[]).map(p => `<div class="flex justify-between text-sm py-1 border-b">
+        <span>${escapeHtml(p.part_name||p.pm_parts?.name||'-')}</span>
+        <span class="text-gray-600">${fmtNum(p.qty_used,2)} ${p.pm_parts?.unit||'ชิ้น'} × ${fmtNum(p.unit_price,2)} ฿ = <strong>${fmtNum(p.qty_used*p.unit_price,2)} ฿</strong></span>
+      </div>`).join('');
+  const typeBadge = r.type === 'breakdown'
+    ? `<span class="badge-overdue px-2 py-0.5 rounded-full text-xs">Breakdown</span>`
+    : r.type === 'planned'
+    ? `<span class="badge-ok px-2 py-0.5 rounded-full text-xs">แผน</span>`
+    : `<span class="badge-alert px-2 py-0.5 rounded-full text-xs">ตรวจ</span>`;
+  openModal(`รายละเอียดการซ่อม — ${escapeHtml(machine?.name||'')}`,`
+    <div class="space-y-3 text-sm">
+      <div class="flex gap-2 flex-wrap">
+        ${typeBadge}
+        <span class="text-gray-500">${fmtDate(r.repair_date)}</span>
+        ${r.technician?`<span class="text-gray-500">ช่าง: ${escapeHtml(r.technician)}</span>`:''}
+        ${r.duration_hours?`<span class="text-gray-500">ใช้เวลา ${fmtNum(r.duration_hours,1)} ชม.</span>`:''}
+      </div>
+      ${r.symptoms?`<div><span class="font-medium text-gray-700">อาการ:</span> ${escapeHtml(r.symptoms)}</div>`:''}
+      ${r.root_cause?`<div><span class="font-medium text-gray-700">สาเหตุ:</span> ${escapeHtml(r.root_cause)}</div>`:''}
+      ${r.action_taken?`<div><span class="font-medium text-gray-700">วิธีแก้ไข:</span> ${escapeHtml(r.action_taken)}</div>`:''}
+      <div class="border-t pt-2">
+        <div class="font-medium text-gray-700 mb-2">อะไหล่ที่ใช้</div>
+        ${partsHtml}
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3 grid grid-cols-3 gap-2 text-center">
+        <div><div class="text-xs text-gray-500">ค่าอะไหล่</div><div class="font-semibold">${fmtNum(r.parts_cost,2)} ฿</div></div>
+        <div><div class="text-xs text-gray-500">ค่าแรง</div><div class="font-semibold">${fmtNum(r.labor_cost,2)} ฿</div></div>
+        <div><div class="text-xs text-gray-500">รวม</div><div class="font-bold text-red-600 text-base">${fmtNum(r.total_cost,2)} ฿</div></div>
+      </div>
+      ${r.notes?`<div class="text-gray-500 text-xs">${escapeHtml(r.notes)}</div>`:''}
+    </div>`,
+    `${isManager()?`<button onclick="closeModal();openEditRepairModal('${id}')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">แก้ไข</button>`:''}
+     <button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ปิด</button>`,
+    '560px');
+}
+
+// =====================================================================
+// SECTION 14B: PM ITEMS PAGE — รายการ PM แยก Sidebar
+// =====================================================================
+async function renderPmItemsPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm">
+    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+  await loadPmData();
+
+  const activeMachines = _pmMachines.filter(m => m.is_active)
+    .sort((a,b) => (a.sort_order - b.sort_order) || (a.factory||'').localeCompare(b.factory||''));
+
+  const cards = activeMachines.map(machine => {
+    const unit  = machine.meter_type === 'km' ? 'กม.' : 'ชม.';
+    const STATUS_PRIORITY = { overdue: 0, alert: 1, ok: 2 };
+    const items = _pmItems.filter(i => i.pm_machine_id === machine.id && i.is_active)
+      .sort((a, b) => {
+        const stA = pmStatus(calcRemaining(a, machine), machine.alert_threshold || 100);
+        const stB = pmStatus(calcRemaining(b, machine), machine.alert_threshold || 100);
+        const pA  = STATUS_PRIORITY[stA] ?? 2;
+        const pB  = STATUS_PRIORITY[stB] ?? 2;
+        return pA !== pB ? pA - pB : (a.sort_order - b.sort_order);
+      });
+
+    const itemRows = items.length === 0
+      ? `<tr><td colspan="5" class="text-center py-4 text-gray-400 text-sm">ยังไม่มีรายการ PM — กด "+ เพิ่ม" เพื่อเริ่ม</td></tr>`
+      : items.map(item => {
+          const next = calcNextDue(item);
+          const rem  = calcRemaining(item, machine);
+          const st   = pmStatus(rem, machine.alert_threshold || 100);
+          const remColor = st === 'overdue' ? 'text-red-600' : st === 'alert' ? 'text-amber-600' : 'text-green-700';
+          return `<tr class="border-b hover:bg-gray-50">
+            <td class="px-3 py-2 text-sm">${escapeHtml(item.pm_type)}</td>
+            <td class="px-3 py-2 text-sm text-center">${fmtNum(item.interval_value)} ${unit}</td>
+            <td class="px-3 py-2 text-sm text-center">${fmtNum(item.last_pm_meter)} ${unit}</td>
+            <td class="px-3 py-2 text-sm text-center font-semibold">${fmtNum(next)} ${unit}</td>
+            <td class="px-3 py-2 text-sm text-center font-bold ${remColor}">${rem >= 0 ? '+' : ''}${fmtNum(rem)}</td>
+            <td class="px-3 py-2 text-center">${pmStatusBadge(st)}</td>
+            <td class="px-3 py-2 text-center">
+              <div class="flex gap-1 justify-center">
+                <button onclick="openEditItemModalFromPage('${item.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+                ${isManager()?`<button onclick="deletePmItem('${item.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+
+    return `
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+      <div class="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+        <div>
+          <span class="font-semibold text-gray-800 text-sm">${escapeHtml(machine.name)}</span>
+          <span class="ml-2 text-xs text-gray-400">${machine.factory||''} | Meter: ${fmtNum(machine.current_meter)} ${unit}</span>
+        </div>
+        ${isManager()?`<button onclick="openAddItemModalFromPage('${machine.id}')"
+          class="flex items-center gap-1 text-xs px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+          <i data-lucide="plus" class="w-3 h-3"></i>เพิ่ม
+        </button>`:''}
+      </div>
+      <div class="tbl-wrap" style="max-height:340px; overflow-y:scroll;">
+        <table class="text-sm w-full">
+          <thead><tr class="text-xs text-gray-500 bg-gray-50 border-b">
+            <th class="px-3 py-2 text-left sticky top-0 bg-gray-50 z-10">ประเภท PM</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">ระยะ</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">ล่าสุด</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">ถัดไป</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">คงเหลือ</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">สถานะ</th>
+            <th class="px-3 py-2 text-center sticky top-0 bg-gray-50 z-10">จัดการ</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('') || `<div class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">
+    ยังไม่มีเครื่องจักร <a href="#" onclick="navigateTo('pm-machines')" class="text-amber-500 underline">เพิ่มเครื่องจักร</a>
+  </div>`;
+
+  content.innerHTML = cards;
+  refreshIcons();
+}
+
+function openAddItemModalFromPage(machineId) {
+  const machine = _pmMachines.find(m => m.id === machineId);
+  const unit = machine?.meter_type === 'km' ? 'กม.' : 'ชม.';
+  openModal('เพิ่มรายการ PM — ' + escapeHtml(machine?.name||''), pmItemFormHtml(null, unit),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItemAndRefresh(null,'${machineId}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+
+function openEditItemModalFromPage(itemId) {
+  const item = _pmItems.find(i => i.id === itemId);
+  if (!item) return;
+  const machine = _pmMachines.find(m => m.id === item.pm_machine_id);
+  const unit = machine?.meter_type === 'km' ? 'กม.' : 'ชม.';
+  openModal('แก้ไขรายการ PM — ' + escapeHtml(machine?.name||''), pmItemFormHtml(item, unit),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItemAndRefresh('${itemId}','${item.pm_machine_id}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+
+async function savePmItemAndRefresh(id, machineId) {
+  await savePmItem(id, machineId);
+  // savePmItem closes modal + shows toast; reload page
+  setTimeout(() => renderPmItemsPage(), 300);
+}
+
+// =====================================================================
+// SECTION 15: MACHINES — จัดการเครื่องจักร
+// =====================================================================
+async function renderMachinesPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm">
+    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลดและซิงค์ชั่วโมง…</div>`;
+  refreshIcons();
+
+  await loadPmData();
+  await syncCurrentMeters();  // ← ซิงค์ทุกครั้งที่เปิดหน้าเครื่องจักร
+
+  const SOURCE_LABEL = {
+    production_cde:'CDE', production_propel:'Propel',
+    production_sanon1:'Sanon1', production_sanon2:'Sanon2', electric_loader:'รถตัก'
+  };
+
+  const rows = _pmMachines.length === 0
+    ? `<tr><td colspan="9" class="text-center py-10 text-gray-400">ยังไม่มีเครื่องจักร</td></tr>`
+    : _pmMachines.sort((a,b)=>(a.sort_order-b.sort_order)||(a.factory||'').localeCompare(b.factory||'')).map(m=>{
+        const itemCount = _pmItems.filter(i=>i.pm_machine_id===m.id).length;
+        const unit = m.meter_type==='km'?'กม.':'ชม.';
+        const syncLabel = (m.sync_source && m.sync_source!=='manual')
+          ? `<div class="text-xs text-green-600 flex items-center gap-0.5 justify-center mt-0.5">
+               <i data-lucide="refresh-cw" class="w-3 h-3"></i>${SOURCE_LABEL[m.sync_source]||m.sync_source}
+             </div>` : '';
+        return `<tr class="border-b hover:bg-gray-50 ${m.is_active?'':'opacity-50'}">
+          <td class="px-3 py-2 text-sm font-medium">${escapeHtml(m.name)}</td>
+          <td class="px-3 py-2 text-xs text-slate-500">${m.code||'-'}</td>
+          <td class="px-3 py-2 text-sm">${m.factory||'-'}</td>
+          <td class="px-3 py-2 text-xs">${m.category||'-'}</td>
+          <td class="px-3 py-2 text-xs">${m.brand||''} ${m.model||''}</td>
+          <td class="px-3 py-2 text-center">
+            <div class="font-semibold text-blue-600 text-sm">${fmtNum(m.current_meter)} ${unit}</div>
+            ${syncLabel}
+          </td>
+          <td class="px-3 py-2 text-sm text-center">${itemCount} รายการ</td>
+          <td class="px-3 py-2 text-center">
+            <span class="px-2 py-0.5 rounded-full text-xs ${m.is_active?'badge-ok':'badge-overdue'}">${m.is_active?'ใช้งาน':'ปิดใช้'}</span>
+          </td>
+          <td class="px-3 py-2 text-center">
+            <div class="flex items-center gap-1 justify-center">
+              <button onclick="openEditMachineModal('${m.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+              <button onclick="openPmItemsModal('${m.id}')" class="p-1 hover:bg-blue-50 rounded text-blue-600" title="รายการ PM"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
+              ${isAdmin()?`<button onclick="deleteMachine('${m.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+  content.innerHTML = `
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="font-semibold text-gray-800">เครื่องจักร PM ทั้งหมด</h2>
+      <div class="flex items-center gap-2">
+        <button onclick="syncAndRefreshMachines()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>ซิงค์ชั่วโมง
+        </button>
+        ${isManager()?`<button onclick="openAddMachineModal()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>เพิ่มเครื่องจักร
+        </button>`:''}
+      </div>
+    </div>
+    <div class="tbl-wrap table-sticky-last">
+      <table class="text-sm">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-3 py-2 text-left">ชื่อเครื่อง</th>
+          <th class="px-3 py-2 text-left">รหัส</th>
+          <th class="px-3 py-2 text-left">โรงงาน</th>
+          <th class="px-3 py-2 text-left">หมวด</th>
+          <th class="px-3 py-2 text-left">ยี่ห้อ/รุ่น</th>
+          <th class="px-3 py-2 text-center">Meter ปัจจุบัน</th>
+          <th class="px-3 py-2 text-center">รายการ PM</th>
+          <th class="px-3 py-2 text-center">สถานะ</th>
+          <th class="px-3 py-2 text-center">จัดการ</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+function openAddMachineModal() {
+  openModal('เพิ่มเครื่องจักร',machineFormHtml(null),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveMachine(null)" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก</button>`,
+    '600px');
+}
+
+function openEditMachineModal(id) {
+  const m = _pmMachines.find(x=>x.id===id);
+  if (!m) return;
+  openModal('แก้ไขเครื่องจักร',machineFormHtml(m),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveMachine('${id}')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก</button>`,
+    '600px');
+}
+
+function machineFormHtml(m) {
+  const factoryOpts = _pmFactories.map(f=>
+    `<option value="${f}" ${m?.factory===f?'selected':''}>${f}</option>`).join('');
+  const catOpts = _pmCategories.map(c=>
+    `<option value="${c}" ${m?.category===c?'selected':''}>${c}</option>`).join('');
+  return `<div class="space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <div class="col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อเครื่องจักร *</label>
+        <input id="mach-name" type="text" value="${escapeHtml(m?.name||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="เช่น CDE Screen" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสเครื่อง</label>
+        <input id="mach-code" type="text" value="${escapeHtml(m?.code||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" placeholder="เช่น CDE-SCR-01" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">โรงงาน</label>
+        <select id="mach-factory" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="">-- ไม่ระบุ --</option>${factoryOpts}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+        <select id="mach-cat" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="">-- ไม่ระบุ --</option>${catOpts}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ยี่ห้อ</label>
+        <input id="mach-brand" type="text" value="${escapeHtml(m?.brand||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">รุ่น</label>
+        <input id="mach-model" type="text" value="${escapeHtml(m?.model||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ประเภท Meter</label>
+        <select id="mach-meter-type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <option value="hours" ${m?.meter_type==='hours'||!m?'selected':''}>ชั่วโมง (ชม.)</option>
+          <option value="km" ${m?.meter_type==='km'?'selected':''}>กิโลเมตร (กม.)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">แจ้งเตือนก่อน (ชม/กม)</label>
+        <input id="mach-alert" type="number" step="1" min="0" value="${m?.alert_threshold||100}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label>
+        <input id="mach-install" type="date" value="${m?.install_date||''}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+      </div>
+    </div>
+    <!-- Dual Meter -->
+    <div class="border rounded-xl p-3 bg-teal-50 space-y-3">
+      <div class="flex items-center gap-2">
+        <i data-lucide="gauge" class="w-4 h-4 text-teal-600"></i>
+        <span class="text-sm font-medium text-teal-800">มิเตอร์ชั่วโมง</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อมิเตอร์ 1</label>
+          <input id="mach-m1-label" type="text" value="${escapeHtml(m?.meter_1_label||'ชม.เครื่องจักร')}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">เลขมิเตอร์ 1 ปัจจุบัน</label>
+          <input id="mach-meter" type="number" step="0.1" min="0" value="${m?.current_meter||0}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-teal-700 font-medium cursor-pointer">
+        <input id="mach-has-m2" type="checkbox" ${m?.has_meter_2?'checked':''}
+          onchange="toggleMeter2Fields()" class="rounded" />
+        เปิดใช้มิเตอร์ที่ 2 (เช่น ไฮโดรลิค)
+      </label>
+      <div id="meter2-fields" class="${m?.has_meter_2?'':'hidden'} grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อมิเตอร์ 2</label>
+          <input id="mach-m2-label" type="text" value="${escapeHtml(m?.meter_2_label||'ชม.ไฮโดรลิค')}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">เลขมิเตอร์ 2 ปัจจุบัน</label>
+          <input id="mach-meter2" type="number" step="0.1" min="0" value="${m?.current_meter_2||0}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+      </div>
+      <p class="text-xs text-teal-600">เลขมิเตอร์ปัจจุบันจะอัปเดตอัตโนมัติเมื่อบันทึกข้อมูลผ่านหน้า "บันทึกเลขมิเตอร์"</p>
+    </div>
+    <!-- Sync Source -->
+    <div class="border rounded-xl p-3 bg-blue-50 space-y-2">
+      <div class="flex items-center gap-2 mb-1">
+        <i data-lucide="refresh-cw" class="w-4 h-4 text-blue-600"></i>
+        <span class="text-sm font-medium text-blue-800">ดึงชั่วโมงอัตโนมัติจาก System 1</span>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">แหล่งข้อมูล</label>
+        <select id="mach-sync-source" onchange="toggleLoaderNameField()" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="manual" ${(m?.sync_source||'manual')==='manual'?'selected':''}>— กรอกเอง (ไม่ Sync) —</option>
+          <option value="production_cde"    ${m?.sync_source==='production_cde'?'selected':''}>CDE — production_cde.stop_hour</option>
+          <option value="production_propel" ${m?.sync_source==='production_propel'?'selected':''}>Propel — production_propel.stop_hour</option>
+          <option value="production_sanon1" ${m?.sync_source==='production_sanon1'?'selected':''}>Sanon1 — production_sanon1.stop_hour</option>
+          <option value="production_sanon2" ${m?.sync_source==='production_sanon2'?'selected':''}>Sanon2 — production_sanon2.stop_hour</option>
+          <option value="electric_loader"   ${m?.sync_source==='electric_loader'?'selected':''}>รถตักไฟฟ้า — electric_loader.machine_hour_stop</option>
+        </select>
+      </div>
+      <div id="loader-name-field" class="${(m?.sync_source==='electric_loader')?'':'hidden'}">
+        <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อรถตัก (loader_name)</label>
+        <input id="mach-loader-name" type="text" value="${escapeHtml(m?.sync_loader_name||'')}"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="เช่น CAT 966, Volvo L90" />
+      </div>
+      <p class="text-xs text-blue-600">เมื่อตั้งค่าแล้ว ระบบจะดึงค่าชั่วโมงล่าสุดมาอัปเดตอัตโนมัติทุกครั้งที่เปิด Dashboard</p>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+      <textarea id="mach-notes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">${escapeHtml(m?.notes||'')}</textarea>
+    </div>
+    <div>
+      <label class="flex items-center gap-2 text-sm text-gray-700">
+        <input id="mach-active" type="checkbox" ${m?.is_active!==false?'checked':''} class="rounded" />
+        เปิดใช้งาน
+      </label>
+    </div>
+  </div>`;
+}
+
+function toggleLoaderNameField() {
+  const src = qs('#mach-sync-source')?.value;
+  const field = qs('#loader-name-field');
+  if (field) field.classList.toggle('hidden', src !== 'electric_loader');
+}
+
+function toggleMeter2Fields() {
+  const checked = qs('#mach-has-m2')?.checked;
+  const fields  = qs('#meter2-fields');
+  if (fields) fields.classList.toggle('hidden', !checked);
+}
+
+async function saveMachine(id) {
+  const name     = qs('#mach-name')?.value?.trim();
+  if (!name) { showToast('กรุณากรอกชื่อเครื่องจักร','error'); return; }
+  const syncSource = qs('#mach-sync-source')?.value || 'manual';
+  const syncLoaderName = syncSource === 'electric_loader'
+    ? (qs('#mach-loader-name')?.value?.trim() || null)
+    : null;
+  const data = {
+    name,
+    code             : qs('#mach-code')?.value?.trim()||null,
+    factory          : qs('#mach-factory')?.value||null,
+    category         : qs('#mach-cat')?.value||null,
+    brand            : qs('#mach-brand')?.value?.trim()||null,
+    model            : qs('#mach-model')?.value?.trim()||null,
+    meter_type       : qs('#mach-meter-type')?.value||'hours',
+    current_meter    : parseFloat(qs('#mach-meter')?.value||'0')||0,
+    alert_threshold  : parseFloat(qs('#mach-alert')?.value||'100')||100,
+    install_date     : qs('#mach-install')?.value||null,
+    notes            : qs('#mach-notes')?.value?.trim()||null,
+    is_active        : qs('#mach-active')?.checked!==false,
+    sync_source      : syncSource,
+    sync_loader_name : syncLoaderName,
+    meter_1_label    : qs('#mach-m1-label')?.value?.trim() || 'ชม.เครื่องจักร',
+    has_meter_2      : qs('#mach-has-m2')?.checked || false,
+    meter_2_label    : qs('#mach-m2-label')?.value?.trim() || 'ชม.ไฮโดรลิค',
+    current_meter_2  : qs('#mach-has-m2')?.checked ? (parseFloat(qs('#mach-meter2')?.value||'0')||0) : null,
+  };
+  let err;
+  if (id) {
+    ({ error: err } = await db.from('pm_machines').update(data).eq('id',id));
+  } else {
+    ({ error: err } = await db.from('pm_machines').insert(data));
+  }
+  if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
+  closeModal();
+  showToast(id?'อัปเดตสำเร็จ':'เพิ่มสำเร็จ','success');
+  await loadPmData();
+  renderMachinesPage();
+}
+
+async function deleteMachine(id) {
+  const m = _pmMachines.find(x=>x.id===id);
+  if (!confirm(`ลบเครื่องจักร "${m?.name}"?\n(รายการ PM ทั้งหมดของเครื่องนี้จะถูกลบด้วย)`)) return;
+  const { error } = await db.from('pm_machines').delete().eq('id',id);
+  if (error) { showToast('ลบไม่สำเร็จ: '+error.message,'error'); return; }
+  showToast('ลบสำเร็จ','success');
+  await loadPmData();
+  renderMachinesPage();
+}
+
+// Modal: รายการ PM Items ของเครื่อง
+function openPmItemsModal(machineId) {
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  if (!machine) return;
+  const unit = machine.meter_type==='km'?'กม.':'ชม.';
+  const items = _pmItems.filter(i=>i.pm_machine_id===machineId).sort((a,b)=>a.sort_order-b.sort_order);
+
+  const itemRows = items.length===0
+    ? `<tr><td colspan="5" class="text-center py-4 text-gray-400 text-sm">ยังไม่มีรายการ PM</td></tr>`
+    : items.map(item=>`<tr class="border-b" id="item-row-${item.id}">
+        <td class="px-2 py-2 text-sm">${escapeHtml(item.pm_type)}</td>
+        <td class="px-2 py-2 text-sm text-center">${fmtNum(item.interval_value)} ${unit}</td>
+        <td class="px-2 py-2 text-sm text-center">${fmtNum(item.last_pm_meter)} ${unit}</td>
+        <td class="px-2 py-2 text-sm text-center">${fmtDateShort(item.last_pm_date)}</td>
+        <td class="px-2 py-2 text-center">
+          <button onclick="openEditItemModal('${item.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+          <button onclick="deletePmItem('${item.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+        </td>
+      </tr>`).join('');
+
+  openModal(`รายการ PM — ${escapeHtml(machine.name)}`,`
+    <div class="mb-3 flex justify-end">
+      <button onclick="openAddItemModal('${machineId}')" class="flex items-center gap-1 text-xs px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+        <i data-lucide="plus" class="w-3 h-3"></i>เพิ่มรายการ PM
+      </button>
+    </div>
+    <div class="tbl-wrap" style="max-height:360px;">
+      <table class="text-sm w-full" id="pm-items-table">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50">
+          <th class="px-2 py-2 text-left">ประเภท PM</th>
+          <th class="px-2 py-2 text-center">ระยะ (${unit})</th>
+          <th class="px-2 py-2 text-center">ล่าสุด (${unit})</th>
+          <th class="px-2 py-2 text-center">วันที่ล่าสุด</th>
+          <th class="px-2 py-2 text-center">จัดการ</th>
+        </tr></thead>
+        <tbody id="pm-items-body">${itemRows}</tbody>
+      </table>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ปิด</button>`,
+    '640px'
+  );
+}
+
+function openAddItemModal(machineId) {
+  const machine = _pmMachines.find(m=>m.id===machineId);
+  const unit    = machine?.meter_type==='km'?'กม.':'ชม.';
+  openModal('เพิ่มรายการ PM',pmItemFormHtml(null, unit),
+    `<button onclick="openPmItemsModal('${machineId}')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItem(null,'${machineId}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+
+function openEditItemModal(itemId) {
+  const item = _pmItems.find(i=>i.id===itemId);
+  if (!item) return;
+  const machine = _pmMachines.find(m=>m.id===item.pm_machine_id);
+  const unit    = machine?.meter_type==='km'?'กม.':'ชม.';
+  openModal('แก้ไขรายการ PM',pmItemFormHtml(item,unit),
+    `<button onclick="openPmItemsModal('${item.pm_machine_id}')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItem('${itemId}','${item.pm_machine_id}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+
+function pmItemFormHtml(item, unit='ชม.') {
+  const existingType = item?.pm_type || '';
+  const isCustom = existingType && !_pmTypes.includes(existingType);
+  const typeOpts = _pmTypes.map(t =>
+    `<option value="${escapeHtml(t)}" ${existingType===t?'selected':''}>${escapeHtml(t)}</option>`
+  ).join('');
+  return `<div class="space-y-3">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการ PM *</label>
+      <select id="item-type-sel" onchange="togglePmTypeInput(this)"
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">-- เลือกประเภท PM --</option>
+        ${typeOpts}
+        <option value="__custom__" ${isCustom?'selected':''}>✏️ พิมพ์เอง…</option>
+      </select>
+      <input id="item-type-custom" type="text" value="${isCustom?escapeHtml(existingType):''}"
+        placeholder="พิมพ์ประเภท PM ที่ต้องการ"
+        class="w-full border rounded-lg px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isCustom?'':'hidden'}" />
+      <input id="item-type" type="hidden" value="${escapeHtml(existingType)}" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ระยะ PM (${unit}) *</label>
+        <input id="item-interval" type="number" step="1" min="1" value="${item?.interval_value||''}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เช่น 600" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">${unit}ที่ทำ PM ล่าสุด</label>
+        <input id="item-last-meter" type="number" step="0.1" min="0" value="${item?.last_pm_meter||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ทำ PM ล่าสุด</label>
+        <input id="item-last-date" type="date" value="${item?.last_pm_date||''}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">ลำดับ</label>
+        <input id="item-order" type="number" step="1" min="0" value="${item?.sort_order||0}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+      <input id="item-notes" type="text" value="${escapeHtml(item?.notes||'')}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div>
+      <label class="flex items-center gap-2 text-sm text-gray-700">
+        <input id="item-active" type="checkbox" ${item?.is_active!==false?'checked':''} class="rounded" />เปิดใช้งาน
+      </label>
+    </div>
+  </div>`;
+}
+
+function togglePmTypeInput(sel) {
+  const custom = qs('#item-type-custom');
+  if (!custom) return;
+  if (sel.value === '__custom__') {
+    custom.classList.remove('hidden');
+    custom.focus();
+  } else {
+    custom.classList.add('hidden');
+    custom.value = '';
+  }
+}
+
+async function savePmItem(id, machineId) {
+  const sel = qs('#item-type-sel');
+  const pm_type = sel?.value === '__custom__'
+    ? (qs('#item-type-custom')?.value?.trim() || '')
+    : (sel?.value?.trim() || '');
+  const interval_val  = parseFloat(qs('#item-interval')?.value||'');
+  if (!pm_type)               { showToast('กรุณากรอกประเภท PM','error'); return; }
+  if (isNaN(interval_val)||interval_val<=0) { showToast('กรุณากรอกระยะ PM','error'); return; }
+
+  const data = {
+    pm_machine_id : machineId,
+    pm_type,
+    interval_value : interval_val,
+    last_pm_meter  : parseFloat(qs('#item-last-meter')?.value||'0')||0,
+    last_pm_date   : qs('#item-last-date')?.value||null,
+    sort_order     : parseInt(qs('#item-order')?.value||'0')||0,
+    notes          : qs('#item-notes')?.value?.trim()||null,
+    is_active      : qs('#item-active')?.checked!==false,
+  };
+
+  let err;
+  if (id) {
+    ({ error: err } = await db.from('pm_items').update(data).eq('id',id));
+  } else {
+    ({ error: err } = await db.from('pm_items').insert(data));
+  }
+  if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
+  showToast(id?'อัปเดตสำเร็จ':'เพิ่มสำเร็จ','success');
+  await loadPmData();
+  openPmItemsModal(machineId);
+}
+
+async function deletePmItem(id) {
+  const item = _pmItems.find(i=>i.id===id);
+  if (!confirm(`ลบรายการ "${item?.pm_type}"?`)) return;
+  const { error } = await db.from('pm_items').delete().eq('id',id);
+  if (error) { showToast('ลบไม่สำเร็จ','error'); return; }
+  showToast('ลบสำเร็จ','success');
+  await loadPmData();
+  openPmItemsModal(item.pm_machine_id);
+}
+
+// =====================================================================
+// SECTION 15B: PM TYPE MANAGEMENT
+// =====================================================================
+function openPmTypesModal() {
+  openModal('แก้ไขประเภท PM',`
+    <div class="space-y-3">
+      <p class="text-sm text-gray-500">กรอกประเภท PM ทีละบรรทัด (1 บรรทัด = 1 ประเภท)</p>
+      <textarea id="pmtype-input" rows="12"
+        class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder="เปลี่ยนน้ำมันเครื่อง&#10;ตรวจสอบใบตะแกรง&#10;ล้างกรอง Hydraulic"
+      >${_pmTypes.join('\n')}</textarea>
+      <p class="text-xs text-slate-400">ภาษาไทยหรืออังกฤษก็ได้ — ห้ามมีเครื่องหมายจุลภาค (,)</p>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmTypes()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '440px'
+  );
+}
+
+async function savePmTypes() {
+  const raw   = qs('#pmtype-input')?.value || '';
+  const types = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  if (types.length === 0) { showToast('กรุณากรอกประเภทอย่างน้อย 1 รายการ','error'); return; }
+  const { error } = await db.from('pm_config')
+    .upsert({ key:'pm_types', value: types.join(','), label:'ประเภทการ PM' }, { onConflict:'key' });
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  _pmTypes = types;
+  closeModal();
+  showToast('บันทึกประเภท PM สำเร็จ','success');
+  renderSettingsPage();
+}
+
+// =====================================================================
+// SECTION 15D: FACTORY MANAGEMENT
+// =====================================================================
+function openFactoriesModal() {
+  openModal('จัดการโรงงาน',`
+    <div class="space-y-3">
+      <p class="text-sm text-gray-500">กรอกชื่อโรงงานทีละบรรทัด (1 บรรทัด = 1 โรงงาน)</p>
+      <textarea id="fac-input" rows="10"
+        class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
+        placeholder="CDE&#10;Propel&#10;Sanon1&#10;Sanon2&#10;ทั่วไป"
+      >${_pmFactories.join('\n')}</textarea>
+      <p class="text-xs text-slate-400">ชื่อโรงงานเหล่านี้จะปรากฏใน dropdown ตอนเพิ่มเครื่องจักร และปุ่มกรองใน Dashboard</p>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveFactories()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">บันทึก</button>`,
+    '440px'
+  );
+}
+
+async function saveFactories() {
+  const raw  = qs('#fac-input')?.value || '';
+  const facs = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  if (facs.length === 0) { showToast('กรุณากรอกชื่อโรงงานอย่างน้อย 1 รายการ','error'); return; }
+  const { error } = await db.from('pm_config')
+    .upsert({ key:'factories', value: facs.join(','), label:'รายชื่อโรงงาน' }, { onConflict:'key' });
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  _pmFactories = facs;
+  closeModal();
+  showToast('บันทึกโรงงานสำเร็จ','success');
+  renderSettingsPage();
+}
+
+// =====================================================================
+// SECTION 15C: CATEGORY MANAGEMENT
+// =====================================================================
+function openCatModal() {
+  openModal('แก้ไขหมวดหมู่เครื่องจักร',`
+    <div class="space-y-3">
+      <p class="text-sm text-gray-500">กรอกหมวดหมู่ทีละบรรทัด (1 บรรทัด = 1 หมวด)</p>
+      <textarea id="cat-input" rows="10"
+        class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+        placeholder="screen&#10;crusher&#10;conveyor&#10;pump&#10;loader&#10;truck&#10;other"
+      >${_pmCategories.join('\n')}</textarea>
+      <p class="text-xs text-slate-400">ตัวอักษรพิมพ์เล็กหรือภาษาไทยก็ได้ — ห้ามมีเครื่องหมายจุลภาค (,)</p>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveCat()" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">บันทึก</button>`,
+    '440px'
+  );
+}
+
+async function saveCat() {
+  const raw = qs('#cat-input')?.value || '';
+  const cats = raw.split('\n').map(s=>s.trim()).filter(Boolean);
+  if (cats.length === 0) { showToast('กรุณากรอกหมวดหมู่อย่างน้อย 1 รายการ','error'); return; }
+  const value = cats.join(',');
+  const { error } = await db.from('pm_config')
+    .upsert({ key:'categories', value, label:'หมวดหมู่เครื่องจักร' }, { onConflict:'key' });
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  _pmCategories = cats;
+  closeModal();
+  showToast('บันทึกหมวดหมู่สำเร็จ','success');
+  renderSettingsPage();
+}
+
+// =====================================================================
+// SECTION 16: SETTINGS
+// =====================================================================
+async function renderSettingsPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `
+  <div class="grid md:grid-cols-2 gap-4">
+    <!-- ข้อมูลระบบ -->
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-gray-800 mb-3">ข้อมูลระบบ PM</h3>
+      <div class="space-y-2 text-sm text-gray-600">
+        <div class="flex justify-between py-1.5 border-b">
+          <span>เครื่องจักรทั้งหมด</span>
+          <strong>${_pmMachines.length} เครื่อง</strong>
+        </div>
+        <div class="flex justify-between py-1.5 border-b">
+          <span>เครื่องจักรที่ใช้งาน</span>
+          <strong>${_pmMachines.filter(m=>m.is_active).length} เครื่อง</strong>
+        </div>
+        <div class="flex justify-between py-1.5 border-b">
+          <span>รายการ PM ทั้งหมด</span>
+          <strong>${_pmItems.length} รายการ</strong>
+        </div>
+        <div class="flex justify-between py-1.5">
+          <span>Supabase Project</span>
+          <span class="text-xs text-slate-400">pcmpwkcmvsxrvbximjgf</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- คำแนะนำ -->
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <h3 class="font-semibold text-gray-800 mb-3">คำแนะนำการใช้งาน</h3>
+      <div class="space-y-2 text-sm text-gray-600">
+        <div class="flex gap-2 items-start">
+          <span class="text-red-500 mt-0.5">🔴</span>
+          <span><strong>เกินกำหนด</strong> — ระยะคงเหลือ &lt; 0 (ต้องทำ PM ทันที)</span>
+        </div>
+        <div class="flex gap-2 items-start">
+          <span class="text-amber-500 mt-0.5">🟡</span>
+          <span><strong>ใกล้ถึงกำหนด</strong> — ระยะคงเหลือ ≤ threshold ที่ตั้งไว้</span>
+        </div>
+        <div class="flex gap-2 items-start">
+          <span class="text-green-500 mt-0.5">🟢</span>
+          <span><strong>ปกติ</strong> — ยังมีระยะเหลือเพียงพอ</span>
+        </div>
+        <hr class="my-2"/>
+        <div class="text-xs text-slate-400">
+          <div>• อัปเดต Meter ปัจจุบันเมื่อเครื่องทำงานสะสมชั่วโมงเพิ่ม</div>
+          <div>• ทุกครั้งที่บันทึก PM → ระบบ update last_pm_meter อัตโนมัติ</div>
+          <div>• รายการ PM ต่อเครื่องจัดการผ่าน: เครื่องจักร → ไอคอน 📋</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- จัดการโรงงาน + ประเภท PM + หมวดหมู่ -->
+    ${isAdmin()?`
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-800">โรงงาน</h3>
+        <button onclick="openFactoriesModal()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>เพิ่ม/แก้ไขโรงงาน
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${_pmFactories.map(f=>`<span class="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm">${escapeHtml(f)}</span>`).join('')}
+      </div>
+      <p class="text-xs text-slate-400 mt-2">แสดงใน dropdown เครื่องจักร และปุ่มกรองใน Dashboard</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-800">ประเภทการ PM</h3>
+        <button onclick="openPmTypesModal()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+          <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>แก้ไขประเภท
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${_pmTypes.map(t=>`<span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">${escapeHtml(t)}</span>`).join('')}
+      </div>
+      <p class="text-xs text-slate-400 mt-2">แสดงใน dropdown ตอนเพิ่มรายการ PM ของแต่ละเครื่อง</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-800">หมวดหมู่เครื่องจักร</h3>
+        <button onclick="openCatModal()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600">
+          <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>แก้ไขหมวดหมู่
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${_pmCategories.map(c=>`<span class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">${escapeHtml(c)}</span>`).join('')}
+      </div>
+      <p class="text-xs text-slate-400 mt-2">แสดงใน dropdown ตอนเพิ่ม/แก้ไขเครื่องจักร</p>
+    </div>`:''}
+
+    <!-- ลิงก์ระบบอื่น -->
+    <div class="bg-white rounded-xl shadow-sm p-5 md:col-span-2">
+      <h3 class="font-semibold text-gray-800 mb-3">ระบบที่เกี่ยวข้อง</h3>
+      <div class="flex gap-3 flex-wrap">
+        <a href="index.html" class="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-sm hover:bg-blue-100 transition-colors">
+          <i data-lucide="factory" class="w-4 h-4"></i>System 1 — Production
+        </a>
+        <a href="inventory.html" class="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-sm hover:bg-emerald-100 transition-colors">
+          <i data-lucide="package" class="w-4 h-4"></i>System 2 — คลังวัสดุ
+        </a>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+// =====================================================================
+// SECTION 16B: SYNC CURRENT METER จาก SYSTEM 1
+// =====================================================================
+async function syncCurrentMeters() {
+  const toSync = _pmMachines.filter(m => m.is_active && m.sync_source && m.sync_source !== 'manual');
+  if (!toSync.length) return;
+
+  const PROD_TABLES = ['production_cde','production_propel','production_sanon1','production_sanon2'];
+
+  // query แต่ละแหล่งพร้อมกัน
+  const tasks = toSync.map(async machine => {
+    try {
+      let newMeter = null;
+
+      if (PROD_TABLES.includes(machine.sync_source)) {
+        // ดึง stop_hour ล่าสุด (= Hour Meter ณ สิ้นวัน)
+        const { data } = await db.from(machine.sync_source)
+          .select('stop_hour, production_date')
+          .not('stop_hour', 'is', null)
+          .order('production_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.stop_hour != null) newMeter = Number(data.stop_hour);
+
+      } else if (machine.sync_source === 'electric_loader') {
+        // ดึง machine_hour_stop ล่าสุด กรองตาม loader_name
+        let q = db.from('electric_loader')
+          .select('machine_hour_stop, work_date')
+          .not('machine_hour_stop', 'is', null)
+          .order('work_date', { ascending: false })
+          .limit(1);
+        if (machine.sync_loader_name) q = q.eq('loader_name', machine.sync_loader_name);
+        const { data } = await q.maybeSingle();
+        if (data?.machine_hour_stop != null) newMeter = Number(data.machine_hour_stop);
+      }
+
+      // อัปเดตเฉพาะถ้าค่าใหม่สูงกว่าค่าปัจจุบัน
+      if (newMeter != null && newMeter > (machine.current_meter || 0)) {
+        await db.from('pm_machines').update({ current_meter: newMeter }).eq('id', machine.id);
+        machine.current_meter = newMeter;  // อัปเดต in-memory ด้วย
+      }
+    } catch(e) { console.warn('[PM Sync]', machine?.name, e?.message || e); }
+  });
+
+  await Promise.all(tasks);
+}
+
+async function syncAndRefreshMachines() {
+  showToast('กำลังซิงค์ชั่วโมงจากระบบ 1…','info');
+  await syncCurrentMeters();
+  renderMachinesPage();
+}
+
+// =====================================================================
+// SECTION 17: DATA LOADING
+// =====================================================================
+async function loadPmData() {
+  const [{ data: machines }, { data: items }, { data: cfg }, { data: cfgTypes }, { data: cfgFac }] = await Promise.all([
+    db.from('pm_machines').select('*').order('sort_order').order('factory'),
+    db.from('pm_items').select('*').order('pm_machine_id').order('sort_order'),
+    db.from('pm_config').select('*').eq('key','categories').maybeSingle(),
+    db.from('pm_config').select('*').eq('key','pm_types').maybeSingle(),
+    db.from('pm_config').select('*').eq('key','factories').maybeSingle(),
+  ]);
+  _pmMachines = machines || [];
+  _pmItems    = items    || [];
+  if (cfg?.value)      _pmCategories = cfg.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if (cfgTypes?.value) _pmTypes      = cfgTypes.value.split(',').map(s=>s.trim()).filter(Boolean);
+  if (cfgFac?.value)   _pmFactories  = cfgFac.value.split(',').map(s=>s.trim()).filter(Boolean);
+}
+
+// =====================================================================
+// SECTION 18: METER LOG — บันทึกเลขมิเตอร์ชั่วโมง 2 ตัว
+// =====================================================================
+let _meterSelectedMachine = '';   // id เครื่องที่เลือก
+let _meterFilterMonth     = '';   // 'YYYY-MM' หรือ '' = ทั้งหมด
+
+// กรองเฉพาะเครื่องที่ต้องกรอก meter เอง:
+// 1. sync_source='manual' (ไม่มี auto-sync meter 1)
+// 2. has_meter_2=true (มิเตอร์ 2 ต้องกรอกเสมอ)
+function getMeterMachines() {
+  return _pmMachines.filter(m =>
+    m.is_active && (
+      (!m.sync_source || m.sync_source === 'manual') ||
+      m.has_meter_2 === true
+    )
+  );
+}
+
+async function renderMeterPage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+
+  const machines = getMeterMachines();
+  if (!_meterSelectedMachine || !machines.find(m => m.id === _meterSelectedMachine)) {
+    _meterSelectedMachine = machines[0]?.id || '';
+  }
+  await renderMeterTable();
+}
+
+async function renderMeterTable() {
+  const content = qs('#page-content');
+  const machines = getMeterMachines();
+  const selMachine = machines.find(m => m.id === _meterSelectedMachine);
+
+  // โหลด logs ของเครื่องที่เลือก (กรองเดือนถ้าเลือกไว้)
+  let logs = [];
+  if (_meterSelectedMachine) {
+    let q = db.from('pm_meter_logs')
+      .select('*')
+      .eq('machine_id', _meterSelectedMachine)
+      .order('log_date', { ascending: false });
+    if (_meterFilterMonth) {
+      const [fy, fm] = _meterFilterMonth.split('-');
+      const lastDay  = new Date(+fy, +fm, 0).getDate();
+      q = q.gte('log_date', `${_meterFilterMonth}-01`)
+           .lte('log_date', `${_meterFilterMonth}-${String(lastDay).padStart(2,'0')}`);
+    } else {
+      q = q.limit(90);
+    }
+    const { data } = await q;
+    logs = data || [];
+  }
+
+
+  const machineOpts = machines.map(m => {
+    const syncBadge = (!m.sync_source || m.sync_source === 'manual') ? '' : ' 🔄';
+    const m2Badge   = m.has_meter_2 ? ' +ไฮโดรลิค' : '';
+    return `<option value="${m.id}" ${m.id===_meterSelectedMachine?'selected':''}>[${m.factory||'-'}] ${escapeHtml(m.name)}${syncBadge}${m2Badge}</option>`;
+  }).join('');
+
+  // KPI cards — เลขมิเตอร์ล่าสุด
+  const latestLog = logs[0];
+  const eng  = latestLog?.engine_stop  ?? selMachine?.current_meter  ?? '-';
+  const hyd  = latestLog?.hydraulic_stop ?? selMachine?.current_meter_2 ?? '-';
+  const engLabel = selMachine?.meter_1_label || 'ชม.เครื่องจักร';
+  const hydLabel = selMachine?.meter_2_label || 'ชม.ไฮโดรลิค';
+  const hasHyd       = selMachine?.has_meter_2;
+  const isAutoSync   = selMachine?.sync_source && selMachine.sync_source !== 'manual';
+  const showMeter1   = !isAutoSync; // ไม่แสดง meter1 input ถ้า auto-sync อยู่แล้ว
+
+  // ถ้าไม่มีเครื่องจักรในรายการ
+  if (machines.length === 0) {
+    content.innerHTML = `
+    <div class="p-4 space-y-4">
+      <div class="bg-white rounded-xl shadow-sm p-10 text-center text-gray-400 space-y-3">
+        <i data-lucide="gauge" class="w-12 h-12 mx-auto opacity-30"></i>
+        <p class="text-sm">ยังไม่มีเครื่องจักรที่ต้องกรอกข้อมูลมิเตอร์</p>
+        <p class="text-xs text-gray-400">เครื่องที่ sync อัตโนมัติจาก System 1 (CDE/Propel/Sanon) จะไม่แสดงที่นี่<br>
+        กด <b>"เพิ่มเครื่องจักร"</b> ในเมนูด้านซ้ายเพื่อเพิ่มเครื่องที่ต้องบันทึกเลขมิเตอร์เอง</p>
+      </div>
+    </div>`;
+    refreshIcons(); return;
+  }
+
+  content.innerHTML = `
+  <div class="p-4 space-y-4">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="flex-1 min-w-[220px]">
+        <label class="text-xs text-gray-500 mb-1 block">เลือกเครื่องจักร
+          <span class="text-gray-400">(แสดงเฉพาะเครื่องที่ต้องกรอกข้อมูลเอง)</span>
+        </label>
+        <select onchange="_meterSelectedMachine=this.value;renderMeterTable()"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          ${machineOpts}
+        </select>
+      </div>
+      <div class="flex items-end gap-2 mt-4">
+        <button onclick="openCsvImportModal()"
+          class="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+          <i data-lucide="file-up" class="w-4 h-4"></i>นำเข้า CSV
+        </button>
+        <button onclick="openMeterLogModal()"
+          class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+          <i data-lucide="plus" class="w-4 h-4"></i>บันทึกเลขมิเตอร์
+        </button>
+      </div>
+    </div>
+    ${isAutoSync ? `
+    <div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-xs text-blue-700">
+      <i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i>
+      มิเตอร์ 1 (${engLabel}) ของเครื่องนี้ซิงค์อัตโนมัติจาก System 1 — ไม่ต้องกรอกซ้ำ
+      ${hasHyd ? 'กรอกเฉพาะมิเตอร์ 2 (' + hydLabel + ')' : ''}
+    </div>` : ''}
+
+    <!-- กรองเดือน -->
+    <div class="flex flex-wrap items-center gap-3 bg-white rounded-xl px-4 py-2.5 shadow-sm">
+      <span class="text-xs text-gray-500 font-medium">กรองเดือน:</span>
+      <select onchange="_meterFilterMonth=this.value;renderMeterTable()"
+        class="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="" ${!_meterFilterMonth?'selected':''}>— ทั้งหมด —</option>
+        ${(() => {
+          const now = new Date(); const opts = [];
+          for (let i = 0; i < 12; i++) {
+            const d  = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const thMonth = d.toLocaleString('th-TH',{month:'long'});
+            const thYear  = d.getFullYear() + 543;
+            opts.push(`<option value="${ym}" ${_meterFilterMonth===ym?'selected':''}>${thMonth} ${thYear}</option>`);
+          }
+          return opts.join('');
+        })()}
+      </select>
+    </div>
+
+    <!-- KPI -->
+    <div class="grid grid-cols-2 ${hasHyd?'md:grid-cols-4':'md:grid-cols-2'} gap-3">
+      <div class="kpi-card border-l-4 border-blue-500">
+        <div class="kpi-label">${engLabel} (ล่าสุด)</div>
+        <div class="kpi-val text-blue-600">${eng !== '-' ? Number(eng).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</div>
+        <div class="text-xs text-gray-400 mt-1">${latestLog ? latestLog.log_date : 'ยังไม่มีข้อมูล'}</div>
+      </div>
+      ${hasHyd ? `
+      <div class="kpi-card border-l-4 border-teal-500">
+        <div class="kpi-label">${hydLabel} (ล่าสุด)</div>
+        <div class="kpi-val text-teal-600">${hyd !== '-' ? Number(hyd).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</div>
+        <div class="text-xs text-gray-400 mt-1">${latestLog ? latestLog.log_date : 'ยังไม่มีข้อมูล'}</div>
+      </div>` : ''}
+      <div class="kpi-card border-l-4 border-orange-400">
+        <div class="kpi-label">${engLabel} (${_meterFilterMonth ? _meterFilterMonth.replace('-','/') : 'เดือนนี้'})</div>
+        <div class="kpi-val text-orange-500">${calcMonthHours(logs,'engine_hours',_meterFilterMonth).toLocaleString('th',{minimumFractionDigits:1})}</div>
+        <div class="text-xs text-gray-400 mt-1">ชั่วโมง</div>
+      </div>
+      ${hasHyd ? `
+      <div class="kpi-card border-l-4 border-purple-400">
+        <div class="kpi-label">${hydLabel} (${_meterFilterMonth ? _meterFilterMonth.replace('-','/') : 'เดือนนี้'})</div>
+        <div class="kpi-val text-purple-500">${calcMonthHours(logs,'hydraulic_hours',_meterFilterMonth).toLocaleString('th',{minimumFractionDigits:1})}</div>
+        <div class="text-xs text-gray-400 mt-1">ชั่วโมง</div>
+      </div>` : ''}
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div class="px-4 py-3 border-b flex items-center justify-between">
+        <h3 class="font-semibold text-gray-700 text-sm">ประวัติบันทึกเลขมิเตอร์ — ${escapeHtml(selMachine?.name||'-')}</h3>
+        <span class="text-xs text-gray-400">${logs.length} รายการล่าสุด</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="text-sm">
+          <thead>
+            <tr class="text-left text-xs text-gray-500">
+              <th class="px-3 py-2">วันที่</th>
+              <th class="px-3 py-2 text-right bg-blue-50">${engLabel} เริ่ม</th>
+              <th class="px-3 py-2 text-right bg-blue-50">${engLabel} หยุด</th>
+              <th class="px-3 py-2 text-right bg-blue-100 font-semibold">รวมชม.</th>
+              ${hasHyd ? `
+              <th class="px-3 py-2 text-right bg-teal-50">${hydLabel} เริ่ม</th>
+              <th class="px-3 py-2 text-right bg-teal-50">${hydLabel} หยุด</th>
+              <th class="px-3 py-2 text-right bg-teal-100 font-semibold">รวมชม.</th>
+              ` : ''}
+              <th class="px-3 py-2 text-center">Breakdown</th>
+              <th class="px-3 py-2 text-center">นาที</th>
+              <th class="px-3 py-2 text-center">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+          ${logs.length === 0 ? `<tr><td colspan="10" class="text-center py-10 text-gray-400">ยังไม่มีข้อมูล</td></tr>` :
+            logs.map(r => {
+              const engHrs = r.engine_hours ?? ((r.engine_stop||0)-(r.engine_start||0));
+              const hydHrs = r.hydraulic_hours ?? ((r.hydraulic_stop||0)-(r.hydraulic_start||0));
+              return `<tr class="border-b hover:bg-gray-50">
+                <td class="px-3 py-2 whitespace-nowrap font-medium">${r.log_date}</td>
+                <td class="px-3 py-2 text-right bg-blue-50/40">${r.engine_start != null ? Number(r.engine_start).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
+                <td class="px-3 py-2 text-right bg-blue-50/40">${r.engine_stop != null ? Number(r.engine_stop).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
+                <td class="px-3 py-2 text-right bg-blue-100/60 font-semibold ${engHrs>0?'text-blue-700':'text-gray-400'}">${engHrs>0?engHrs.toFixed(1):'0'}</td>
+                ${hasHyd ? `
+                <td class="px-3 py-2 text-right bg-teal-50/40">${r.hydraulic_start != null ? Number(r.hydraulic_start).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
+                <td class="px-3 py-2 text-right bg-teal-50/40">${r.hydraulic_stop != null ? Number(r.hydraulic_stop).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
+                <td class="px-3 py-2 text-right bg-teal-100/60 font-semibold ${hydHrs>0?'text-teal-700':'text-gray-400'}">${hydHrs>0?hydHrs.toFixed(1):'0'}</td>
+                ` : ''}
+                <td class="px-3 py-2 text-center">${r.breakdown_count > 0 ? `<span class="badge-overdue px-2 py-0.5 rounded-full text-xs">${r.breakdown_count} ครั้ง</span>` : '-'}</td>
+                <td class="px-3 py-2 text-center">${r.breakdown_min > 0 ? r.breakdown_min : '-'}</td>
+                <td class="px-3 py-2 text-center">
+                  <button onclick="deleteMeterLog('${r.id}')" class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50">ลบ</button>
+                </td>
+              </tr>`;
+            }).join('')
+          }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+}
+
+function calcMonthHours(logs, field, filterMonth = '') {
+  const now = new Date();
+  const ym  = filterMonth || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  // ถ้ากรองเดือนอยู่แล้ว logs ทั้งหมดอยู่ในเดือนนั้น ไม่ต้อง filter ซ้ำ
+  const rows = filterMonth ? logs : logs.filter(r => r.log_date && r.log_date.startsWith(ym));
+  return rows.reduce((s, r) => s + (Number(r[field]) || 0), 0);
+}
+
+function openMeterLogModal(prefill = null) {
+  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
+  if (!selMachine) { showToast('กรุณาเลือกเครื่องจักรก่อน','warn'); return; }
+
+  // ดึงเลขมิเตอร์ล่าสุดมาใส่ช่อง "เริ่ม" อัตโนมัติ (ถ้าไม่มี prefill)
+  const defaultEngStart = prefill?.engine_start    ?? (selMachine.current_meter   || '');
+  const defaultHydStart = prefill?.hydraulic_start ?? (selMachine.current_meter_2 || '');
+
+  const hasHyd   = selMachine.has_meter_2;
+  const engLabel = selMachine.meter_1_label || 'ชม.เครื่องจักร';
+  const hydLabel = selMachine.meter_2_label || 'ชม.ไฮโดรลิค';
+  const today    = new Date().toISOString().slice(0,10);
+
+  openModal(`บันทึกเลขมิเตอร์ — ${escapeHtml(selMachine.name)}`, `
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs font-medium text-gray-600">วันที่ *</label>
+        <input id="ml-date" type="date" value="${prefill?.log_date||today}"
+          class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+
+      <!-- เครื่องยนต์ -->
+      <div class="bg-blue-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-blue-700 uppercase tracking-wide">${engLabel}</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-600">เริ่ม</label>
+            <input id="ml-eng-start" type="number" step="0.1" placeholder="0.0"
+              value="${defaultEngStart}"
+              oninput="calcMeterHours('eng')"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">หยุด</label>
+            <input id="ml-eng-stop" type="number" step="0.1" placeholder="0.0"
+              value="${prefill?.engine_stop??''}"
+              oninput="calcMeterHours('eng')"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-blue-700 font-semibold">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+          รวม: <span id="ml-eng-hrs">0.0</span> ชั่วโมง
+        </div>
+      </div>
+
+      ${hasHyd ? `
+      <!-- ไฮโดรลิค -->
+      <div class="bg-teal-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide">${hydLabel}</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-600">เริ่ม</label>
+            <input id="ml-hyd-start" type="number" step="0.1" placeholder="0.0"
+              value="${defaultHydStart}"
+              oninput="calcMeterHours('hyd')"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">หยุด</label>
+            <input id="ml-hyd-stop" type="number" step="0.1" placeholder="0.0"
+              value="${prefill?.hydraulic_stop??''}"
+              oninput="calcMeterHours('hyd')"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-teal-700 font-semibold">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+          รวม: <span id="ml-hyd-hrs">0.0</span> ชั่วโมง
+        </div>
+      </div>` : ''}
+
+      <!-- Breakdown -->
+      <div class="bg-red-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-red-600 uppercase tracking-wide">Breakdown (ถ้ามี)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-600">จำนวนครั้ง</label>
+            <input id="ml-bd-count" type="number" min="0" placeholder="0"
+              value="${prefill?.breakdown_count??0}"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-red-400">
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">รวมนาที</label>
+            <input id="ml-bd-min" type="number" min="0" placeholder="0"
+              value="${prefill?.breakdown_min??0}"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-red-400">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs text-gray-600">หมายเหตุ</label>
+        <textarea id="ml-notes" rows="2" placeholder="(ถ้ามี)"
+          class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-gray-300">${prefill?.notes||''}</textarea>
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveMeterLog()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">บันทึก</button>`,
+    '500px'
+  );
+
+  // คำนวณชั่วโมงเริ่มต้น (กรณี prefill)
+  setTimeout(() => { calcMeterHours('eng'); calcMeterHours('hyd'); refreshIcons(); }, 50);
+}
+
+function calcMeterHours(type) {
+  const start = parseFloat(qs(`#ml-${type}-start`)?.value) || 0;
+  const stop  = parseFloat(qs(`#ml-${type}-stop`)?.value)  || 0;
+  const hrs   = Math.max(0, stop - start);
+  const el    = qs(`#ml-${type}-hrs`);
+  if (el) el.textContent = hrs.toFixed(1);
+}
+
+async function saveMeterLog() {
+  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
+  if (!selMachine) return;
+
+  const log_date     = qs('#ml-date')?.value;
+  if (!log_date) { showToast('กรุณาเลือกวันที่','error'); return; }
+
+  const engine_start    = parseFloat(qs('#ml-eng-start')?.value) || null;
+  const engine_stop     = parseFloat(qs('#ml-eng-stop')?.value)  || null;
+  const engine_hours    = (engine_stop != null && engine_start != null) ? Math.max(0, engine_stop - engine_start) : null;
+  const hydraulic_start = parseFloat(qs('#ml-hyd-start')?.value) || null;
+  const hydraulic_stop  = parseFloat(qs('#ml-hyd-stop')?.value)  || null;
+  const hydraulic_hours = (hydraulic_stop != null && hydraulic_start != null) ? Math.max(0, hydraulic_stop - hydraulic_start) : null;
+  const breakdown_count = parseInt(qs('#ml-bd-count')?.value) || 0;
+  const breakdown_min   = parseInt(qs('#ml-bd-min')?.value)   || 0;
+  const notes           = qs('#ml-notes')?.value?.trim() || null;
+
+  const payload = {
+    machine_id: _meterSelectedMachine, log_date,
+    engine_start, engine_stop, engine_hours,
+    hydraulic_start, hydraulic_stop, hydraulic_hours,
+    breakdown_count, breakdown_min, notes,
+    created_by: currentUser?.username || null
+  };
+
+  const { error } = await db.from('pm_meter_logs').insert(payload);
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+
+  // อัปเดต current_meter ใน pm_machines อัตโนมัติ
+  const updates = {};
+  if (engine_stop != null && engine_stop > (selMachine.current_meter || 0)) {
+    updates.current_meter = engine_stop;
+    selMachine.current_meter = engine_stop;
+  }
+  if (hydraulic_stop != null && hydraulic_stop > (selMachine.current_meter_2 || 0)) {
+    updates.current_meter_2 = hydraulic_stop;
+    selMachine.current_meter_2 = hydraulic_stop;
+  }
+  if (Object.keys(updates).length > 0) {
+    await db.from('pm_machines').update(updates).eq('id', _meterSelectedMachine);
+  }
+
+  closeModal();
+  showToast('บันทึกเลขมิเตอร์สำเร็จ','success');
+  renderMeterTable();
+}
+
+async function deleteMeterLog(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  const { error } = await db.from('pm_meter_logs').delete().eq('id', id);
+  if (error) { showToast('ลบไม่สำเร็จ: '+error.message,'error'); return; }
+  showToast('ลบสำเร็จ','success');
+  renderMeterTable();
+}
+
+// =====================================================================
+// SECTION 18A: CSV IMPORT — นำเข้าเลขมิเตอร์ย้อนหลัง
+// =====================================================================
+let _csvRows = [];  // preview rows
+
+function openCsvImportModal() {
+  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
+  if (!selMachine) { showToast('กรุณาเลือกเครื่องจักรก่อน','warn'); return; }
+  const hasHyd   = selMachine.has_meter_2;
+  const engLabel = selMachine.meter_1_label || 'ชม.เครื่องจักร';
+  const hydLabel = selMachine.meter_2_label || 'ชม.ไฮโดรลิค';
+
+  openModal(`นำเข้าข้อมูลมิเตอร์จาก CSV — ${escapeHtml(selMachine.name)}`, `
+    <div class="space-y-4">
+      <!-- รูปแบบ CSV -->
+      <div class="bg-slate-50 rounded-lg p-3 text-xs text-slate-600 space-y-1">
+        <p class="font-semibold text-slate-700">รูปแบบไฟล์ CSV (Header row บรรทัดแรก):</p>
+        <code class="block bg-white border rounded px-2 py-1 font-mono text-xs overflow-x-auto">
+          date,eng_start,eng_stop${hasHyd?',hyd_start,hyd_stop':''},bd_count,bd_min
+        </code>
+        <ul class="space-y-0.5 mt-1">
+          <li><b>date</b> — วันที่ (YYYY-MM-DD หรือ D/M/YYYY)</li>
+          <li><b>eng_start / eng_stop</b> — ${engLabel} เริ่ม/หยุด</li>
+          ${hasHyd ? `<li><b>hyd_start / hyd_stop</b> — ${hydLabel} เริ่ม/หยุด</li>` : ''}
+          <li><b>bd_count / bd_min</b> — Breakdown ครั้ง/นาที (ถ้าไม่มีใส่ 0)</li>
+        </ul>
+        <a href="#" onclick="downloadCsvTemplate(event)" class="text-blue-600 hover:underline">⬇ ดาวน์โหลด Template</a>
+      </div>
+
+      <!-- File input -->
+      <div>
+        <label class="text-xs font-medium text-gray-700">เลือกไฟล์ CSV</label>
+        <input id="csv-file-input" type="file" accept=".csv,.txt"
+          onchange="parseCsvFile(this)"
+          class="w-full border rounded-lg px-3 py-2 text-sm mt-1 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-purple-50 file:text-purple-700">
+      </div>
+
+      <!-- Preview -->
+      <div id="csv-preview" class="hidden">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-semibold text-gray-700">ตัวอย่างข้อมูล (<span id="csv-count">0</span> แถว)</p>
+          <span id="csv-warn" class="text-xs text-red-500 hidden"></span>
+        </div>
+        <div class="tbl-wrap max-h-48 border rounded-lg overflow-auto">
+          <table class="text-xs w-full">
+            <thead>
+              <tr class="bg-slate-100 text-left">
+                <th class="px-2 py-1">วันที่</th>
+                <th class="px-2 py-1">${engLabel} เริ่ม</th>
+                <th class="px-2 py-1">${engLabel} หยุด</th>
+                <th class="px-2 py-1">รวมชม.</th>
+                ${hasHyd ? `<th class="px-2 py-1">${hydLabel} เริ่ม</th><th class="px-2 py-1">${hydLabel} หยุด</th><th class="px-2 py-1">รวมชม.</th>` : ''}
+                <th class="px-2 py-1">BD</th>
+                <th class="px-2 py-1">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="csv-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button id="csv-import-btn" onclick="importCsvData()" disabled
+       class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+       นำเข้าข้อมูล
+     </button>`,
+    '600px'
+  );
+}
+
+function parseDateTH(str) {
+  if (!str) return null;
+  str = String(str).trim();
+
+  let d, m, y;
+
+  // แยกด้วย - หรือ /
+  const parts = str.includes('/') ? str.split('/') : str.split('-');
+  if (parts.length !== 3) return null;
+
+  const [p1, p2, p3] = parts.map(Number);
+
+  // ถ้า part แรก > 31 → year อยู่หน้า (YYYY-MM-DD หรือ YY-MM-DD)
+  if (p1 > 31) { y = p1; m = p2; d = p3; }
+  else          { d = p1; m = p2; y = p3; }  // DD/MM/YYYY หรือ DD/MM/YY
+
+  // แปลงปี
+  if (y < 100)       y = y + 1957;  // พ.ศ. 2 หลัก: 69 → 69+1957 = 2026
+  else if (y > 2500) y = y - 543;   // พ.ศ. 4 หลัก: 2569 → 2026
+  // ถ้า y <= 2500 และ >= 100 → ค.ศ. ปกติ ใช้ตรง
+
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function parseCsvFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { showToast('ไฟล์ไม่มีข้อมูล','error'); return; }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const rows = [];
+    const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
+    const hasHyd = selMachine?.has_meter_2;
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      const get  = key => {
+        const idx = headers.indexOf(key);
+        return idx >= 0 ? cols[idx]?.trim() : '';
+      };
+
+      const date = parseDateTH(get('date'));
+      if (!date) continue;
+
+      const engStart = parseFloat(get('eng_start'))  || null;
+      const engStop  = parseFloat(get('eng_stop'))   || null;
+      const hydStart = hasHyd ? (parseFloat(get('hyd_start')) || null) : null;
+      const hydStop  = hasHyd ? (parseFloat(get('hyd_stop'))  || null) : null;
+      const bdCount  = parseInt(get('bd_count'))  || 0;
+      const bdMin    = parseInt(get('bd_min'))    || 0;
+
+      const engHrs = (engStop != null && engStart != null) ? Math.max(0, engStop - engStart) : null;
+      const hydHrs = (hydStop != null && hydStart != null) ? Math.max(0, hydStop - hydStart) : null;
+
+      rows.push({ date, engStart, engStop, engHrs, hydStart, hydStop, hydHrs, bdCount, bdMin });
+    }
+
+    _csvRows = rows;
+    const body = qs('#csv-preview-body');
+    if (body) {
+      body.innerHTML = rows.map(r => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="px-2 py-1 font-medium">${r.date}</td>
+          <td class="px-2 py-1 text-right">${r.engStart ?? '-'}</td>
+          <td class="px-2 py-1 text-right">${r.engStop ?? '-'}</td>
+          <td class="px-2 py-1 text-right font-semibold text-blue-600">${r.engHrs != null ? r.engHrs.toFixed(1) : '-'}</td>
+          ${hasHyd ? `
+          <td class="px-2 py-1 text-right">${r.hydStart ?? '-'}</td>
+          <td class="px-2 py-1 text-right">${r.hydStop ?? '-'}</td>
+          <td class="px-2 py-1 text-right font-semibold text-teal-600">${r.hydHrs != null ? r.hydHrs.toFixed(1) : '-'}</td>
+          ` : ''}
+          <td class="px-2 py-1 text-center">${r.bdCount > 0 ? `<span class="badge-overdue px-1.5 rounded text-xs">${r.bdCount}</span>` : '-'}</td>
+          <td class="px-2 py-1 text-green-600">✓</td>
+        </tr>`).join('');
+    }
+    const countEl = qs('#csv-count');
+    if (countEl) countEl.textContent = rows.length;
+    qs('#csv-preview')?.classList.remove('hidden');
+    const btn = qs('#csv-import-btn');
+    if (btn) btn.disabled = rows.length === 0;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function importCsvData() {
+  if (!_csvRows.length) return;
+  const machineId = _meterSelectedMachine;
+  const btn = qs('#csv-import-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังนำเข้า…'; }
+
+  // สร้าง payload ทุกแถว
+  const payload = _csvRows.map(r => ({
+    machine_id     : machineId,
+    log_date       : r.date,
+    engine_start   : r.engStart,
+    engine_stop    : r.engStop,
+    engine_hours   : r.engHrs,
+    hydraulic_start: r.hydStart,
+    hydraulic_stop : r.hydStop,
+    hydraulic_hours: r.hydHrs,
+    breakdown_count: r.bdCount,
+    breakdown_min  : r.bdMin,
+    created_by     : currentUser?.username || null,
+  }));
+
+  // upsert ทีละ 50 แถว (ป้องกัน payload ใหญ่เกิน)
+  let imported = 0;
+  for (let i = 0; i < payload.length; i += 50) {
+    const chunk = payload.slice(i, i + 50);
+    const { error } = await db.from('pm_meter_logs')
+      .upsert(chunk, { onConflict: 'machine_id,log_date', ignoreDuplicates: false });
+    if (error) { showToast('นำเข้าผิดพลาด: '+error.message,'error'); if (btn) btn.disabled = false; return; }
+    imported += chunk.length;
+  }
+
+  // อัปเดต current_meter ด้วยค่า stop สูงสุด
+  const maxEng = Math.max(..._csvRows.map(r => r.engStop || 0).filter(v => v > 0));
+  const maxHyd = Math.max(..._csvRows.map(r => r.hydStop || 0).filter(v => v > 0));
+  const selMachine = _pmMachines.find(m => m.id === machineId);
+  const updates = {};
+  if (maxEng > (selMachine?.current_meter || 0)) { updates.current_meter = maxEng; }
+  if (maxHyd > (selMachine?.current_meter_2 || 0)) { updates.current_meter_2 = maxHyd; }
+  if (Object.keys(updates).length > 0) {
+    await db.from('pm_machines').update(updates).eq('id', machineId);
+    if (selMachine) Object.assign(selMachine, updates);
+  }
+
+  closeModal();
+  _csvRows = [];
+  showToast(`นำเข้าสำเร็จ ${imported} รายการ`,'success');
+  renderMeterTable();
+}
+
+function downloadCsvTemplate(e) {
+  e.preventDefault();
+  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
+  const hasHyd = selMachine?.has_meter_2;
+  const header = hasHyd
+    ? 'date,eng_start,eng_stop,hyd_start,hyd_stop,bd_count,bd_min'
+    : 'date,eng_start,eng_stop,bd_count,bd_min';
+  const sample = hasHyd
+    ? '2026-07-01,5760.0,5769.3,4382.3,4386.9,0,0'
+    : '2026-07-01,5760.0,5769.3,0,0';
+  const blob = new Blob([header+'\n'+sample], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href = url; a.download = 'meter_template.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// =====================================================================
+// SECTION 18B: ADD MACHINE FROM METER PAGE
+// =====================================================================
+function openAddMeterMachineModal() {
+  const factoryOpts = _pmFactories.map(f =>
+    `<option value="${f}">${f}</option>`).join('');
+
+  openModal('เพิ่มเครื่องจักร — บันทึกเลขมิเตอร์', `
+    <div class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="col-span-2">
+          <label class="text-xs font-medium text-gray-700">ชื่อเครื่องจักร *</label>
+          <input id="am-name" type="text" placeholder="เช่น รถตัก CAT 966"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-700">โรงงาน</label>
+          <select id="am-factory" class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-green-500">
+            <option value="">-- ไม่ระบุ --</option>${factoryOpts}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-700">รหัสเครื่อง</label>
+          <input id="am-code" type="text" placeholder="เช่น LOADER-01"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+      </div>
+
+      <!-- Meter 1 -->
+      <div class="border rounded-xl p-3 bg-blue-50 space-y-3">
+        <label class="flex items-center gap-2 text-sm font-semibold text-blue-800 cursor-pointer">
+          <input id="am-use-m1" type="checkbox" checked onchange="toggleAmMeter1()" class="rounded">
+          บันทึกมิเตอร์ชั่วโมง (มิเตอร์ 1)
+        </label>
+        <div id="am-m1-fields" class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-600">ชื่อมิเตอร์ 1</label>
+              <input id="am-m1-label" type="text" value="ชม.เครื่องจักร"
+                class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+              <label class="text-xs text-gray-600">เลขมิเตอร์ปัจจุบัน</label>
+              <input id="am-m1-current" type="number" step="0.1" placeholder="0.0"
+                class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">ซิงค์เลขมิเตอร์จาก System 1 (ลดการกรอกซ้ำ)</label>
+            <select id="am-sync-source" onchange="toggleAmLoaderName()"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+              <option value="manual">— กรอกเอง (ไม่ Sync) —</option>
+              <option value="production_cde">CDE — production_cde.stop_hour</option>
+              <option value="production_propel">Propel — production_propel.stop_hour</option>
+              <option value="production_sanon1">Sanon1 — production_sanon1.stop_hour</option>
+              <option value="production_sanon2">Sanon2 — production_sanon2.stop_hour</option>
+              <option value="electric_loader">รถตักไฟฟ้า — electric_loader.machine_hour_stop</option>
+            </select>
+          </div>
+          <div id="am-loader-name-field" class="hidden">
+            <label class="text-xs text-gray-600">ชื่อรถตัก (loader_name)</label>
+            <input id="am-loader-name" type="text" placeholder="เช่น CAT 966, Volvo L90"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+          </div>
+        </div>
+      </div>
+
+      <!-- Meter 2 -->
+      <div class="border rounded-xl p-3 bg-teal-50 space-y-3">
+        <label class="flex items-center gap-2 text-sm font-semibold text-teal-800 cursor-pointer">
+          <input id="am-use-m2" type="checkbox" onchange="toggleAmMeter2()" class="rounded">
+          บันทึกมิเตอร์ชั่วโมงที่ 2 (เช่น ไฮโดรลิค)
+        </label>
+        <div id="am-m2-fields" class="hidden grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-600">ชื่อมิเตอร์ 2</label>
+            <input id="am-m2-label" type="text" value="ชม.ไฮโดรลิค"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          </div>
+          <div>
+            <label class="text-xs text-gray-600">เลขมิเตอร์ปัจจุบัน</label>
+            <input id="am-m2-current" type="number" step="0.1" placeholder="0.0"
+              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs text-gray-600">แจ้งเตือนก่อนถึงรอบ PM (ชม.)</label>
+        <input id="am-alert" type="number" value="100"
+          class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-gray-300">
+      </div>
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveAddMeterMachine()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">เพิ่มเครื่องจักร</button>`,
+    '520px'
+  );
+}
+
+function toggleAmMeter1() {
+  const checked = qs('#am-use-m1')?.checked;
+  const fields  = qs('#am-m1-fields');
+  if (fields) fields.classList.toggle('hidden', !checked);
+}
+function toggleAmMeter2() {
+  const checked = qs('#am-use-m2')?.checked;
+  const fields  = qs('#am-m2-fields');
+  if (fields) fields.classList.toggle('hidden', !checked);
+}
+function toggleAmLoaderName() {
+  const src   = qs('#am-sync-source')?.value;
+  const field = qs('#am-loader-name-field');
+  if (field) field.classList.toggle('hidden', src !== 'electric_loader');
+}
+
+async function saveAddMeterMachine() {
+  const name = qs('#am-name')?.value?.trim();
+  if (!name) { showToast('กรุณากรอกชื่อเครื่องจักร','error'); return; }
+
+  const useM1      = qs('#am-use-m1')?.checked || false;
+  const useM2      = qs('#am-use-m2')?.checked || false;
+  const syncSource = useM1 ? (qs('#am-sync-source')?.value || 'manual') : 'manual';
+  const syncLoader = syncSource === 'electric_loader'
+    ? (qs('#am-loader-name')?.value?.trim() || null) : null;
+
+  const payload = {
+    name,
+    code             : qs('#am-code')?.value?.trim() || null,
+    factory          : qs('#am-factory')?.value || null,
+    meter_type       : 'hours',
+    current_meter    : useM1 ? (parseFloat(qs('#am-m1-current')?.value) || 0) : 0,
+    meter_1_label    : useM1 ? (qs('#am-m1-label')?.value?.trim() || 'ชม.เครื่องจักร') : 'ชม.เครื่องจักร',
+    sync_source      : syncSource,
+    sync_loader_name : syncLoader,
+    has_meter_2      : useM2,
+    meter_2_label    : useM2 ? (qs('#am-m2-label')?.value?.trim() || 'ชม.ไฮโดรลิค') : 'ชม.ไฮโดรลิค',
+    current_meter_2  : useM2 ? (parseFloat(qs('#am-m2-current')?.value) || 0) : null,
+    alert_threshold  : parseFloat(qs('#am-alert')?.value) || 100,
+    is_active        : true,
+  };
+
+  const { data, error } = await db.from('pm_machines').insert(payload).select().single();
+  if (error) { showToast('เพิ่มไม่สำเร็จ: '+error.message,'error'); return; }
+
+  await loadPmData();
+  _meterSelectedMachine = data.id;
+  closeModal();
+  showToast(`เพิ่ม "${name}" สำเร็จ`,'success');
+  renderMeterTable();
+}
+
+// =====================================================================
+// SECTION 19: BOOTSTRAP
+// =====================================================================
+async function bootstrap() {
+  if (await restoreSession()) {
+    if (!canAccessPmSystem()) {
+      currentUser = null;
+      try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
+      renderAccessDenied(true);
+      return;
+    }
+    await loadPmData();
+    renderShell();
+    // กู้คืนหน้าล่าสุด — ถ้าไม่มีให้ไป dashboard
+    let lastPage = 'pm-dashboard';
+    try { lastPage = sessionStorage.getItem(PAGE_KEY) || 'pm-dashboard'; } catch(_) {}
+    await navigateTo(lastPage);
+  } else {
+    renderLanding();
+  }
+}
+
+bootstrap();
+</script>
+</body>
+</html>
