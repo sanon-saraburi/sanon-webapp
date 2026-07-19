@@ -892,6 +892,10 @@ function navigateTo(pageKey, forceFullRender) {
     } catch (_) {}
   }
 
+  // อัปเดต header title ทุกครั้งที่ navigate
+  const _shellTitle = document.getElementById('shell-page-title');
+  if (_shellTitle) _shellTitle.textContent = menuLabel(pageKey, DASHBOARD_MENUS.concat(MANAGE_MENUS));
+
   // Soft navigate: ถ้า shell render แล้วและไม่ได้ force full render
   // → swap เฉพาะ page-content + อัปเดต active class ไม่ rebuild ทั้งหน้า (ไม่เด่งกลับบน)
   const pageContentEl = document.getElementById('page-content');
@@ -1506,14 +1510,14 @@ function renderAppShell() {
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </a>
-          <!-- System 3 — coming soon -->
-          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-not-allowed"
-               style="background:linear-gradient(135deg,#78716c,#a8a29e);box-shadow:0 2px 6px rgba(120,113,108,.20)">
-            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.15)">
-              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white/70"></i>
+          <!-- System 3 — PM -->
+          <a href="pm.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 2px 8px rgba(180,83,9,.30)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
             </div>
-            <span class="text-[10px] font-bold text-white/60 leading-tight">PM</span>
-          </div>
+            <span class="text-[10px] font-bold text-white leading-tight">PM</span>
+          </a>
         </div>
       </div>
       <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1 scroll-thin">
@@ -1551,7 +1555,7 @@ function renderAppShell() {
           <i data-lucide="factory" class="w-6 h-6 text-primary-600"></i>
           <span class="font-semibold text-secondary-800 text-sm">รายงานผลผลิต</span>
         </div>
-        <h1 class="hidden lg:block font-semibold text-secondary-800">${escapeHtml(menuLabel(currentPage, DASHBOARD_MENUS.concat(MANAGE_MENUS)))}</h1>
+        <h1 id="shell-page-title" class="hidden lg:block font-semibold text-secondary-800">${escapeHtml(menuLabel(currentPage, DASHBOARD_MENUS.concat(MANAGE_MENUS)))}</h1>
         <div class="flex items-center gap-3">
           <span id="session-countdown" class="hidden items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5" title="เวลาคงเหลือของเซสชัน"></span>
           <button id="approval-bell-btn" class="relative p-2 rounded-xl hover:bg-secondary-50 transition" title="รายการรออนุมัติ">
@@ -5530,9 +5534,9 @@ function openProductionForm(plantKey, editingRow) {
       production_date: document.getElementById('pf-date').value,
       raw_material: document.getElementById('pf-rawmat').value.trim() || null,
       start_hour:   numOrNull(document.getElementById('pf-start-hour').value),
-      start_minute: null,
+      start_minute: 0,
       stop_hour:    numOrNull(document.getElementById('pf-stop-hour').value),
-      stop_minute:  null,
+      stop_minute:  0,
       feed_ton:     numOrNull(document.getElementById('pf-feed-ton').value),
       breakdown_detail: document.getElementById('pf-breakdown').value.trim() || null,
       note:         document.getElementById('pf-note').value.trim() || null,
@@ -7748,7 +7752,9 @@ async function _saveApprovalEdit(plantKey, row, cfg, andApprove) {
 
   if (isProduction) {
     payload.start_hour = numOrNull2(document.getElementById('aedit-sh')?.value);
+    payload.start_minute = 0;
     payload.stop_hour = numOrNull2(document.getElementById('aedit-eh')?.value);
+    payload.stop_minute = 0;
     payload.feed_ton = numOrNull2(document.getElementById('aedit-feed')?.value);
     payload.raw_material = strOrNull(document.getElementById('aedit-rawmat')?.value);
     payload.breakdown_detail = strOrNull(document.getElementById('aedit-breakdown')?.value);
@@ -7788,7 +7794,19 @@ async function _saveApprovalEdit(plantKey, row, cfg, andApprove) {
     } else {
       // อัปเดต cache ด้วยค่าใหม่
       const idx = (_approvalsData[plantKey] || []).findIndex(r => r.id === row.id);
-      if (idx >= 0) Object.assign(_approvalsData[plantKey][idx], payload);
+      if (idx >= 0) {
+        Object.assign(_approvalsData[plantKey][idx], payload);
+        // คำนวณ runtime_hour / runtime_minute ใหม่ (mirror generated column)
+        if (isProduction) {
+          const sh = Number(payload.start_hour)||0, sm = Number(payload.start_minute)||0;
+          const eh = Number(payload.stop_hour)||0,  em = Number(payload.stop_minute)||0;
+          const totalMins = (eh*60+em) - (sh*60+sm);
+          _approvalsData[plantKey][idx].runtime_hour   = Math.max(0, Math.floor(totalMins/60));
+          _approvalsData[plantKey][idx].runtime_minute = Math.max(0, totalMins%60);
+          if (payload.feed_ton != null && totalMins > 0)
+            _approvalsData[plantKey][idx].avg_ton_per_hour = payload.feed_ton / (totalMins/60);
+        }
+      }
       showToast('บันทึกข้อมูลสำเร็จ', 'success');
     }
     renderApprovalSections(getApprovalPlantKeysForUser());
@@ -8468,7 +8486,10 @@ function renderManageReports(container) {
   document.getElementById('report-exec-pptx-btn').addEventListener('click', openExecutiveReportDialog);
   document.getElementById('report-export-csv-btn').addEventListener('click', exportReportCsv);
   document.getElementById('report-export-excel-btn').addEventListener('click', exportReportExcel);
-  document.getElementById('report-print-btn').addEventListener('click', () => window.print());
+  document.getElementById('report-print-btn').addEventListener('click', () => {
+    if (_reportState.type === 'production') printProductionReport();
+    else printOtherReport();
+  });
   document.getElementById('report-refresh-btn').addEventListener('click', loadReportData);
 
   loadReportFactoriesCache().then(() => {
@@ -8583,9 +8604,22 @@ async function loadReportData() {
     } else if (_reportState.type === 'drone') {
       let q = db.from('drone_stock').select('*, factories(name)');
       if (_reportState.factoryId !== 'all') q = q.eq('factory_id', _reportState.factoryId);
+      // กรองตาม stock_year + stock_month (drone ไม่มี date field ใช้ year*100+month แทน)
+      const _droneYMfrom = _reportState.from ? (() => { const d = new Date(_reportState.from); return d.getFullYear() * 100 + d.getMonth() + 1; })() : null;
+      const _droneYMto   = _reportState.to   ? (() => { const d = new Date(_reportState.to);   return d.getFullYear() * 100 + d.getMonth() + 1; })() : null;
       const { data, error } = await q;
       if (error) throw error;
-      rows = (data || []).map(r => Object.assign({ _factory: r.factories ? r.factories.name : '' }, r));
+      let droneData = (data || []).map(r => Object.assign({ _factory: r.factories ? r.factories.name : '' }, r));
+      // filter client-side ด้วย year*100+month
+      if (_droneYMfrom || _droneYMto) {
+        droneData = droneData.filter(r => {
+          const ym = (Number(r.stock_year) || 0) * 100 + (Number(r.stock_month) || 0);
+          if (_droneYMfrom && ym < _droneYMfrom) return false;
+          if (_droneYMto   && ym > _droneYMto)   return false;
+          return true;
+        });
+      }
+      rows = droneData;
     } else if (_reportState.type === 'sales') {
       let q = db.from('sales').select('*, factories(name)');
       if (_reportState.from) q = q.gte('sale_date', _reportState.from);
@@ -8801,6 +8835,587 @@ function renderReportTable() {
 function formatReportCell(v) {
   if (v === null || v === undefined) return '-';
   return String(v);
+}
+
+// =====================================================================
+// PRINT — รายงานการผลิต (Production Daily Report)
+// =====================================================================
+function printProductionReport() {
+  if (_reportState.type !== 'production') { window.print(); return; }
+  const allRows = _reportState.rows;
+  if (!allRows.length) { showToast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
+
+  // กำหนดคอลัมน์ yield ตาม plant
+  const PLANT_YIELD_COLS = {
+    CDE: [
+      { key: 'os_ton',                 label: 'O/S' },
+      { key: 'stone_3_4_ton',          label: 'หิน 3/4' },
+      { key: 'stone_screening_3_8_ton',label: 'หินเกล็ด' },
+      { key: 'msand_ton',              label: 'ทรายกลาง' },
+      { key: 'silk_sediment_ton',      label: 'ตะกอน Silk' },
+    ],
+    Propel: [
+      { key: 'os_ton',                 label: 'O/S' },
+      { key: 'stone_3_4_ton',          label: 'หิน 3/4' },
+      { key: 'stone_screening_3_8_ton',label: 'หินเกล็ด' },
+      { key: 'msand_ton',              label: 'ทรายกลาง' },
+      { key: 'silk_sediment_ton',      label: 'ตะกอน Silk' },
+      { key: 'stone_1_2_ton',          label: 'หิน 1/2' },
+    ],
+    Sanon1: [
+      { key: 'stone_6_8_ton',   label: 'หิน 6/8' },
+      { key: 'stone_3_4_ton',   label: 'หิน 3/4' },
+      { key: 'stone_kluk_ton',  label: 'หินคลุก' },
+      { key: 'stone_dust_ton',  label: 'ฝุ่นหิน' },
+    ],
+    Sanon2: [
+      { key: 'stone_6_8_ton',      label: 'หิน 6/8' },
+      { key: 'stone_3_4_ton',      label: 'หิน 3/4' },
+      { key: 'stone_kluk_ton',     label: 'หินคลุก' },
+      { key: 'stone_dust_ton',     label: 'ฝุ่นหิน' },
+      { key: 'stone_3_8_ton',      label: 'หิน 3/8' },
+      { key: 'stone_special2_ton', label: 'พิเศษ' },
+    ],
+  };
+
+  // Helper functions
+  const _fmtPrintDate = (s) => {
+    if (!s) return '-';
+    const d = new Date(s + 'T00:00:00');
+    if (isNaN(d)) return s;
+    return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+  };
+  const _fmtN = (v, d = 1) => {
+    const n = Number(v);
+    if (v == null || v === '' || isNaN(n) || n === 0) return '-';
+    return n.toLocaleString('th-TH', { minimumFractionDigits: d, maximumFractionDigits: d });
+  };
+  const _fmtN0 = (v) => {
+    const n = Number(v);
+    if (v == null || v === '' || isNaN(n) || n === 0) return '-';
+    return n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  };
+  const _esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // แยก rows ตาม plant
+  const plantOrder = ['CDE', 'Propel', 'Sanon1', 'Sanon2'];
+  const plantRows = {};
+  allRows.forEach(r => {
+    const p = r._plant || 'อื่นๆ';
+    if (!plantRows[p]) plantRows[p] = [];
+    plantRows[p].push(r);
+  });
+  const activePlants = plantOrder.filter(p => plantRows[p]);
+
+  // Date range label
+  const fromLabel = _reportState.from ? _fmtPrintDate(_reportState.from) : '';
+  const toLabel   = _reportState.to   ? _fmtPrintDate(_reportState.to)   : '';
+  const periodLabel = (fromLabel && toLabel) ? `${fromLabel} – ${toLabel}` : fromLabel || toLabel || 'ทั้งหมด';
+  const plantsLabel = activePlants.join(', ');
+  const printDate   = new Date().toLocaleDateString('th-TH', { day:'numeric', month:'long', year:'numeric' });
+
+  // สร้าง section ต่อ plant
+  let sectionsHtml = '';
+
+  activePlants.forEach((plant, pIdx) => {
+    const rows = plantRows[plant].slice().sort((a, b) =>
+      (a.production_date || '').localeCompare(b.production_date || ''));
+    const yieldCols = PLANT_YIELD_COLS[plant] || PLANT_YIELD_COLS.CDE;
+
+    // KPI calculations
+    const workDays    = rows.filter(r => (Number(r.runtime_hour)||0)*60 + (Number(r.runtime_minute)||0) > 0).length;
+    const totalRtHrF  = rows.reduce((s,r) => s + (Number(r.runtime_hour)||0) + (Number(r.runtime_minute)||0)/60, 0);
+    const totalFeed   = rows.reduce((s,r) => s + (Number(r.feed_ton)||0), 0);
+    const totalProd   = yieldCols.reduce((s,c) => s + rows.reduce((rs,r) => rs + (Number(r[c.key])||0), 0), 0);
+    const avgTph      = totalRtHrF > 0 ? totalFeed / totalRtHrF : 0;
+    const bdCount     = rows.filter(r => (r.breakdown_detail||'').trim()).length;
+    const noRtDays    = rows.filter(r => (Number(r.runtime_hour)||0)*60 + (Number(r.runtime_minute)||0) === 0).length;
+
+    const kpiCards = [
+      { icon: '📅', label: 'วันทั้งหมด',      value: rows.length + ' วัน',           color: '#0c2461' },
+      { icon: '⚙️', label: 'วันทำงานจริง',   value: workDays + ' วัน',              color: '#1a5276' },
+      { icon: '🔴', label: 'วันไม่ผลิต',     value: noRtDays + ' วัน',             color: '#922b21' },
+      { icon: '⏱',  label: 'Runtime รวม',    value: _fmtN(totalRtHrF,1)+' ชม.',    color: '#154360' },
+      { icon: '🪨', label: 'หินป้อนรวม',     value: _fmtN0(totalFeed)+' ตัน',      color: '#1b4f72' },
+      { icon: '📈', label: 'เฉลี่ย ตัน/ชม.', value: _fmtN(avgTph,1)+' ตัน',        color: '#0e4d92' },
+      { icon: '🔧', label: 'Breakdown',       value: bdCount + ' ครั้ง',            color: '#7b241c' },
+    ];
+
+    // Table body
+    let tbody = '';
+    let totFeed = 0, totRtMin = 0;
+    const totYield = {};
+    yieldCols.forEach(c => { totYield[c.key] = 0; });
+
+    rows.forEach((r, idx) => {
+      const rtMins = (Number(r.runtime_hour)||0)*60 + (Number(r.runtime_minute)||0);
+      const isRestDay = rtMins === 0;
+      const rtStr = rtMins > 0 ? `${Math.floor(rtMins/60)}ชม.${rtMins%60 > 0 ? (rtMins%60)+'น.' : ''}` : '-';
+
+      totFeed   += Number(r.feed_ton)||0;
+      totRtMin  += (Number(r.runtime_hour)||0)*60 + (Number(r.runtime_minute)||0);
+      yieldCols.forEach(c => { totYield[c.key] += Number(r[c.key])||0; });
+
+      const rowCls = isRestDay ? 'rest-day' : (idx%2===1 ? 'alt-row' : '');
+      tbody += `<tr class="${rowCls}">
+        <td class="tc">${idx+1}</td>
+        <td class="nowrap">${_fmtPrintDate(r.production_date)}</td>
+        <td>${_esc(r.raw_material||'-')}</td>
+        <td class="tc">${rtStr}</td>
+        <td class="tr">${Number(r.avg_ton_per_hour)>0 ? _fmtN(r.avg_ton_per_hour,1) : '-'}</td>
+        <td class="tr">${_fmtN0(r.feed_ton)}</td>
+        ${yieldCols.map(c => `<td class="tr">${_fmtN0(r[c.key])}</td>`).join('')}
+        <td class="bd-cell">${_esc(r.breakdown_detail||'')}</td>
+      </tr>`;
+    });
+
+    // Grand Total row
+    const totRtHr2 = Math.floor(totRtMin/60);
+    const totRtMn2 = totRtMin % 60;
+    const totRtStr = totRtMin > 0 ? `${totRtHr2}ชม.${totRtMn2>0?totRtMn2+'น.':''}` : '-';
+    const totRtHrF2 = totRtMin / 60;
+    const totAvg   = totRtHrF2 > 0 ? totFeed / totRtHrF2 : 0;
+
+    tbody += `<tr class="grand-total">
+      <td colspan="2" class="tc">Grand Total</td>
+      <td></td>
+      <td class="tc">${totRtStr}</td>
+      <td class="tr">${_fmtN(totAvg,1)}</td>
+      <td class="tr">${_fmtN0(totFeed)}</td>
+      ${yieldCols.map(c => `<td class="tr">${_fmtN0(totYield[c.key])}</td>`).join('')}
+      <td></td>
+    </tr>`;
+
+    sectionsHtml += `
+      ${pIdx > 0 ? '<div class="page-break"></div>' : ''}
+      <div class="plant-section">
+        <div class="plant-header">
+          <span class="plant-badge">${_esc(plant)}</span>
+          <span class="plant-period">${rows.length} วัน &nbsp;|&nbsp; วันทำงาน <strong>${workDays}</strong> วัน &nbsp;|&nbsp; ไม่ผลิต <strong>${noRtDays}</strong> วัน</span>
+        </div>
+        <div class="kpi-grid">
+          ${kpiCards.map(k => `
+            <div class="kpi-card" style="border-top:3px solid ${k.color}">
+              <div class="kpi-icon">${k.icon}</div>
+              <div class="kpi-label">${k.label}</div>
+              <div class="kpi-value" style="color:${k.color}">${k.value}</div>
+            </div>`).join('')}
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="w-no">#</th>
+                <th class="w-date">วันที่</th>
+                <th>วัตถุดิบ</th>
+                <th class="w-rt">Runtime<br>(ชม./น.)</th>
+                <th class="w-num">เฉลี่ย<br>ตัน/ชม.</th>
+                <th class="w-num">หินป้อน<br>(ตัน)</th>
+                ${yieldCols.map(c => `<th class="w-num">${_esc(c.label)}</th>`).join('')}
+                <th class="w-bd">Breakdown</th>
+              </tr>
+            </thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>`;
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>รายงานการผลิต — ${_esc(plantsLabel)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Kanit',sans-serif;font-size:9pt;color:#1a1a2e;background:#fff}
+
+    /* --- HEADER --- */
+    .report-header{
+      background:linear-gradient(135deg,#0c1e40 0%,#1a3a6b 60%,#0d2b5e 100%);
+      color:#fff;padding:16px 24px;
+      display:flex;align-items:center;justify-content:space-between;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .hdr-company{font-size:9pt;font-weight:300;opacity:.8;letter-spacing:.5px}
+    .hdr-title{font-size:15pt;font-weight:700;margin:3px 0}
+    .hdr-sub{font-size:8.5pt;font-weight:300;opacity:.75}
+    .hdr-right{text-align:right;font-size:8pt;opacity:.85;line-height:1.7}
+    .hdr-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+      border-radius:6px;padding:3px 10px;font-size:7.5pt;margin-top:5px;display:inline-block}
+
+    /* --- BODY --- */
+    .report-body{padding:14px 20px}
+    .plant-section{margin-bottom:16px}
+    .plant-header{display:flex;align-items:center;gap:12px;
+      margin-bottom:10px;border-bottom:2px solid #1a3a6b;padding-bottom:6px;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .plant-badge{background:#1a3a6b;color:#fff;font-weight:700;font-size:10.5pt;
+      padding:3px 14px;border-radius:20px;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .plant-period{font-size:8.5pt;color:#555}
+
+    /* --- KPI CARDS --- */
+    .kpi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-bottom:10px}
+    .kpi-card{border:1px solid #e0e8f0;border-radius:8px;padding:7px 5px;
+      text-align:center;background:#f8fafc;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .kpi-icon{font-size:12pt;margin-bottom:1px}
+    .kpi-label{font-size:6.5pt;color:#666;margin-bottom:2px;line-height:1.3}
+    .kpi-value{font-size:10.5pt;font-weight:700}
+
+    /* --- TABLE --- */
+    .tbl-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:8pt}
+    thead tr{background:#0c1e40;color:#fff;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    thead th{padding:5px 4px;text-align:center;border:1px solid #2a4a7f;
+      font-weight:600;white-space:nowrap;font-size:7.5pt}
+    tbody td{padding:4px 4px;border:1px solid #dde4f0;vertical-align:middle}
+    tbody tr.alt-row{background:#f4f7fb}
+    tbody tr.rest-day{background:#fde8e8 !important;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    tbody tr.rest-day td{color:#b91c1c}
+    tr.grand-total{background:#0c1e40 !important;color:#fff !important;font-weight:700;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    tr.grand-total td{border:1px solid #2a4a7f}
+
+    /* col widths */
+    .w-no{width:28px}
+    .w-date{width:66px}
+    .w-rt{width:56px}
+    .w-num{width:52px}
+    .w-bd{min-width:80px}
+    .tc{text-align:center}
+    .tr{text-align:right}
+    .nowrap{white-space:nowrap}
+    .bd-cell{font-size:7.5pt;color:#7b1c1c}
+
+    /* --- FOOTER --- */
+    .report-footer{padding:6px 20px 14px;display:flex;justify-content:space-between;
+      font-size:7pt;color:#888;border-top:1px solid #ddd;margin-top:8px}
+
+    /* --- PRINT --- */
+    @media print{
+      body{font-size:8.5pt}
+      .page-break{page-break-before:always}
+      @page{margin:8mm;size:A4 landscape}
+      *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+    }
+  </style>
+</head>
+<body>
+<div class="report-header">
+  <div>
+    <div class="hdr-company">บริษัท สานนท์ จำกัด | โรงโม่หิน-เครื่องล้างหิน จ.สระบุรี</div>
+    <div class="hdr-title">ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</div>
+    <div class="hdr-sub">Production Daily Report</div>
+  </div>
+  <div class="hdr-right">
+    <div>หน่วยผลิต: <strong>${_esc(plantsLabel)}</strong></div>
+    <div>ช่วงเวลา: <strong>${_esc(periodLabel)}</strong></div>
+    <div class="hdr-badge">พิมพ์: ${_esc(printDate)}</div>
+  </div>
+</div>
+
+<div class="report-body">
+  ${sectionsHtml}
+</div>
+
+<div class="report-footer">
+  <span>* แถวสีแดงอ่อน = วันไม่มี Runtime (วันหยุด / ไม่ผลิต)</span>
+  <span>ระบบรายงานผลการผลิต | บริษัท สานนท์ จำกัด</span>
+</div>
+
+<script>
+  if (document.fonts) {
+    document.fonts.ready.then(() => window.print());
+  } else {
+    setTimeout(() => window.print(), 800);
+  }
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=800');
+  if (!win) { showToast('ป๊อปอัปถูกบล็อก กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้', 'error'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
+// =====================================================================
+// PRINT — รายงานประเภทอื่น (Drone / Sales / Loader / Water)
+// =====================================================================
+function printOtherReport() {
+  const type  = _reportState.type;
+  const allRows = _reportState.rows;
+  if (!allRows.length) { showToast('ไม่มีข้อมูลให้พิมพ์', 'warning'); return; }
+
+  // Helpers
+  const _esc   = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const _fmtN  = (v,d=1) => { const n=Number(v); if(v==null||v===''||isNaN(n)||n===0) return '-'; return n.toLocaleString('th-TH',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+  const _fmtN0 = v => { const n=Number(v); if(v==null||v===''||isNaN(n)||n===0) return '-'; return n.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0}); };
+  const _fmtD  = s => { if(!s) return '-'; const d=new Date(s+'T00:00:00'); return isNaN(d)?s:d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+  const _sum   = (arr,k) => arr.reduce((s,r)=>s+(Number(r[k])||0),0);
+  const _uniq  = (arr,k) => new Set(arr.map(r=>r[k]).filter(Boolean)).size;
+  const fromLabel  = _reportState.from ? _fmtD(_reportState.from) : '';
+  const toLabel    = _reportState.to   ? _fmtD(_reportState.to)   : '';
+  const periodLabel = (fromLabel&&toLabel) ? `${fromLabel} – ${toLabel}` : fromLabel||toLabel||'ทั้งหมด';
+  const printDate  = new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+
+  // ─── กำหนด KPI + Table ตาม type ───────────────────────────────────
+  let reportLabel = '', kpiCards = [], tableHtml = '';
+
+  // ── DRONE ──────────────────────────────────────────────────────────
+  if (type === 'drone') {
+    reportLabel = 'รายงานสต๊อคหินบินโดรน';
+    const totVol = _sum(allRows,'volume_cum'), totTon = _sum(allRows,'ton_amount');
+    kpiCards = [
+      { icon:'📦', label:'จำนวนรายการ',    value:allRows.length+' รายการ', color:'#0c2461' },
+      { icon:'📐', label:'ปริมาณรวม',       value:_fmtN(totVol,2)+' ลบ.ม.', color:'#1a5276' },
+      { icon:'🪨', label:'น้ำหนักรวม',      value:_fmtN0(totTon)+' ตัน',   color:'#154360' },
+    ];
+    const rows = allRows.slice().sort((a,b)=>(String(a._factory||'')).localeCompare(String(b._factory||''),'th'));
+    let totV=0, totT=0, tbody='';
+    rows.forEach((r,i)=>{
+      totV+=Number(r.volume_cum)||0; totT+=Number(r.ton_amount)||0;
+      tbody+=`<tr class="${i%2?'alt-row':''}">
+        <td class="tc">${i+1}</td><td>${_esc(r.stone_type)}</td>
+        <td class="tr">${_fmtN(r.volume_cum,2)}</td><td class="tr">${_fmtN(r.bulk_density,3)}</td>
+        <td class="tr">${_fmtN0(r.ton_amount)}</td><td>${_esc(r._factory)}</td>
+        <td class="tc">${_esc(r.stock_month)}</td><td class="tc">${_esc(r.stock_year)}</td>
+        <td class="tc status-${r.status}">${_esc(r.status)}</td>
+      </tr>`;
+    });
+    tbody+=`<tr class="grand-total"><td colspan="2" class="tc">Grand Total</td>
+      <td class="tr">${_fmtN(totV,2)}</td><td></td><td class="tr">${_fmtN0(totT)}</td>
+      <td colspan="4"></td></tr>`;
+    tableHtml=`<table><thead><tr>
+      <th class="w-no">#</th><th>ชนิดหิน</th><th class="w-num">ลบ.ม.</th>
+      <th class="w-num">ถพ.</th><th class="w-num">ตัน</th><th>โรงงาน</th>
+      <th class="w-sm">เดือน</th><th class="w-sm">ปี</th><th class="w-sm">สถานะ</th>
+    </tr></thead><tbody>${tbody}</tbody></table>`;
+
+  // ── SALES ──────────────────────────────────────────────────────────
+  } else if (type === 'sales') {
+    reportLabel = 'รายงานยอดขาย';
+    const totTon = _sum(allRows,'quantity_ton'), uniqDays = _uniq(allRows,'sale_date');
+    const byType = {};
+    allRows.forEach(r=>{ const k=r.stone_type||'-'; byType[k]=(byType[k]||0)+(Number(r.quantity_ton)||0); });
+    kpiCards = [
+      { icon:'📅', label:'จำนวนวัน',       value:uniqDays+' วัน',         color:'#0c2461' },
+      { icon:'📋', label:'จำนวนรายการ',    value:allRows.length+' รายการ', color:'#1a5276' },
+      { icon:'🪨', label:'ปริมาณรวม',      value:_fmtN0(totTon)+' ตัน',   color:'#154360' },
+      ...Object.entries(byType).slice(0,4).map(([k,v],i)=>({
+        icon:'📊', label:k, value:_fmtN0(v)+' ตัน',
+        color:['#1b4f72','#0e4d92','#145a8b','#0a3d62'][i]||'#1b4f72'
+      })),
+    ];
+    const rows = allRows.slice().sort((a,b)=>(a.sale_date||'').localeCompare(b.sale_date||''));
+    let totQ=0, tbody='';
+    rows.forEach((r,i)=>{
+      totQ+=Number(r.quantity_ton)||0;
+      tbody+=`<tr class="${i%2?'alt-row':''}">
+        <td class="tc">${i+1}</td><td class="nowrap">${_fmtD(r.sale_date)}</td>
+        <td>${_esc(r._factory)}</td><td>${_esc(r.stone_type)}</td>
+        <td class="tr">${_fmtN0(r.quantity_ton)}</td><td>${_esc(r.note)}</td>
+      </tr>`;
+    });
+    tbody+=`<tr class="grand-total"><td colspan="4" class="tc">Grand Total</td>
+      <td class="tr">${_fmtN0(totQ)}</td><td></td></tr>`;
+    tableHtml=`<table><thead><tr>
+      <th class="w-no">#</th><th class="w-date">วันที่</th><th>โรงงาน</th>
+      <th>ชนิดหิน</th><th class="w-num">ปริมาณ(ตัน)</th><th>หมายเหตุ</th>
+    </tr></thead><tbody>${tbody}</tbody></table>`;
+
+  // ── LOADER (รายการ) ────────────────────────────────────────────────
+  } else if (type === 'loader') {
+    reportLabel = 'รายงานรถตักไฟฟ้า';
+    const totMH   = allRows.reduce((s,r)=>s+_getMH_r(r),0);
+    const totKW   = _sum(allRows,'charge_kw'), totCost = _sum(allRows,'electric_cost_baht');
+    const uniqDays = _uniq(allRows,'work_date');
+    kpiCards = [
+      { icon:'📅', label:'จำนวนวัน',        value:uniqDays+' วัน',         color:'#0c2461' },
+      { icon:'⏱',  label:'รวมชั่วโมงทำงาน', value:_fmtN(totMH,1)+' ชม.',  color:'#1a5276' },
+      { icon:'⚡', label:'ชาร์จรวม',         value:_fmtN(totKW,1)+' KW',   color:'#1b4f72' },
+      { icon:'💰', label:'ค่าไฟรวม',         value:_fmtN0(totCost)+' บาท', color:'#7b241c' },
+    ];
+    const rows = allRows.slice().sort((a,b)=>(a.work_date||'').localeCompare(b.work_date||''));
+    let tMH=0,tKW=0,tCost=0, tbody='';
+    rows.forEach((r,i)=>{
+      const mh=_getMH_r(r); tMH+=mh; tKW+=Number(r.charge_kw)||0; tCost+=Number(r.electric_cost_baht)||0;
+      tbody+=`<tr class="${i%2?'alt-row':''}">
+        <td class="tc">${i+1}</td><td class="nowrap">${_fmtD(r.work_date)}</td>
+        <td>${_esc(r.loader_name)}</td><td class="tc">${_esc(r.total_work_time)||'-'}</td>
+        <td class="tr">${_fmtN(mh,2)}</td>
+        <td class="tr">${_fmtN(r.charge_kw,1)}</td><td class="tr">${_fmtN0(r.electric_cost_baht)}</td>
+        <td>${_esc(r._factory)}</td><td>${_esc(r.note)}</td>
+      </tr>`;
+    });
+    tbody+=`<tr class="grand-total"><td colspan="4" class="tc">Grand Total</td>
+      <td class="tr">${_fmtN(tMH,2)}</td>
+      <td class="tr">${_fmtN(tKW,1)}</td><td class="tr">${_fmtN0(tCost)}</td>
+      <td colspan="2"></td></tr>`;
+    tableHtml=`<table><thead><tr>
+      <th class="w-no">#</th><th class="w-date">วันที่</th><th>รถตัก</th>
+      <th class="w-rt">เวลาทำงาน</th><th class="w-num">ชม.</th>
+      <th class="w-num">KW</th><th class="w-num">ค่าไฟ(บาท)</th>
+      <th>โรงงาน</th><th>หมายเหตุ</th>
+    </tr></thead><tbody>${tbody}</tbody></table>`;
+
+  // ── LOADER DAILY ───────────────────────────────────────────────────
+  } else if (type === 'loader_daily') {
+    reportLabel = 'รายงานรถตักไฟฟ้า (รายวันต่อคัน)';
+    const totMH = allRows.reduce((s,r)=>s+_getMH_r(r),0);
+    const totKW = _sum(allRows,'charge_kw'), totCost = _sum(allRows,'electric_cost_baht');
+    kpiCards = [
+      { icon:'🚜', label:'จำนวนรถตัก',     value:[...new Set(allRows.map(r=>r.loader_name).filter(Boolean))].length+' คัน', color:'#0c2461' },
+      { icon:'⏱',  label:'รวมชั่วโมงทำงาน',value:_fmtN(totMH,1)+' ชม.',  color:'#1a5276' },
+      { icon:'⚡', label:'ชาร์จรวม',        value:_fmtN(totKW,1)+' KW',   color:'#1b4f72' },
+      { icon:'💰', label:'ค่าไฟรวม',        value:_fmtN0(totCost)+' บาท', color:'#7b241c' },
+    ];
+    // กลุ่มตาม loader_name
+    const loaderNames = [...new Set(allRows.map(r=>r.loader_name).filter(Boolean))].sort();
+    let sections = '';
+    loaderNames.forEach((ln,li) => {
+      const lRows = allRows.filter(r=>r.loader_name===ln);
+      const byDate = {};
+      lRows.forEach(r=>{ const dt=r.work_date; if(!byDate[dt]) byDate[dt]={mh:0,kw:0,cost:0}; byDate[dt].mh+=_getMH_r(r); byDate[dt].kw+=Number(r.charge_kw)||0; byDate[dt].cost+=Number(r.electric_cost_baht)||0; });
+      const dates=Object.keys(byDate).sort();
+      let tMH=0,tKW=0,tCost=0,tbody='';
+      dates.forEach((dt,i)=>{ const {mh,kw,cost}=byDate[dt]; tMH+=mh;tKW+=kw;tCost+=cost;
+        tbody+=`<tr class="${i%2?'alt-row':''}"><td class="tc">${i+1}</td><td class="nowrap">${_fmtD(dt)}</td><td class="tr">${_fmtN(mh,2)}</td><td class="tr">${mh>0?_fmtN(kw/mh,2):'-'}</td><td class="tr">${_fmtN(kw,1)}</td><td class="tr">${_fmtN0(cost)}</td></tr>`;
+      });
+      tbody+=`<tr class="grand-total"><td colspan="2" class="tc">Grand Total</td><td class="tr">${_fmtN(tMH,2)}</td><td class="tr">${tMH>0?_fmtN(tKW/tMH,2):'-'}</td><td class="tr">${_fmtN(tKW,1)}</td><td class="tr">${_fmtN0(tCost)}</td></tr>`;
+      sections+=`${li>0?'<div class="page-break"></div>':''}
+        <div class="plant-section">
+          <div class="plant-header"><span class="plant-badge">🚜 ${_esc(ln)}</span><span class="plant-period">${dates.length} วัน</span></div>
+          <table><thead><tr><th class="w-no">#</th><th class="w-date">วันที่</th><th class="w-num">ชม.ทำงาน</th><th class="w-num">KW/Hr</th><th class="w-num">KW รวม</th><th class="w-num">ค่าไฟ(บาท)</th></tr></thead><tbody>${tbody}</tbody></table>
+        </div>`;
+    });
+    tableHtml = sections;
+
+  // ── WATER ──────────────────────────────────────────────────────────
+  } else if (type === 'water') {
+    reportLabel = 'รายงานน้ำบาดาล';
+    const totCum = _sum(allRows,'usage_cum'), uniqDays = _uniq(allRows,'usage_date');
+    kpiCards = [
+      { icon:'📅', label:'จำนวนวัน',      value:uniqDays+' วัน',          color:'#0c2461' },
+      { icon:'📋', label:'จำนวนรายการ',   value:allRows.length+' รายการ', color:'#0e6655' },
+      { icon:'💧', label:'ปริมาณรวม',     value:_fmtN(totCum,2)+' ลบ.ม.', color:'#1a5276' },
+    ];
+    const rows = allRows.slice().sort((a,b)=>(a.usage_date||'').localeCompare(b.usage_date||''));
+    let tCum=0, tbody='';
+    rows.forEach((r,i)=>{ tCum+=Number(r.usage_cum)||0;
+      tbody+=`<tr class="${i%2?'alt-row':''}">
+        <td class="tc">${i+1}</td><td class="nowrap">${_fmtD(r.usage_date)}</td>
+        <td class="tr">${_fmtN(r.meter_start,2)}</td><td class="tr">${_fmtN(r.meter_stop,2)}</td>
+        <td class="tr">${_fmtN(r.usage_cum,2)}</td><td>${_esc(r.location)}</td><td>${_esc(r.note)}</td>
+      </tr>`;
+    });
+    tbody+=`<tr class="grand-total"><td colspan="4" class="tc">Grand Total</td>
+      <td class="tr">${_fmtN(tCum,2)}</td><td colspan="2"></td></tr>`;
+    tableHtml=`<table><thead><tr>
+      <th class="w-no">#</th><th class="w-date">วันที่</th>
+      <th class="w-num">มาตรเริ่ม</th><th class="w-num">มาตรหยุด</th>
+      <th class="w-num">ปริมาณ(ลบ.ม.)</th><th>ตำแหน่ง</th><th>หมายเหตุ</th>
+    </tr></thead><tbody>${tbody}</tbody></table>`;
+
+  } else {
+    window.print(); return;
+  }
+
+  // ─── Build KPI grid HTML ───────────────────────────────────────────
+  const kpiGridHtml = kpiCards.length ? `
+    <div class="kpi-grid" style="grid-template-columns:repeat(${Math.min(kpiCards.length,7)},1fr)">
+      ${kpiCards.map(k=>`
+        <div class="kpi-card" style="border-top:3px solid ${k.color}">
+          <div class="kpi-icon">${k.icon}</div>
+          <div class="kpi-label">${k.label}</div>
+          <div class="kpi-value" style="color:${k.color}">${k.value}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  // ─── Shared CSS (same as printProductionReport) ────────────────────
+  const sharedCss = `
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Kanit',sans-serif;font-size:9pt;color:#1a1a2e;background:#fff}
+    .report-header{background:linear-gradient(135deg,#0c1e40 0%,#1a3a6b 60%,#0d2b5e 100%);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .hdr-company{font-size:9pt;font-weight:300;opacity:.8;letter-spacing:.5px}
+    .hdr-title{font-size:15pt;font-weight:700;margin:3px 0}
+    .hdr-sub{font-size:8.5pt;font-weight:300;opacity:.75}
+    .hdr-right{text-align:right;font-size:8pt;opacity:.85;line-height:1.7}
+    .hdr-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:3px 10px;font-size:7.5pt;margin-top:5px;display:inline-block}
+    .report-body{padding:14px 20px}
+    .plant-section{margin-bottom:16px}
+    .plant-header{display:flex;align-items:center;gap:12px;margin-bottom:10px;border-bottom:2px solid #1a3a6b;padding-bottom:6px}
+    .plant-badge{background:#1a3a6b;color:#fff;font-weight:700;font-size:10.5pt;padding:3px 14px;border-radius:20px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .plant-period{font-size:8.5pt;color:#555}
+    .kpi-grid{display:grid;gap:7px;margin-bottom:10px}
+    .kpi-card{border:1px solid #e0e8f0;border-radius:8px;padding:7px 5px;text-align:center;background:#f8fafc;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .kpi-icon{font-size:12pt;margin-bottom:1px}
+    .kpi-label{font-size:6.5pt;color:#666;margin-bottom:2px;line-height:1.3}
+    .kpi-value{font-size:10.5pt;font-weight:700}
+    table{width:100%;border-collapse:collapse;font-size:8pt}
+    thead tr{background:#0c1e40;color:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    thead th{padding:5px 4px;text-align:center;border:1px solid #2a4a7f;font-weight:600;white-space:nowrap;font-size:7.5pt}
+    tbody td{padding:4px 4px;border:1px solid #dde4f0;vertical-align:middle}
+    tbody tr.alt-row{background:#f4f7fb}
+    tr.grand-total{background:#0c1e40!important;color:#fff!important;font-weight:700;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    tr.grand-total td{border:1px solid #2a4a7f}
+    td.status-approved{color:#065f46;font-weight:600}
+    td.status-pending{color:#92400e;font-weight:600}
+    .w-no{width:28px}.w-date{width:66px}.w-rt{width:56px}.w-num{width:56px}.w-sm{width:44px}
+    .tc{text-align:center}.tr{text-align:right}.nowrap{white-space:nowrap}
+    .report-footer{padding:6px 20px 14px;display:flex;justify-content:space-between;font-size:7pt;color:#888;border-top:1px solid #ddd;margin-top:8px}
+    .page-break{page-break-before:always}
+    @media print{body{font-size:8.5pt}.page-break{page-break-before:always}@page{margin:8mm;size:A4 landscape}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}`;
+
+  const bodyContent = type === 'loader_daily'
+    ? `<div class="report-body">${kpiGridHtml}${tableHtml}</div>`
+    : `<div class="report-body">
+        <div class="plant-section">
+          <div class="plant-header"><span class="plant-badge">${_esc(reportLabel)}</span><span class="plant-period">${allRows.length} รายการ | ช่วงเวลา ${_esc(periodLabel)}</span></div>
+          ${kpiGridHtml}
+          <div class="tbl-wrap">${tableHtml}</div>
+        </div>
+       </div>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>${_esc(reportLabel)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>${sharedCss}</style>
+</head>
+<body>
+<div class="report-header">
+  <div>
+    <div class="hdr-company">บริษัท สานนท์ จำกัด | โรงโม่หิน-เครื่องล้างหิน จ.สระบุรี</div>
+    <div class="hdr-title">ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</div>
+    <div class="hdr-sub">${_esc(reportLabel)}</div>
+  </div>
+  <div class="hdr-right">
+    <div>ช่วงเวลา: <strong>${_esc(periodLabel)}</strong></div>
+    <div class="hdr-badge">พิมพ์: ${_esc(printDate)}</div>
+  </div>
+</div>
+${bodyContent}
+<div class="report-footer">
+  <span>${_esc(reportLabel)}</span>
+  <span>ระบบรายงานผลการผลิต | บริษัท สานนท์ จำกัด</span>
+</div>
+<script>
+  if(document.fonts){document.fonts.ready.then(()=>window.print());}else{setTimeout(()=>window.print(),800);}
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('','_blank','width=1200,height=800');
+  if (!win) { showToast('ป๊อปอัปถูกบล็อก กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้','error'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 function attachReportTableEvents() {

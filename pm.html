@@ -1226,6 +1226,7 @@ async function saveLog() {
   const notes     = qs('#log-notes')?.value?.trim()||'';
 
   if (!machineId) { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
+  if (!itemId)    { showToast('กรุณาเลือกประเภท PM','error'); return; }
   if (!date)      { showToast('กรุณาระบุวันที่','error'); return; }
   if (isNaN(meter)||meter<0) { showToast('กรุณาระบุค่า Meter','error'); return; }
 
@@ -1281,12 +1282,14 @@ async function saveLog() {
 
   // บันทึก downtime ถ้าระบุ
   if (downtime > 0) {
+    const startDt = new Date(date);
+    const endDt   = new Date(startDt.getTime() + downtime * 3600000);
     await db.from('pm_downtime').insert({
       pm_machine_id: machineId,
       machine_name : machine?.name||'',
       factory      : machine?.factory||'',
-      start_time   : new Date(date).toISOString(),
-      end_time     : new Date(date).toISOString(),
+      start_time   : startDt.toISOString(),
+      end_time     : endDt.toISOString(),
       duration_hours: downtime,
       type         : 'planned_pm',
       created_by   : currentUser?.username||'',
@@ -2317,7 +2320,7 @@ async function renderPmItemsPage() {
             <td class="px-3 py-2 text-center">
               <div class="flex gap-1 justify-center">
                 <button onclick="openEditItemModalFromPage('${item.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
-                ${isManager()?`<button onclick="deletePmItem('${item.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+                ${isManager()?`<button onclick="deletePmItem('${item.id}',true)" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
               </div>
             </td>
           </tr>`;
@@ -2358,6 +2361,7 @@ async function renderPmItemsPage() {
   refreshIcons();
 }
 
+// เรียกจากหน้า pm-items (ใน renderPmItemsPage)
 function openAddItemModalFromPage(machineId) {
   const machine = _pmMachines.find(m => m.id === machineId);
   const unit = machine?.meter_type === 'km' ? 'กม.' : 'ชม.';
@@ -2366,7 +2370,6 @@ function openAddItemModalFromPage(machineId) {
      <button onclick="savePmItemAndRefresh(null,'${machineId}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
     '480px');
 }
-
 function openEditItemModalFromPage(itemId) {
   const item = _pmItems.find(i => i.id === itemId);
   if (!item) return;
@@ -2377,11 +2380,35 @@ function openEditItemModalFromPage(itemId) {
      <button onclick="savePmItemAndRefresh('${itemId}','${item.pm_machine_id}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
     '480px');
 }
-
 async function savePmItemAndRefresh(id, machineId) {
-  await savePmItem(id, machineId);
-  // savePmItem closes modal + shows toast; reload page
-  setTimeout(() => renderPmItemsPage(), 300);
+  await savePmItem(id, machineId, false);  // ไม่เปิด modal — refresh pm-items page แทน
+  closeModal();
+  setTimeout(() => renderPmItemsPage(), 150);
+}
+
+// เรียกจากหน้า pm-machines (accordion)
+function openAddItemModalFromMachines(machineId) {
+  const machine = _pmMachines.find(m => m.id === machineId);
+  const unit = machine?.meter_type === 'km' ? 'กม.' : 'ชม.';
+  openModal('เพิ่มรายการ PM — ' + escapeHtml(machine?.name||''), pmItemFormHtml(null, unit),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItemAndRefreshMachines(null,'${machineId}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+function openEditItemModalFromMachines(itemId) {
+  const item = _pmItems.find(i => i.id === itemId);
+  if (!item) return;
+  const machine = _pmMachines.find(m => m.id === item.pm_machine_id);
+  const unit = machine?.meter_type === 'km' ? 'กม.' : 'ชม.';
+  openModal('แก้ไขรายการ PM — ' + escapeHtml(machine?.name||''), pmItemFormHtml(item, unit),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="savePmItemAndRefreshMachines('${itemId}','${item.pm_machine_id}')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">บันทึก</button>`,
+    '480px');
+}
+async function savePmItemAndRefreshMachines(id, machineId) {
+  await savePmItem(id, machineId, false);  // ไม่เปิด modal
+  closeModal();
+  setTimeout(() => renderMachinesPage(), 150);  // refresh accordion machines page
 }
 
 // =====================================================================
@@ -2394,50 +2421,106 @@ async function renderMachinesPage() {
   refreshIcons();
 
   await loadPmData();
-  await syncCurrentMeters();  // ← ซิงค์ทุกครั้งที่เปิดหน้าเครื่องจักร
+  await syncCurrentMeters();
 
   const SOURCE_LABEL = {
     production_cde:'CDE', production_propel:'Propel',
     production_sanon1:'Sanon1', production_sanon2:'Sanon2', electric_loader:'รถตัก'
   };
 
-  const rows = _pmMachines.length === 0
-    ? `<tr><td colspan="9" class="text-center py-10 text-gray-400">ยังไม่มีเครื่องจักร</td></tr>`
-    : _pmMachines.sort((a,b)=>(a.sort_order-b.sort_order)||(a.factory||'').localeCompare(b.factory||'')).map(m=>{
-        const itemCount = _pmItems.filter(i=>i.pm_machine_id===m.id).length;
+  const machineCards = _pmMachines.length === 0
+    ? `<div class="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400">ยังไม่มีเครื่องจักร</div>`
+    : _pmMachines.sort((a,b)=>(a.sort_order-b.sort_order)||(a.factory||'').localeCompare(b.factory||'')).map(m => {
         const unit = m.meter_type==='km'?'กม.':'ชม.';
         const syncLabel = (m.sync_source && m.sync_source!=='manual')
-          ? `<div class="text-xs text-green-600 flex items-center gap-0.5 justify-center mt-0.5">
+          ? `<span class="text-xs text-green-600 flex items-center gap-0.5 ml-2">
                <i data-lucide="refresh-cw" class="w-3 h-3"></i>${SOURCE_LABEL[m.sync_source]||m.sync_source}
-             </div>` : '';
-        return `<tr class="border-b hover:bg-gray-50 ${m.is_active?'':'opacity-50'}">
-          <td class="px-3 py-2 text-sm font-medium">${escapeHtml(m.name)}</td>
-          <td class="px-3 py-2 text-xs text-slate-500">${m.code||'-'}</td>
-          <td class="px-3 py-2 text-sm">${m.factory||'-'}</td>
-          <td class="px-3 py-2 text-xs">${m.category||'-'}</td>
-          <td class="px-3 py-2 text-xs">${m.brand||''} ${m.model||''}</td>
-          <td class="px-3 py-2 text-center">
-            <div class="font-semibold text-blue-600 text-sm">${fmtNum(m.current_meter)} ${unit}</div>
-            ${syncLabel}
-          </td>
-          <td class="px-3 py-2 text-sm text-center">${itemCount} รายการ</td>
-          <td class="px-3 py-2 text-center">
-            <span class="px-2 py-0.5 rounded-full text-xs ${m.is_active?'badge-ok':'badge-overdue'}">${m.is_active?'ใช้งาน':'ปิดใช้'}</span>
-          </td>
-          <td class="px-3 py-2 text-center">
-            <div class="flex items-center gap-1 justify-center">
-              <button onclick="openEditMachineModal('${m.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-600"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
-              <button onclick="openPmItemsModal('${m.id}')" class="p-1 hover:bg-blue-50 rounded text-blue-600" title="รายการ PM"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
-              ${isAdmin()?`<button onclick="deleteMachine('${m.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+             </span>` : '';
+
+        // PM items ของเครื่องนี้
+        const items = _pmItems.filter(i=>i.pm_machine_id===m.id && i.is_active)
+          .sort((a,b)=>a.sort_order-b.sort_order);
+
+        const itemRows = items.length === 0
+          ? `<tr><td colspan="6" class="text-center py-3 text-gray-400 text-xs">ยังไม่มีรายการ PM</td></tr>`
+          : items.map(item => {
+              const next = calcNextDue(item);
+              const rem  = calcRemaining(item, m);
+              const st   = pmStatus(rem, m.alert_threshold||100);
+              const remColor = st==='overdue'?'text-red-600':st==='alert'?'text-amber-600':'text-green-700';
+              return `<tr class="border-b hover:bg-gray-50">
+                <td class="px-3 py-1.5 text-xs">${escapeHtml(item.pm_type)}</td>
+                <td class="px-3 py-1.5 text-xs text-center">${fmtNum(item.interval_value)} ${unit}</td>
+                <td class="px-3 py-1.5 text-xs text-center">${fmtNum(item.last_pm_meter)} ${unit}</td>
+                <td class="px-3 py-1.5 text-xs text-center font-semibold">${fmtNum(next)} ${unit}</td>
+                <td class="px-3 py-1.5 text-xs text-center font-bold ${remColor}">${rem>=0?'+':''}${fmtNum(rem)}</td>
+                <td class="px-3 py-1.5 text-center">${pmStatusBadge(st)}</td>
+                <td class="px-3 py-1.5 text-center whitespace-nowrap">
+                  <button onclick="openEditItemModalFromMachines('${item.id}')" class="p-1 hover:bg-amber-50 rounded text-amber-500"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                  ${isManager()?`<button onclick="deletePmItemFromMachines('${item.id}')" class="p-1 hover:bg-red-50 rounded text-red-400"><i data-lucide="trash-2" class="w-3 h-3"></i></button>`:''}
+                </td>
+              </tr>`;
+            }).join('');
+
+        return `
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-3 ${m.is_active?'':'opacity-60'}">
+          <!-- Machine Header -->
+          <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b cursor-pointer select-none"
+               onclick="toggleMachineAccordion('acc-${m.id}')">
+            <div class="flex items-center gap-3 min-w-0">
+              <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform" id="chevron-${m.id}"></i>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-semibold text-gray-800 text-sm">${escapeHtml(m.name)}</span>
+                  ${m.code?`<span class="text-xs text-gray-400">(${m.code})</span>`:''}
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">${m.factory||'-'}</span>
+                  ${syncLabel}
+                  <span class="px-2 py-0.5 rounded-full text-xs ${m.is_active?'badge-ok':'badge-overdue'}">${m.is_active?'ใช้งาน':'ปิดใช้'}</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-0.5">${m.category||''} ${m.brand?' · '+m.brand:''} ${m.model?m.model:''}</div>
+              </div>
             </div>
-          </td>
-        </tr>`;
+            <div class="flex items-center gap-3 flex-shrink-0 ml-2">
+              <div class="text-right">
+                <div class="font-bold text-blue-600 text-sm">${fmtNum(m.current_meter)} ${unit}</div>
+                <div class="text-xs text-gray-400">${items.length} รายการ PM</div>
+              </div>
+              <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                <button onclick="openEditMachineModal('${m.id}')" class="p-1.5 hover:bg-amber-50 rounded text-amber-600" title="แก้ไขเครื่อง"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
+                ${isAdmin()?`<button onclick="deleteMachine('${m.id}')" class="p-1.5 hover:bg-red-50 rounded text-red-400" title="ลบเครื่อง"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
+              </div>
+            </div>
+          </div>
+          <!-- PM Items (accordion body) -->
+          <div id="acc-${m.id}" class="overflow-hidden transition-all">
+            <div class="border-b bg-slate-50 px-4 py-1.5 flex items-center justify-between">
+              <span class="text-xs text-gray-500 font-medium">รายการ PM</span>
+              ${isManager()?`<button onclick="openAddItemModalFromMachines('${m.id}')" class="flex items-center gap-1 text-xs px-2.5 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                <i data-lucide="plus" class="w-3 h-3"></i>เพิ่มรายการ PM
+              </button>`:''}
+            </div>
+            <div class="overflow-x-auto">
+              <table class="text-sm w-full">
+                <thead><tr class="text-xs text-gray-400 bg-white border-b">
+                  <th class="px-3 py-1.5 text-left">ประเภท PM</th>
+                  <th class="px-3 py-1.5 text-center">ระยะ</th>
+                  <th class="px-3 py-1.5 text-center">ล่าสุด</th>
+                  <th class="px-3 py-1.5 text-center">ถัดไป</th>
+                  <th class="px-3 py-1.5 text-center">คงเหลือ</th>
+                  <th class="px-3 py-1.5 text-center">สถานะ</th>
+                  <th class="px-3 py-1.5 text-center">จัดการ</th>
+                </tr></thead>
+                <tbody>${itemRows}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>`;
       }).join('');
 
   content.innerHTML = `
-  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-    <div class="flex items-center justify-between px-4 py-3 border-b">
-      <h2 class="font-semibold text-gray-800">เครื่องจักร PM ทั้งหมด</h2>
+  <div class="space-y-0">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-gray-700">เครื่องจักร PM ทั้งหมด</h2>
       <div class="flex items-center gap-2">
         <button onclick="syncAndRefreshMachines()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>ซิงค์ชั่วโมง
@@ -2447,24 +2530,35 @@ async function renderMachinesPage() {
         </button>`:''}
       </div>
     </div>
-    <div class="tbl-wrap table-sticky-last">
-      <table class="text-sm">
-        <thead><tr class="text-xs text-gray-500 bg-gray-50">
-          <th class="px-3 py-2 text-left">ชื่อเครื่อง</th>
-          <th class="px-3 py-2 text-left">รหัส</th>
-          <th class="px-3 py-2 text-left">โรงงาน</th>
-          <th class="px-3 py-2 text-left">หมวด</th>
-          <th class="px-3 py-2 text-left">ยี่ห้อ/รุ่น</th>
-          <th class="px-3 py-2 text-center">Meter ปัจจุบัน</th>
-          <th class="px-3 py-2 text-center">รายการ PM</th>
-          <th class="px-3 py-2 text-center">สถานะ</th>
-          <th class="px-3 py-2 text-center">จัดการ</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    ${machineCards}
   </div>`;
   refreshIcons();
+  // เปิด accordion ทุกเครื่องตั้งแต่แรก
+  setTimeout(() => {
+    _pmMachines.forEach(m => {
+      const el = qs('#acc-'+m.id);
+      if (el) {
+        el.style.maxHeight = el.scrollHeight + 200 + 'px';
+        el.style.opacity = '1';
+      }
+    });
+  }, 50);
+}
+
+function toggleMachineAccordion(id) {
+  const el = qs('#'+id);
+  if (!el) return;
+  const machId = id.replace('acc-','');
+  const chevron = qs('#chevron-'+machId);
+  if (el.style.maxHeight && el.style.maxHeight !== '0px') {
+    el.style.maxHeight = '0px';
+    el.style.opacity = '0';
+    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+  } else {
+    el.style.maxHeight = el.scrollHeight + 200 + 'px';
+    el.style.opacity = '1';
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
+  }
 }
 
 function openAddMachineModal() {
@@ -2796,7 +2890,7 @@ function togglePmTypeInput(sel) {
   }
 }
 
-async function savePmItem(id, machineId) {
+async function savePmItem(id, machineId, reopenModal=true) {
   const sel = qs('#item-type-sel');
   const pm_type = sel?.value === '__custom__'
     ? (qs('#item-type-custom')?.value?.trim() || '')
@@ -2819,23 +2913,43 @@ async function savePmItem(id, machineId) {
   let err;
   if (id) {
     ({ error: err } = await db.from('pm_items').update(data).eq('id',id));
+    if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
+    // อัปเดต _pmItems ทันที
+    const idx = _pmItems.findIndex(i=>i.id===id);
+    if (idx>=0) _pmItems[idx] = { ..._pmItems[idx], ...data };
   } else {
-    ({ error: err } = await db.from('pm_items').insert(data));
+    let newItem;
+    ({ data: newItem, error: err } = await db.from('pm_items').insert(data).select().single());
+    if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
+    if (newItem) _pmItems.push(newItem);  // เพิ่มเข้า state ทันที ไม่ต้องรอ reload
   }
-  if (err) { showToast('บันทึกไม่สำเร็จ: '+err.message,'error'); return; }
   showToast(id?'อัปเดตสำเร็จ':'เพิ่มสำเร็จ','success');
-  await loadPmData();
-  openPmItemsModal(machineId);
+  if (reopenModal) openPmItemsModal(machineId);  // เรียกจาก pm-machines modal (เดิม)
 }
 
-async function deletePmItem(id) {
+async function deletePmItemFromMachines(id) {
   const item = _pmItems.find(i=>i.id===id);
   if (!confirm(`ลบรายการ "${item?.pm_type}"?`)) return;
   const { error } = await db.from('pm_items').delete().eq('id',id);
   if (error) { showToast('ลบไม่สำเร็จ','error'); return; }
   showToast('ลบสำเร็จ','success');
-  await loadPmData();
-  openPmItemsModal(item.pm_machine_id);
+  _pmItems = _pmItems.filter(i=>i.id!==id);
+  renderMachinesPage();
+}
+
+async function deletePmItem(id, fromItemsPage=false) {
+  const item = _pmItems.find(i=>i.id===id);
+  if (!confirm(`ลบรายการ "${item?.pm_type}"?`)) return;
+  const { error } = await db.from('pm_items').delete().eq('id',id);
+  if (error) { showToast('ลบไม่สำเร็จ','error'); return; }
+  showToast('ลบสำเร็จ','success');
+  // อัปเดต state ทันที ไม่ต้องรอ reload
+  _pmItems = _pmItems.filter(i=>i.id!==id);
+  if (fromItemsPage) {
+    renderPmItemsPage();   // refresh หน้า pm-items
+  } else {
+    openPmItemsModal(item.pm_machine_id);  // re-open modal (จากหน้าเครื่องจักร)
+  }
 }
 
 // =====================================================================
