@@ -10021,9 +10021,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const own = tryParse('_sn_sess');
       if (own?.user?.id) { user = own.user; page = own.page; loginAt = own.loginAt || Date.now(); }
       else {
+        // Fallback sessionStorage จากระบบอื่น
         for (const key of ['_sn_inv_sess','_sn_pm_sess']) {
           const p = tryParse(key);
           if (p?.id && p?.username) { user = p; break; }
+        }
+        // Fallback localStorage shared session (SSO ข้าม tab — ล็อกอินระบบไหนก่อนก็ได้)
+        if (!user) {
+          try {
+            const shared = JSON.parse(localStorage.getItem('_sn_shared_sess') || 'null');
+            if (shared?.id && shared?.username) user = shared;
+          } catch(_) {}
         }
       }
       if (user && user.id) {
