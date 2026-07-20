@@ -544,6 +544,7 @@ async function doLogin(username, password) {
     };
     sessionStorage.setItem('_sn_pm_sess', JSON.stringify(base));
     sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() }));
+    localStorage.setItem('_sn_shared_sess', JSON.stringify(base));
   } catch(_) {}
 
   return { data: currentUser };
@@ -559,6 +560,7 @@ async function doLogout() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
   try { sessionStorage.removeItem('_sn_pm_sess'); } catch(_) {}
   try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
+  try { localStorage.removeItem('_sn_shared_sess'); } catch(_) {}
   stopSessionTimer();
   navigateTo('landing');
 }
@@ -3978,13 +3980,21 @@ function printSelectedLabels() {
     let userData = null;
     const own = tryParse(SESSION_KEY);
     if (own?.id && own?.username) {
-      userData = own;
+      // own session — re-fetch permissions เพื่อความถูกต้อง
+      await loadInvUser(own);
     } else {
-      // 2. Fallback — session จากระบบอื่น
+      // 2. Fallback — session จากระบบอื่น (sessionStorage)
       for (const key of ['_sn_pm_sess','_sn_sess']) {
         const p = tryParse(key);
         const u = p?.user || p;
         if (u?.id && u?.username) { userData = u; break; }
+      }
+      // 3. Fallback — shared session จาก localStorage (SSO ข้าม tab)
+      if (!userData) {
+        try {
+          const shared = JSON.parse(localStorage.getItem('_sn_shared_sess') || 'null');
+          if (shared?.id && shared?.username) userData = shared;
+        } catch(_) {}
       }
       if (userData) await loadInvUser(userData);
     }

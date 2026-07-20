@@ -340,6 +340,7 @@ async function doLogin(username, password) {
   try { sessionStorage.setItem(SESSION_KEY,  JSON.stringify(base)); } catch(_) {}
   try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
   try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  try { localStorage.setItem('_sn_shared_sess', JSON.stringify(base)); } catch(_) {}
   return true;
 }
 
@@ -348,6 +349,7 @@ function doLogout() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch(_) {}
   try { sessionStorage.removeItem('_sn_inv_sess'); } catch(_) {}
   try { sessionStorage.removeItem('_sn_sess'); } catch(_) {}
+  try { localStorage.removeItem('_sn_shared_sess'); } catch(_) {}
   clearInterval(sessionTimerInterval);
   navigateTo('landing');
 }
@@ -399,6 +401,27 @@ async function restoreSession() {
       return true;
     } catch(_) {}
   }
+
+  // 3. Fallback — shared session จาก localStorage (SSO ข้าม tab)
+  try {
+    const shared = JSON.parse(localStorage.getItem('_sn_shared_sess') || 'null');
+    if (shared?.id && shared?.username) {
+      let extraManage = shared._extraManage || [];
+      const { data: perm } = await db.from('user_permissions')
+        .select('extra_manage').eq('user_id', shared.id).maybeSingle();
+      if (perm?.extra_manage?.length) extraManage = perm.extra_manage;
+      const { data: rp } = await db.from('role_permissions')
+        .select('extra_manage').eq('role_name', shared.role).maybeSingle();
+      if (rp?.extra_manage?.length) {
+        const rolePm = rp.extra_manage.filter(k => k.startsWith('pm-'));
+        extraManage = [...new Set([...extraManage, ...rolePm])];
+      }
+      currentUser = { ...shared, _extraManage: extraManage };
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(_) {}
+      return true;
+    }
+  } catch(_) {}
+
   return false;
 }
 

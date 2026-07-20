@@ -547,6 +547,8 @@ async function doLogin(username, password) {
     startSessionTimer();
     startApprovalCountPolling();
     try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: currentUser, page: defaultPageForUser(currentUser), loginAt: Date.now() })); } catch (_) {}
+    // SSO shared session — ให้ inventory.html / pm.html อ่านได้ข้าม tab
+    try { localStorage.setItem('_sn_shared_sess', JSON.stringify({ id: currentUser.id, username: currentUser.username, full_name: currentUser.full_name, role: currentUser.role, factory: currentUser.factory||null, department: currentUser.department||null, _extraManage: currentUser._extraManage||[] })); } catch (_) {}
     // redirect ไประบบที่เลือก (ถ้ามี)
     if (_loginTargetSystem === 'inventory') {
       try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify({ id: currentUser.id, username: currentUser.username, full_name: currentUser.full_name, role: currentUser.role, _extraManage: currentUser._extraManage || [] })); } catch (_) {}
@@ -634,6 +636,7 @@ function doLogout() {
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_inv_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_pm_sess'); } catch (_) {}
+  try { localStorage.removeItem('_sn_shared_sess'); } catch (_) {}
   showToast('ออกจากระบบเรียบร้อย', 'info');
   navigateTo('landing');
 }
