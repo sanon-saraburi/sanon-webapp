@@ -1338,6 +1338,26 @@ function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#
 function siGenLot(){const d=qs('#si-date')?.value||todayISO();const el=qs('#si-lot');if(el)el.value=genLotNo(d);}
 function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#si-price')?.value||0);if(qs('#si-total'))qs('#si-total').value=fmtMoney(q*p);}
 function filterTbl(inp,bodyId){const q=(inp.value||'').toLowerCase();qsa('#'+bodyId+' tr').forEach(tr=>{tr.style.display=!q||tr.textContent.toLowerCase().includes(q)?'':'none';});}
+let _woFacFilter='';let _woSearchFilter='';
+function woFilterFac(fac){
+  _woFacFilter=fac==='ทั้งหมด'?'':fac;
+  ['ทั้งหมด','CDE','Propel','Sanon1','Sanon2'].forEach(f=>{
+    const btn=qs('#wo-fac-'+f);
+    if(!btn)return;
+    if(f===fac){btn.className=btn.className.replace(/bg-white text-gray-600 border-gray-200 hover:bg-gray-50/,'bg-indigo-600 text-white border-indigo-600');}
+    else{btn.className=btn.className.replace(/bg-indigo-600 text-white border-indigo-600/,'bg-white text-gray-600 border-gray-200 hover:bg-gray-50');}
+  });
+  _woApplyFilters();
+}
+function woFilterSearch(val){_woSearchFilter=(val||'').toLowerCase();_woApplyFilters();}
+function _woApplyFilters(){
+  qsa('#wo-body tr').forEach(tr=>{
+    const fac=(tr.dataset.factory||'').toLowerCase();
+    const facOk=!_woFacFilter||fac===_woFacFilter.toLowerCase();
+    const searchOk=!_woSearchFilter||tr.textContent.toLowerCase().includes(_woSearchFilter);
+    tr.style.display=(facOk&&searchOk)?'':'none';
+  });
+}
 function filterItems(){
   const q=(qs('#items-search')?.value||'').toLowerCase();
   const cat=(qs('#items-cat')?.value||'').toLowerCase();
@@ -1407,9 +1427,17 @@ PAGE_RENDERERS['inv-withdraw'] = async function(el) {
       </div>
     </div>
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-5 py-3 border-b flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-gray-600">ประวัติการเบิก</h3>
-        <input placeholder="ค้นหา..." oninput="filterTbl(this,'wo-body')" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-44"/>
+      <div class="px-5 py-3 border-b flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold text-gray-600 mr-2">ประวัติการเบิก</h3>
+        <!-- Factory filter buttons -->
+        <div class="flex gap-1 flex-wrap flex-1">
+          ${['ทั้งหมด','CDE','Propel','Sanon1','Sanon2'].map((f,i)=>`
+          <button onclick="woFilterFac('${f}')" id="wo-fac-${f}"
+            class="px-2.5 py-1 rounded-lg text-xs border transition-colors ${i===0?'bg-indigo-600 text-white border-indigo-600':'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}">
+            ${f}
+          </button>`).join('')}
+        </div>
+        <input placeholder="ค้นหา..." oninput="woFilterSearch(this.value)" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-40"/>
       </div>
       <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm">
         <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
@@ -1417,7 +1445,7 @@ PAGE_RENDERERS['inv-withdraw'] = async function(el) {
           <th class="text-left px-4 py-2">วัสดุ</th><th class="text-right px-4 py-2">จำนวน</th>
           <th class="text-left px-4 py-2">โรง/ฝ่าย</th><th class="text-left px-4 py-2">สถานะ</th>
         </tr></thead>
-        <tbody id="wo-body">${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50">
+        <tbody id="wo-body">${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50" data-factory="${escapeHtml(r.factory||'')}">
           <td class="px-4 py-2 font-mono text-xs text-orange-600">${escapeHtml(r.doc_no||'-')}</td>
           <td class="px-4 py-2 text-gray-500">${fmtDate(r.created_at)}</td>
           <td class="px-4 py-2">${escapeHtml(r.inventory_items?.name||'-')}</td>

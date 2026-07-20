@@ -179,6 +179,7 @@ const DASHBOARD_MENUS = [
   { key: 'dash-loader',      label: 'รถตักไฟฟ้า',        icon: 'truck',          group: 'extra' },
   { key: 'dash-water',       label: 'น้ำบาดาล',          icon: 'droplets',       group: 'extra' },
   { key: 'dash-electricity', label: 'ค่าไฟฟ้า',          icon: 'zap',            group: 'extra' },
+  { key: 'dash-executive',   label: 'Executive Summary',  icon: 'layout-dashboard', group: 'extra' },
 ];
 
 // หมวดหมู่ 2: เมนูจัดการข้อมูล (13 เมนู — รอบ 2 implement ครบแล้ว)
@@ -637,6 +638,23 @@ function doLogout() {
   navigateTo('landing');
 }
 
+// SSO: เขียน session ทุก key ก่อนเปลี่ยนระบบ
+function gotoSystem(url) {
+  if (currentUser) {
+    const base = {
+      id: currentUser.id, username: currentUser.username,
+      display_name: currentUser.display_name, full_name: currentUser.full_name,
+      role: currentUser.role, status: currentUser.status,
+      factory: currentUser.factory || '', department: currentUser.department || '',
+      _extraManage: currentUser._extraManage || [],
+    };
+    try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_pm_sess',  JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  }
+  window.location.href = url;
+}
+
 // =====================================================================
 // SECTION 7C: SESSION TIMEOUT (2 ชั่วโมง, ยกเว้น role admin)
 // =====================================================================
@@ -732,9 +750,9 @@ async function trySaveActiveForm() {
       production_date: dateInput.value,
       raw_material: (document.getElementById('pf-rawmat')?.value || '').trim() || null,
       start_hour:   numOrNull(document.getElementById('pf-start-hour')?.value),
-      start_minute: null,
+      start_minute: 0,
       stop_hour:    numOrNull(document.getElementById('pf-stop-hour')?.value),
-      stop_minute:  null,
+      stop_minute:  0,
       feed_ton: numOrNull(document.getElementById('pf-feed-ton')?.value),
       breakdown_detail: (document.getElementById('pf-breakdown')?.value || '').trim() || null,
       note: (document.getElementById('pf-note')?.value || '').trim() || null,
@@ -962,6 +980,9 @@ function renderPageContent(pageKey) {
       break;
     case 'dash-electricity':
       renderDashboardElectricity(container);
+      break;
+    case 'dash-executive':
+      renderDashboardExecutive(container);
       break;
     // ===========================================================
     // หมวดหมู่ 2: จัดการข้อมูล (13 เมนู)
@@ -1503,7 +1524,7 @@ function renderAppShell() {
             <span class="text-[10px] font-bold text-white leading-tight">ผลิต</span>
           </div>
           <!-- System 2 — link -->
-          <a href="inventory.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="event.preventDefault();gotoSystem('inventory.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 2px 8px rgba(13,148,136,.30)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="package" class="w-3.5 h-3.5 text-white"></i>
@@ -1511,7 +1532,7 @@ function renderAppShell() {
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </a>
           <!-- System 3 — PM -->
-          <a href="pm.html" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="event.preventDefault();gotoSystem('pm.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 2px 8px rgba(180,83,9,.30)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
@@ -10038,6 +10059,178 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   })();
 });
+
+// =====================================================================
+// SECTION 18C: EXECUTIVE SUMMARY DASHBOARD (dash-executive)
+// =====================================================================
+async function renderDashboardExecutive(container) {
+  container.innerHTML = `<div class="text-center py-12 text-secondary-400 text-sm">กำลังโหลดข้อมูล…</div>`;
+
+  try {
+    const now    = new Date();
+    const year   = now.getFullYear();
+    const month  = now.getMonth() + 1;
+    const mStr   = String(month).padStart(2,'0');
+    const dateFrom = `${year}-${mStr}-01`;
+    const lastDay  = new Date(year, month, 0).getDate();
+    const dateTo   = `${year}-${mStr}-${lastDay}`;
+    const MN = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+    // ดึงข้อมูลพร้อมกัน
+    const [
+      { data: cdeProd },
+      { data: propelProd },
+      { data: s1Prod },
+      { data: s2Prod },
+      { data: elecData },
+      { data: salesData },
+      { data: invPending },
+    ] = await Promise.all([
+      db.from('production_cde').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
+      db.from('production_propel').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
+      db.from('production_sanon1').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
+      db.from('production_sanon2').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
+      db.from('electricity_costs').select('factory,baht,kwh').eq('year',year).eq('month',month),
+      db.from('sales').select('amount_baht').gte('sale_date',dateFrom).lte('sale_date',dateTo),
+      db.from('inventory_transactions').select('id').eq('transaction_type','withdraw').eq('status','pending'),
+    ]);
+
+    const sumTon = arr => (arr||[]).reduce((s,r)=>s+(r.feed_ton||0),0);
+    const cdeTon    = sumTon(cdeProd);
+    const propelTon = sumTon(propelProd);
+    const s1Ton     = sumTon(s1Prod);
+    const s2Ton     = sumTon(s2Prod);
+    const totalTon  = cdeTon + propelTon + s1Ton + s2Ton;
+    const totalElec = (elecData||[]).reduce((s,r)=>s+(r.baht||0),0);
+    const totalSales= (salesData||[]).reduce((s,r)=>s+(r.amount_baht||0),0);
+    const elecPerTon= totalTon > 0 ? totalElec/totalTon : 0;
+    const invPendingCount = (invPending||[]).length;
+
+    // ข้อมูลผลิตรายโรง
+    const factories = [
+      { name:'CDE',    ton:cdeTon,    target:120*lastDay,  color:'teal'   },
+      { name:'Propel', ton:propelTon, target:180*lastDay,  color:'cyan'   },
+      { name:'Sanon1', ton:s1Ton,     target:500*lastDay,  color:'violet' },
+      { name:'Sanon2', ton:s2Ton,     target:400*lastDay,  color:'rose'   },
+    ];
+
+    container.innerHTML = `
+    <div class="space-y-5 fade-in">
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-secondary-800">Executive Summary</h2>
+          <p class="text-xs text-secondary-400 mt-0.5">ข้อมูลประจำเดือน ${MN[month]} ${year+543} · อัปเดต ${now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</p>
+        </div>
+        <div class="flex gap-2">
+          <a href="inventory.html" onclick="event.preventDefault();gotoSystem('inventory.html')" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 rounded-xl text-xs hover:bg-teal-100">
+            <i data-lucide="package" class="w-3.5 h-3.5"></i>คลังวัสดุ
+            ${invPendingCount>0?`<span class="bg-red-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">${invPendingCount}</span>`:''}
+          </a>
+          <a href="pm.html" onclick="event.preventDefault();gotoSystem('pm.html')" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-xl text-xs hover:bg-amber-100">
+            <i data-lucide="wrench" class="w-3.5 h-3.5"></i>PM เครื่องจักร
+          </a>
+        </div>
+      </div>
+
+      <!-- KPI top row -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        ${[
+          { label:'ผลผลิตรวม', value:fmtNum(totalTon), unit:'ตัน', icon:'layers', color:'blue' },
+          { label:'ยอดขายรวม', value:fmtNum(totalSales), unit:'บาท', icon:'banknote', color:'green' },
+          { label:'ค่าไฟฟ้ารวม', value:fmtNum(totalElec), unit:'บาท', icon:'zap', color:'yellow' },
+          { label:'ค่าไฟ/ตัน', value:elecPerTon.toFixed(2), unit:'บาท/ตัน', icon:'trending-up', color:'orange' },
+        ].map(k=>`
+        <div class="bg-white rounded-2xl shadow-sm p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 bg-${k.color}-100 rounded-xl flex items-center justify-center">
+              <i data-lucide="${k.icon}" class="w-4 h-4 text-${k.color}-600"></i>
+            </div>
+            <span class="text-xs text-secondary-500">${k.label}</span>
+          </div>
+          <p class="text-2xl font-bold text-secondary-800">${k.value}</p>
+          <p class="text-xs text-secondary-400">${k.unit}</p>
+        </div>`).join('')}
+      </div>
+
+      <!-- ผลผลิตรายโรง -->
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-secondary-700 mb-4 flex items-center gap-2">
+          <i data-lucide="factory" class="w-4 h-4 text-blue-500"></i>ผลผลิตรายโรงงาน — ${MN[month]} ${year+543}
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${factories.map(f => {
+            const pct = f.target > 0 ? Math.min(100, f.ton/f.target*100) : 0;
+            const color = pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red';
+            return `
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-semibold text-secondary-700">${f.name}</span>
+                <span class="text-xs text-${color}-600 font-bold">${pct.toFixed(0)}%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="h-2 rounded-full bg-${color}-500 transition-all" style="width:${pct.toFixed(1)}%"></div>
+              </div>
+              <div class="flex justify-between text-xs text-secondary-400">
+                <span>${fmtNum(f.ton)} ตัน</span>
+                <span>เป้า ${fmtNum(f.target)}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- ค่าไฟรายโรง -->
+      ${(elecData||[]).length > 0 ? `
+      <div class="bg-white rounded-2xl shadow-sm p-5">
+        <h3 class="text-sm font-semibold text-secondary-700 mb-3 flex items-center gap-2">
+          <i data-lucide="zap" class="w-4 h-4 text-yellow-500"></i>ค่าไฟฟ้ารายโรงงาน
+        </h3>
+        <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-xs text-gray-500">
+            <tr>
+              <th class="text-left px-4 py-2">โรงงาน</th>
+              <th class="text-right px-4 py-2">ค่าไฟ (บาท)</th>
+              <th class="text-right px-4 py-2">kWh</th>
+              <th class="text-right px-4 py-2">ผลผลิต (ตัน)</th>
+              <th class="text-right px-4 py-2">บาท/ตัน</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(elecData||[]).map(r => {
+              const facKey = r.factory?.toLowerCase().replace(' ','');
+              const ton = facKey==='cde'?cdeTon:facKey==='propel'?propelTon:facKey==='sanon1'?s1Ton:facKey==='sanon2'?s2Ton:0;
+              const bpt = ton > 0 ? r.baht/ton : 0;
+              return `<tr class="border-t hover:bg-gray-50">
+                <td class="px-4 py-2.5 font-medium">${escapeHtml(r.factory)}</td>
+                <td class="px-4 py-2.5 text-right">${fmtNum(r.baht)}</td>
+                <td class="px-4 py-2.5 text-right text-gray-500">${fmtNum(r.kwh||0)}</td>
+                <td class="px-4 py-2.5 text-right text-gray-500">${fmtNum(ton)}</td>
+                <td class="px-4 py-2.5 text-right font-semibold text-orange-600">${bpt.toFixed(2)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table></div>
+      </div>` : ''}
+
+      <!-- คลังวัสดุ pending -->
+      ${invPendingCount > 0 ? `
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-500 flex-shrink-0"></i>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-amber-800">รออนุมัติการเบิกวัสดุ ${invPendingCount} รายการ</p>
+          <p class="text-xs text-amber-600 mt-0.5">ในระบบคลังวัสดุ</p>
+        </div>
+        <a href="inventory.html" onclick="event.preventDefault();gotoSystem('inventory.html')"
+           class="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs hover:bg-amber-600">ไปอนุมัติ</a>
+      </div>` : ''}
+    </div>`;
+  } catch(err) {
+    container.innerHTML = `<div class="bg-red-50 rounded-2xl p-6 text-red-600 text-sm">โหลดข้อมูลไม่สำเร็จ: ${err.message}</div>`;
+  }
+  refreshIcons();
+}
 
 // =====================================================================
 // SECTION 30: EXECUTIVE REPORT — PowerPoint Generator
