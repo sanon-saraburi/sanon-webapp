@@ -1597,6 +1597,35 @@ async function doReject(id){
   qs('#ar-'+id)?.remove();_pendingCount=Math.max(0,_pendingCount-1);updatePendingBadge();showToast('ปฏิเสธรายการแล้ว','info');
 }
 
+async function cancelWithdraw(id){
+  const tx=_rptData.find(r=>r.id===id);
+  if(!tx){showToast('ไม่พบรายการ','error');return;}
+  const nm=tx.inventory_items?.name||'วัสดุ';
+  const unit=tx.inventory_items?.unit||'';
+  if(!confirm(`ยกเลิกยอดเบิก ${tx.doc_no||''}\n${nm} จำนวน ${fmtNum(tx.quantity)} ${unit}\n\nสต็อกจะถูกคืนอัตโนมัติ ดำเนินการต่อ?`))return;
+  const reason=prompt('เหตุผลยกเลิก (ถ้ามี):')||'ยกเลิกโดย '+(currentUser.full_name||currentUser.username);
+  const {error}=await db.from('inventory_transactions').update({
+    status:'rejected',
+    approved_by:currentUser.id,
+    approved_at:new Date().toISOString(),
+    rejected_reason:reason
+  }).eq('id',id);
+  if(error){showToast('เกิดข้อผิดพลาด: '+error.message,'error');return;}
+  // คืน FIFO lots (ถ้ามี lot_breakdown)
+  const breakdown=tx.lot_breakdown||[];
+  if(breakdown.length){
+    for(const b of breakdown){
+      const {data:lot}=await db.from('inventory_lots').select('remaining_qty').eq('id',b.lot_id).maybeSingle();
+      if(lot!=null){
+        await db.from('inventory_lots').update({remaining_qty:(lot.remaining_qty||0)+b.qty}).eq('id',b.lot_id);
+      }
+    }
+  }
+  await Promise.all([loadStockData(),loadLots()]);
+  showToast('ยกเลิกยอดเบิกแล้ว — สต็อกคืนเรียบร้อย','success');
+  await loadReport();
+}
+
 // =====================================================================
 // SECTION 15: inv-po — ใบสั่งซื้อ
 // =====================================================================
@@ -2567,12 +2596,13 @@ async function loadReport(){
       <span class="text-gray-500">รวมจำนวน <b class="text-gray-700">${fmtNum(tQty)}</b></span>
       ${tAmt?`<span class="text-gray-500">มูลค่ารวม <b class="text-gray-700">${fmtMoney(tAmt)}</b> บาท</span>`:''}
     </div>
-    <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm">
+    <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm table-sticky-last">
       <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
         <th class="text-left px-4 py-2">เลขที่</th><th class="text-left px-4 py-2">วันที่</th>
         <th class="text-left px-4 py-2">ประเภท</th><th class="text-left px-4 py-2">วัสดุ</th>
         <th class="text-right px-4 py-2">จำนวน</th><th class="text-right px-4 py-2">มูลค่า</th>
         <th class="text-left px-4 py-2">โรง/ฝ่าย</th>
+        ${isManager()?'<th class="text-left px-4 py-2 sticky right-0 bg-gray-50">จัดการ</th>':''}
       </tr></thead><tbody>${_rptData.map(r=>`<tr class="border-t hover:bg-gray-50">
         <td class="px-4 py-2 font-mono text-xs">${escapeHtml(r.doc_no||'-')}</td>
         <td class="px-4 py-2 text-gray-500">${fmtDate(r.created_at)}</td>
@@ -2581,7 +2611,8 @@ async function loadReport(){
         <td class="px-4 py-2 text-right font-medium">${fmtNum(r.quantity)} ${escapeHtml(r.inventory_items?.unit||'')}</td>
         <td class="px-4 py-2 text-right">${r.total_amount?fmtMoney(r.total_amount):'-'}</td>
         <td class="px-4 py-2 text-xs text-gray-500">${escapeHtml([r.factory,r.department].filter(Boolean).join('/')||'-')}</td>
-      </tr>`).join('')||'<tr><td colspan="7" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>'}</tbody>
+        ${isManager()?`<td class="px-4 py-2 sticky right-0 bg-white">${r.transaction_type==='withdraw'?`<button onclick="cancelWithdraw('${r.id}')" class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 whitespace-nowrap">ยกเลิก</button>`:'—'}</td>`:''}
+      </tr>`).join('')||`<tr><td colspan="${isManager()?8:7}" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>`}</tbody>
     </table></div>`;
   } else if(type==='low-stock'){
     _rptData=_invItems.filter(i=>(_stockMap[i.id]||0)<=(i.min_stock||0));
