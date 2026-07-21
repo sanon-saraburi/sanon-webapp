@@ -3726,202 +3726,210 @@ function getMeterMachines() {
 
 async function renderMeterPage() {
   const content = qs('#page-content');
-  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
-  refreshIcons();
-
   const machines = getMeterMachines();
-  if (!_meterSelectedMachine || !machines.find(m => m.id === _meterSelectedMachine)) {
-    _meterSelectedMachine = machines[0]?.id || '';
-  }
-  await renderMeterTable();
-}
 
-async function renderMeterTable() {
-  const content = qs('#page-content');
-  const machines = getMeterMachines();
-  const selMachine = machines.find(m => m.id === _meterSelectedMachine);
-
-  // โหลด logs ของเครื่องที่เลือก (กรองเดือนถ้าเลือกไว้)
-  let logs = [];
-  if (_meterSelectedMachine) {
-    let q = db.from('pm_meter_logs')
-      .select('*')
-      .eq('machine_id', _meterSelectedMachine)
-      .order('log_date', { ascending: false });
-    if (_meterFilterMonth) {
-      const [fy, fm] = _meterFilterMonth.split('-');
-      const lastDay  = new Date(+fy, +fm, 0).getDate();
-      q = q.gte('log_date', `${_meterFilterMonth}-01`)
-           .lte('log_date', `${_meterFilterMonth}-${String(lastDay).padStart(2,'0')}`);
-    } else {
-      q = q.limit(90);
-    }
-    const { data } = await q;
-    logs = data || [];
-  }
-
-
-  const machineOpts = machines.map(m => {
-    const syncBadge = (!m.sync_source || m.sync_source === 'manual') ? '' : ' 🔄';
-    const m2Badge   = m.has_meter_2 ? ' +ไฮโดรลิค' : '';
-    return `<option value="${m.id}" ${m.id===_meterSelectedMachine?'selected':''}>[${m.factory||'-'}] ${escapeHtml(m.name)}${syncBadge}${m2Badge}</option>`;
-  }).join('');
-
-  // KPI cards — เลขมิเตอร์ล่าสุด
-  const latestLog = logs[0];
-  const eng  = latestLog?.engine_stop  ?? selMachine?.current_meter  ?? '-';
-  const hyd  = latestLog?.hydraulic_stop ?? selMachine?.current_meter_2 ?? '-';
-  const engLabel = selMachine?.meter_1_label || 'ชม.เครื่องจักร';
-  const hydLabel = selMachine?.meter_2_label || 'ชม.ไฮโดรลิค';
-  const hasHyd       = selMachine?.has_meter_2;
-  const isAutoSync   = selMachine?.sync_source && selMachine.sync_source !== 'manual';
-  const showMeter1   = !isAutoSync; // ไม่แสดง meter1 input ถ้า auto-sync อยู่แล้ว
-
-  // ถ้าไม่มีเครื่องจักรในรายการ
   if (machines.length === 0) {
     content.innerHTML = `
-    <div class="p-4 space-y-4">
-      <div class="bg-white rounded-xl shadow-sm p-10 text-center text-gray-400 space-y-3">
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl shadow-sm p-10 text-center text-gray-400 space-y-3">
         <i data-lucide="gauge" class="w-12 h-12 mx-auto opacity-30"></i>
         <p class="text-sm">ยังไม่มีเครื่องจักรที่ต้องกรอกข้อมูลมิเตอร์</p>
-        <p class="text-xs text-gray-400">เครื่องที่ sync อัตโนมัติจาก System 1 (CDE/Propel/Sanon) จะไม่แสดงที่นี่<br>
-        กด <b>"เพิ่มเครื่องจักร"</b> ในเมนูด้านซ้ายเพื่อเพิ่มเครื่องที่ต้องบันทึกเลขมิเตอร์เอง</p>
+        <p class="text-xs">กด <b>"เพิ่มเครื่องจักร"</b> แล้วตั้ง "ซิงค์มิเตอร์" เป็น "กรอกเอง"</p>
+        <button onclick="navigateTo('pm-machines')" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">ไปหน้าเครื่องจักร</button>
       </div>
     </div>`;
     refreshIcons(); return;
   }
 
+  // สร้าง month options
+  const now = new Date();
+  const monthOpts = (() => {
+    const opts = ['<option value="">— ทุกเดือน —</option>'];
+    for (let i = 0; i < 12; i++) {
+      const d  = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleString('th-TH',{month:'long'}) + ' ' + (d.getFullYear()+543);
+      opts.push(`<option value="${ym}" ${_meterFilterMonth===ym?'selected':''}>${label}</option>`);
+    }
+    return opts.join('');
+  })();
+
+  const machFilterOpts = `<option value="">ทุกเครื่อง</option>`
+    + machines.map(m=>`<option value="${m.id}" ${_meterSelectedMachine===m.id?'selected':''}>[${m.factory||'-'}] ${escapeHtml(m.name)}</option>`).join('');
+
   content.innerHTML = `
-  <div class="p-4 space-y-4">
-    <!-- Header -->
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="flex-1 min-w-[220px]">
-        <label class="text-xs text-gray-500 mb-1 block">เลือกเครื่องจักร
-          <span class="text-gray-400">(แสดงเฉพาะเครื่องที่ต้องกรอกข้อมูลเอง)</span>
-        </label>
-        <select onchange="_meterSelectedMachine=this.value;renderMeterTable()"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          ${machineOpts}
-        </select>
-      </div>
-      <div class="flex items-end gap-2 mt-4">
-        <button onclick="openCsvImportModal()"
-          class="flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+  <div class="space-y-4">
+    <!-- Header & actions -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-base font-semibold text-gray-700 flex items-center gap-2">
+        <i data-lucide="gauge" class="w-5 h-5 text-blue-500"></i>บันทึกเลขมิเตอร์
+      </h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openCsvImportModal()" class="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 rounded-xl text-sm hover:bg-gray-50">
           <i data-lucide="file-up" class="w-4 h-4"></i>นำเข้า CSV
         </button>
-        <button onclick="openMeterLogModal()"
-          class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-          <i data-lucide="plus" class="w-4 h-4"></i>บันทึกเลขมิเตอร์
+        <button onclick="openMeterLogModal()" class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 shadow-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i>เพิ่มข้อมูลมิเตอร์
         </button>
       </div>
     </div>
-    ${isAutoSync ? `
-    <div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-xs text-blue-700">
-      <i data-lucide="info" class="w-4 h-4 flex-shrink-0"></i>
-      มิเตอร์ 1 (${engLabel}) ของเครื่องนี้ซิงค์อัตโนมัติจาก System 1 — ไม่ต้องกรอกซ้ำ
-      ${hasHyd ? 'กรอกเฉพาะมิเตอร์ 2 (' + hydLabel + ')' : ''}
-    </div>` : ''}
 
-    <!-- กรองเดือน -->
-    <div class="flex flex-wrap items-center gap-3 bg-white rounded-xl px-4 py-2.5 shadow-sm">
-      <span class="text-xs text-gray-500 font-medium">กรองเดือน:</span>
-      <select onchange="_meterFilterMonth=this.value;renderMeterTable()"
-        class="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="" ${!_meterFilterMonth?'selected':''}>— ทั้งหมด —</option>
-        ${(() => {
-          const now = new Date(); const opts = [];
-          for (let i = 0; i < 12; i++) {
-            const d  = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-            const thMonth = d.toLocaleString('th-TH',{month:'long'});
-            const thYear  = d.getFullYear() + 543;
-            opts.push(`<option value="${ym}" ${_meterFilterMonth===ym?'selected':''}>${thMonth} ${thYear}</option>`);
-          }
-          return opts.join('');
-        })()}
+    <!-- Filter bar -->
+    <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+      <select id="meter-filter-machine" onchange="_meterSelectedMachine=this.value;loadMeterTableData()"
+        class="border border-gray-200 rounded-xl px-3 py-2 text-sm flex-1 min-w-[200px]">
+        ${machFilterOpts}
       </select>
+      <select id="meter-filter-month" onchange="_meterFilterMonth=this.value;loadMeterTableData()"
+        class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+        ${monthOpts}
+      </select>
+      <button onclick="loadMeterTableData()" class="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 rounded-xl text-sm hover:bg-gray-50">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>รีเฟรช
+      </button>
     </div>
 
-    <!-- KPI -->
-    <div class="grid grid-cols-2 ${hasHyd?'md:grid-cols-4':'md:grid-cols-2'} gap-3">
-      <div class="kpi-card border-l-4 border-blue-500">
-        <div class="kpi-label">${engLabel} (ล่าสุด)</div>
-        <div class="kpi-val text-blue-600">${eng !== '-' ? Number(eng).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</div>
-        <div class="text-xs text-gray-400 mt-1">${latestLog ? latestLog.log_date : 'ยังไม่มีข้อมูล'}</div>
-      </div>
-      ${hasHyd ? `
-      <div class="kpi-card border-l-4 border-teal-500">
-        <div class="kpi-label">${hydLabel} (ล่าสุด)</div>
-        <div class="kpi-val text-teal-600">${hyd !== '-' ? Number(hyd).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</div>
-        <div class="text-xs text-gray-400 mt-1">${latestLog ? latestLog.log_date : 'ยังไม่มีข้อมูล'}</div>
-      </div>` : ''}
-      <div class="kpi-card border-l-4 border-orange-400">
-        <div class="kpi-label">${engLabel} (${_meterFilterMonth ? _meterFilterMonth.replace('-','/') : 'เดือนนี้'})</div>
-        <div class="kpi-val text-orange-500">${calcMonthHours(logs,'engine_hours',_meterFilterMonth).toLocaleString('th',{minimumFractionDigits:1})}</div>
-        <div class="text-xs text-gray-400 mt-1">ชั่วโมง</div>
-      </div>
-      ${hasHyd ? `
-      <div class="kpi-card border-l-4 border-purple-400">
-        <div class="kpi-label">${hydLabel} (${_meterFilterMonth ? _meterFilterMonth.replace('-','/') : 'เดือนนี้'})</div>
-        <div class="kpi-val text-purple-500">${calcMonthHours(logs,'hydraulic_hours',_meterFilterMonth).toLocaleString('th',{minimumFractionDigits:1})}</div>
-        <div class="text-xs text-gray-400 mt-1">ชั่วโมง</div>
-      </div>` : ''}
-    </div>
+    <!-- KPI cards -->
+    <div id="meter-kpi-area" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
 
     <!-- Table -->
-    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-      <div class="px-4 py-3 border-b flex items-center justify-between">
-        <h3 class="font-semibold text-gray-700 text-sm">ประวัติบันทึกเลขมิเตอร์ — ${escapeHtml(selMachine?.name||'-')}</h3>
-        <span class="text-xs text-gray-400">${logs.length} รายการล่าสุด</span>
+    <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-gray-700">ประวัติบันทึกเลขมิเตอร์</h3>
+        <span id="meter-row-count" class="text-xs text-gray-400"></span>
       </div>
-      <div class="tbl-wrap">
-        <table class="text-sm">
-          <thead>
-            <tr class="text-left text-xs text-gray-500">
-              <th class="px-3 py-2">วันที่</th>
-              <th class="px-3 py-2 text-right bg-blue-50">${engLabel} เริ่ม</th>
-              <th class="px-3 py-2 text-right bg-blue-50">${engLabel} หยุด</th>
-              <th class="px-3 py-2 text-right bg-blue-100 font-semibold">รวมชม.</th>
-              ${hasHyd ? `
-              <th class="px-3 py-2 text-right bg-teal-50">${hydLabel} เริ่ม</th>
-              <th class="px-3 py-2 text-right bg-teal-50">${hydLabel} หยุด</th>
-              <th class="px-3 py-2 text-right bg-teal-100 font-semibold">รวมชม.</th>
-              ` : ''}
-              <th class="px-3 py-2 text-center">Breakdown</th>
-              <th class="px-3 py-2 text-center">นาที</th>
-              <th class="px-3 py-2 text-center">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody>
-          ${logs.length === 0 ? `<tr><td colspan="10" class="text-center py-10 text-gray-400">ยังไม่มีข้อมูล</td></tr>` :
-            logs.map(r => {
-              const engHrs = r.engine_hours ?? ((r.engine_stop||0)-(r.engine_start||0));
-              const hydHrs = r.hydraulic_hours ?? ((r.hydraulic_stop||0)-(r.hydraulic_start||0));
-              return `<tr class="border-b hover:bg-gray-50">
-                <td class="px-3 py-2 whitespace-nowrap font-medium">${r.log_date}</td>
-                <td class="px-3 py-2 text-right bg-blue-50/40">${r.engine_start != null ? Number(r.engine_start).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
-                <td class="px-3 py-2 text-right bg-blue-50/40">${r.engine_stop != null ? Number(r.engine_stop).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
-                <td class="px-3 py-2 text-right bg-blue-100/60 font-semibold ${engHrs>0?'text-blue-700':'text-gray-400'}">${engHrs>0?engHrs.toFixed(1):'0'}</td>
-                ${hasHyd ? `
-                <td class="px-3 py-2 text-right bg-teal-50/40">${r.hydraulic_start != null ? Number(r.hydraulic_start).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
-                <td class="px-3 py-2 text-right bg-teal-50/40">${r.hydraulic_stop != null ? Number(r.hydraulic_stop).toLocaleString('th',{minimumFractionDigits:1}) : '-'}</td>
-                <td class="px-3 py-2 text-right bg-teal-100/60 font-semibold ${hydHrs>0?'text-teal-700':'text-gray-400'}">${hydHrs>0?hydHrs.toFixed(1):'0'}</td>
-                ` : ''}
-                <td class="px-3 py-2 text-center">${r.breakdown_count > 0 ? `<span class="badge-overdue px-2 py-0.5 rounded-full text-xs">${r.breakdown_count} ครั้ง</span>` : '-'}</td>
-                <td class="px-3 py-2 text-center">${r.breakdown_min > 0 ? r.breakdown_min : '-'}</td>
-                <td class="px-3 py-2 text-center">
-                  <button onclick="deleteMeterLog('${r.id}')" class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50">ลบ</button>
-                </td>
-              </tr>`;
-            }).join('')
-          }
-          </tbody>
-        </table>
+      <div id="meter-table-body" class="overflow-x-auto">
+        <div class="py-10 text-center text-gray-400 text-sm">กำลังโหลด…</div>
       </div>
     </div>
   </div>`;
   refreshIcons();
+  loadMeterTableData();
 }
+
+async function loadMeterTableData() {
+  const el = qs('#meter-table-body');
+  if (!el) return;
+  el.innerHTML = `<div class="py-8 text-center text-gray-400 text-sm"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+
+  let q = db.from('pm_meter_logs')
+    .select('*,pm_machines(id,name,factory,meter_1_label,meter_2_label,has_meter_2)')
+    .order('log_date', { ascending: false });
+
+  if (_meterSelectedMachine) q = q.eq('machine_id', _meterSelectedMachine);
+
+  if (_meterFilterMonth) {
+    const [fy, fm] = _meterFilterMonth.split('-');
+    const lastDay  = new Date(+fy, +fm, 0).getDate();
+    q = q.gte('log_date', `${_meterFilterMonth}-01`)
+         .lte('log_date', `${_meterFilterMonth}-${String(lastDay).padStart(2,'0')}`);
+  } else {
+    q = q.limit(120);
+  }
+
+  const { data: logs, error } = await q;
+  if (error) { el.innerHTML = `<div class="p-6 text-red-500 text-sm">โหลดไม่สำเร็จ: ${error.message}</div>`; return; }
+
+  const countEl = qs('#meter-row-count');
+  if (countEl) countEl.textContent = `${(logs||[]).length} รายการ`;
+
+  // --- KPI cards ---
+  const kpiArea = qs('#meter-kpi-area');
+  if (kpiArea) {
+    const machines = getMeterMachines();
+    const now = new Date();
+    const curYM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const monthLogs = _meterFilterMonth
+      ? (logs||[])
+      : (logs||[]).filter(r => r.log_date?.startsWith(curYM));
+
+    // ชม.ล่าสุด: current_meter ของเครื่องที่เลือก หรือ max ทุกเครื่อง
+    let latestMeter = 0, latestLabel = 'ชม.เครื่องจักร (ล่าสุด)', latestSub = '';
+    if (_meterSelectedMachine) {
+      const m = machines.find(x => x.id === _meterSelectedMachine);
+      if (m) { latestMeter = m.current_meter || 0; latestLabel = (m.meter_1_label||'ชม.เครื่องจักร') + ' (ล่าสุด)'; }
+      latestSub = m?.name || '';
+    } else {
+      latestMeter = Math.max(...machines.map(m => m.current_meter || 0), 0);
+      latestSub = 'ค่าสูงสุดในระบบ';
+    }
+
+    // ชม.รวมเดือนนี้ (engine)
+    const monthEngHrs = monthLogs.reduce((s,r) => s + (Number(r.engine_hours)||0), 0);
+    // breakdown เดือนนี้
+    const monthBdCnt = monthLogs.reduce((s,r) => s + (Number(r.breakdown_count)||0), 0);
+    const monthBdMin = monthLogs.reduce((s,r) => s + (Number(r.breakdown_min)||0), 0);
+    // จำนวนวันที่มีการบันทึก
+    const uniqueDays = new Set(monthLogs.map(r=>r.log_date)).size;
+
+    const monthLabel = _meterFilterMonth
+      ? new Date(_meterFilterMonth+'-01').toLocaleString('th-TH',{month:'long',year:'numeric'})
+      : 'เดือนนี้';
+
+    kpiArea.innerHTML = `
+      <div class="kpi-card border-l-4 border-blue-400">
+        <div class="kpi-val text-blue-600">${fmtNum(latestMeter,1)}</div>
+        <div class="kpi-label">${latestLabel}</div>
+        ${latestSub ? `<div class="text-xs text-gray-400 mt-0.5">${escapeHtml(latestSub)}</div>` : ''}
+      </div>
+      <div class="kpi-card border-l-4 border-orange-400">
+        <div class="kpi-val text-orange-500">${monthEngHrs.toFixed(1)}</div>
+        <div class="kpi-label">ชม.รวม${monthLabel}</div>
+        <div class="text-xs text-gray-400 mt-0.5">${uniqueDays} วันทำงาน</div>
+      </div>
+      <div class="kpi-card border-l-4 border-red-400">
+        <div class="kpi-val text-red-500">${monthBdCnt}</div>
+        <div class="kpi-label">Breakdown ${monthLabel}</div>
+        <div class="text-xs text-gray-400 mt-0.5">${monthBdMin} นาทีรวม</div>
+      </div>
+      <div class="kpi-card border-l-4 border-gray-300">
+        <div class="kpi-val text-gray-600">${(logs||[]).length}</div>
+        <div class="kpi-label">รายการที่แสดง</div>
+        <div class="text-xs text-gray-400 mt-0.5">${_meterFilterMonth ? monthLabel : '120 รายการล่าสุด'}</div>
+      </div>`;
+  }
+
+  if (!logs?.length) {
+    el.innerHTML = `<div class="py-10 text-center text-gray-400 text-sm">ยังไม่มีข้อมูลในช่วงที่เลือก</div>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500 sticky top-0">
+      <tr>
+        <th class="text-left px-4 py-2.5">วันที่</th>
+        <th class="text-left px-4 py-2.5">เครื่องจักร</th>
+        <th class="text-left px-4 py-2.5">โรงงาน</th>
+        <th class="text-right px-4 py-2.5 bg-blue-50">มิเตอร์เริ่ม</th>
+        <th class="text-right px-4 py-2.5 bg-blue-50">มิเตอร์หยุด</th>
+        <th class="text-right px-4 py-2.5 bg-blue-100 font-semibold">ชม.รวม</th>
+        <th class="text-center px-4 py-2.5">Breakdown</th>
+        <th class="text-center px-4 py-2.5 sticky right-0 bg-gray-50">จัดการ</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${logs.map(r => {
+        const hrs = r.engine_hours ?? Math.max(0,(r.engine_stop||0)-(r.engine_start||0));
+        const hasBd = r.breakdown_count > 0;
+        return `<tr class="border-t hover:bg-gray-50">
+          <td class="px-4 py-2.5 whitespace-nowrap font-medium text-gray-700">${r.log_date}</td>
+          <td class="px-4 py-2.5 font-medium text-gray-800">${escapeHtml(r.pm_machines?.name||'-')}</td>
+          <td class="px-4 py-2.5 text-gray-500">${escapeHtml(r.pm_machines?.factory||'-')}</td>
+          <td class="px-4 py-2.5 text-right bg-blue-50/30">${r.engine_start!=null?fmtNum(r.engine_start):'-'}</td>
+          <td class="px-4 py-2.5 text-right bg-blue-50/30">${r.engine_stop!=null?fmtNum(r.engine_stop):'-'}</td>
+          <td class="px-4 py-2.5 text-right bg-blue-100/50 font-semibold ${hrs>0?'text-blue-700':'text-gray-400'}">${hrs>0?hrs.toFixed(1):'0'}</td>
+          <td class="px-4 py-2.5 text-center">${hasBd?`<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs">${r.breakdown_count}ครั้ง ${r.breakdown_min}นาที</span>`:'-'}</td>
+          <td class="px-4 py-2.5 text-center sticky right-0 bg-white">
+            <button onclick="deleteMeterLog('${r.id}')" class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50">ลบ</button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function renderMeterTable() { await loadMeterTableData(); }
 
 function calcMonthHours(logs, field, filterMonth = '') {
   const now = new Date();
@@ -3931,78 +3939,111 @@ function calcMonthHours(logs, field, filterMonth = '') {
   return rows.reduce((s, r) => s + (Number(r[field]) || 0), 0);
 }
 
-function openMeterLogModal(prefill = null) {
-  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
-  if (!selMachine) { showToast('กรุณาเลือกเครื่องจักรก่อน','warn'); return; }
+function onMeterMachineChange() {
+  const machines = getMeterMachines();
+  const mid = qs('#ml-machine')?.value || '';
+  const m   = machines.find(x=>x.id===mid);
+  if (!m) return;
+  _meterSelectedMachine = mid;
+  // pre-fill เลขมิเตอร์ปัจจุบัน (เฉพาะเมื่อยังไม่ได้กรอก)
+  const engEl = qs('#ml-eng-start');
+  const hydEl = qs('#ml-hyd-start');
+  const engStop = qs('#ml-eng-stop');
+  const hydStop = qs('#ml-hyd-stop');
+  if (engEl) engEl.value = m.current_meter || '';
+  if (hydEl) hydEl.value = m.current_meter_2 || '';
+  if (engStop) engStop.value = '';
+  if (hydStop) hydStop.value = '';
+  // อัปเดต label ชื่อมิเตอร์
+  const engLabel = m.meter_1_label || 'ชม.เครื่องจักร';
+  const hydLabel = m.meter_2_label || 'ชม.ไฮโดรลิค';
+  const elEngLbl = qs('#ml-eng-label');
+  const elHydLbl = qs('#ml-hyd-label');
+  if (elEngLbl) elEngLbl.textContent = engLabel;
+  if (elHydLbl) elHydLbl.textContent = hydLabel;
+  // แสดง/ซ่อน section ไฮโดรลิค
+  const hydSection = qs('#ml-hyd-section');
+  if (hydSection) hydSection.style.display = m.has_meter_2 ? '' : 'none';
+  calcMeterHours('eng'); calcMeterHours('hyd');
+}
 
-  // ดึงเลขมิเตอร์ล่าสุดมาใส่ช่อง "เริ่ม" อัตโนมัติ (ถ้าไม่มี prefill)
+function openMeterLogModal(prefill = null) {
+  const machines = getMeterMachines();
+  if (!machines.length) { showToast('ไม่มีเครื่องจักรที่ต้องกรอกมิเตอร์','warn'); return; }
+
+  // ถ้ายังไม่ได้เลือก ใช้เครื่องแรก
+  if (!_meterSelectedMachine) _meterSelectedMachine = machines[0].id;
+  const selMachine = machines.find(m => m.id === _meterSelectedMachine) || machines[0];
+
   const defaultEngStart = prefill?.engine_start    ?? (selMachine.current_meter   || '');
   const defaultHydStart = prefill?.hydraulic_start ?? (selMachine.current_meter_2 || '');
-
   const hasHyd   = selMachine.has_meter_2;
   const engLabel = selMachine.meter_1_label || 'ชม.เครื่องจักร';
   const hydLabel = selMachine.meter_2_label || 'ชม.ไฮโดรลิค';
   const today    = new Date().toISOString().slice(0,10);
 
-  openModal(`บันทึกเลขมิเตอร์ — ${escapeHtml(selMachine.name)}`, `
+  const machOpts = machines.map(m=>`<option value="${m.id}" ${m.id===selMachine.id?'selected':''}>[${m.factory||'-'}] ${escapeHtml(m.name)}</option>`).join('');
+
+  openModal('เพิ่มข้อมูลมิเตอร์', `
     <div class="space-y-4">
+      <!-- เครื่องจักร -->
+      <div>
+        <label class="text-xs font-medium text-gray-600">เครื่องจักร *</label>
+        <select id="ml-machine" onchange="onMeterMachineChange()"
+          class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          ${machOpts}
+        </select>
+      </div>
+      <!-- วันที่ -->
       <div>
         <label class="text-xs font-medium text-gray-600">วันที่ *</label>
         <input id="ml-date" type="date" value="${prefill?.log_date||today}"
           class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
-
       <!-- เครื่องยนต์ -->
       <div class="bg-blue-50 rounded-xl p-3 space-y-2">
-        <p class="text-xs font-semibold text-blue-700 uppercase tracking-wide">${engLabel}</p>
+        <p id="ml-eng-label" class="text-xs font-semibold text-blue-700 uppercase tracking-wide">${engLabel}</p>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="text-xs text-gray-600">เริ่ม</label>
             <input id="ml-eng-start" type="number" step="0.1" placeholder="0.0"
-              value="${defaultEngStart}"
-              oninput="calcMeterHours('eng')"
+              value="${defaultEngStart}" oninput="calcMeterHours('eng')"
               class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
           </div>
           <div>
             <label class="text-xs text-gray-600">หยุด</label>
             <input id="ml-eng-stop" type="number" step="0.1" placeholder="0.0"
-              value="${prefill?.engine_stop??''}"
-              oninput="calcMeterHours('eng')"
+              value="${prefill?.engine_stop??''}" oninput="calcMeterHours('eng')"
               class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
           </div>
         </div>
         <div class="flex items-center gap-2 text-sm text-blue-700 font-semibold">
-          <i data-lucide="clock" class="w-4 h-4"></i>
-          รวม: <span id="ml-eng-hrs">0.0</span> ชั่วโมง
+          <i data-lucide="clock" class="w-4 h-4"></i>รวม: <span id="ml-eng-hrs">0.0</span> ชั่วโมง
         </div>
       </div>
-
-      ${hasHyd ? `
-      <!-- ไฮโดรลิค -->
-      <div class="bg-teal-50 rounded-xl p-3 space-y-2">
-        <p class="text-xs font-semibold text-teal-700 uppercase tracking-wide">${hydLabel}</p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-gray-600">เริ่ม</label>
-            <input id="ml-hyd-start" type="number" step="0.1" placeholder="0.0"
-              value="${defaultHydStart}"
-              oninput="calcMeterHours('hyd')"
-              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+      <!-- ไฮโดรลิค (แสดง/ซ่อนตามเครื่อง) -->
+      <div id="ml-hyd-section" style="display:${hasHyd?'':'none'}">
+        <div class="bg-teal-50 rounded-xl p-3 space-y-2">
+          <p id="ml-hyd-label" class="text-xs font-semibold text-teal-700 uppercase tracking-wide">${hydLabel}</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-600">เริ่ม</label>
+              <input id="ml-hyd-start" type="number" step="0.1" placeholder="0.0"
+                value="${defaultHydStart}" oninput="calcMeterHours('hyd')"
+                class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+            </div>
+            <div>
+              <label class="text-xs text-gray-600">หยุด</label>
+              <input id="ml-hyd-stop" type="number" step="0.1" placeholder="0.0"
+                value="${prefill?.hydraulic_stop??''}" oninput="calcMeterHours('hyd')"
+                class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+            </div>
           </div>
-          <div>
-            <label class="text-xs text-gray-600">หยุด</label>
-            <input id="ml-hyd-stop" type="number" step="0.1" placeholder="0.0"
-              value="${prefill?.hydraulic_stop??''}"
-              oninput="calcMeterHours('hyd')"
-              class="w-full border rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-teal-400">
+          <div class="flex items-center gap-2 text-sm text-teal-700 font-semibold">
+            <i data-lucide="clock" class="w-4 h-4"></i>รวม: <span id="ml-hyd-hrs">0.0</span> ชั่วโมง
           </div>
         </div>
-        <div class="flex items-center gap-2 text-sm text-teal-700 font-semibold">
-          <i data-lucide="clock" class="w-4 h-4"></i>
-          รวม: <span id="ml-hyd-hrs">0.0</span> ชั่วโมง
-        </div>
-      </div>` : ''}
-
+      </div>
       <!-- Breakdown -->
       <div class="bg-red-50 rounded-xl p-3 space-y-2">
         <p class="text-xs font-semibold text-red-600 uppercase tracking-wide">Breakdown (ถ้ามี)</p>
@@ -4021,7 +4062,7 @@ function openMeterLogModal(prefill = null) {
           </div>
         </div>
       </div>
-
+      <!-- หมายเหตุ -->
       <div>
         <label class="text-xs text-gray-600">หมายเหตุ</label>
         <textarea id="ml-notes" rows="2" placeholder="(ถ้ามี)"
@@ -4046,8 +4087,11 @@ function calcMeterHours(type) {
 }
 
 async function saveMeterLog() {
-  const selMachine = _pmMachines.find(m => m.id === _meterSelectedMachine);
-  if (!selMachine) return;
+  // อ่าน machine จาก dropdown ใน modal
+  const machine_id = qs('#ml-machine')?.value || _meterSelectedMachine;
+  const selMachine = _pmMachines.find(m => m.id === machine_id);
+  if (!selMachine) { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
+  _meterSelectedMachine = machine_id;
 
   const log_date     = qs('#ml-date')?.value;
   if (!log_date) { showToast('กรุณาเลือกวันที่','error'); return; }
@@ -4063,7 +4107,7 @@ async function saveMeterLog() {
   const notes           = qs('#ml-notes')?.value?.trim() || null;
 
   const payload = {
-    machine_id: _meterSelectedMachine, log_date,
+    machine_id, log_date,
     engine_start, engine_stop, engine_hours,
     hydraulic_start, hydraulic_stop, hydraulic_hours,
     breakdown_count, breakdown_min, notes,
@@ -4084,7 +4128,7 @@ async function saveMeterLog() {
     selMachine.current_meter_2 = hydraulic_stop;
   }
   if (Object.keys(updates).length > 0) {
-    await db.from('pm_machines').update(updates).eq('id', _meterSelectedMachine);
+    await db.from('pm_machines').update(updates).eq('id', machine_id);
   }
 
   closeModal();
