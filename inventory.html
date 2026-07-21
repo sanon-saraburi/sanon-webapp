@@ -2944,6 +2944,17 @@ function openItemModal(item){
       </select></div>
     <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">หมายเหตุ</label>
       <input id="it-desc" value="${escapeHtml(item?.description||'')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+    <div class="col-span-2">
+      <label class="text-xs text-gray-500 mb-1 block">โรงงานที่เบิกได้</label>
+      <p class="text-xs text-gray-400 mb-2">ไม่เลือก = ทุกโรงงานเบิกได้ (ของส่วนกลาง)</p>
+      <div class="flex flex-wrap gap-4">
+        ${['CDE','Propel','Sanon1','Sanon2'].map(f=>`
+          <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input type="checkbox" class="it-fac w-4 h-4" value="${f}" ${(item?.allowed_factories||[]).includes(f)?'checked':''}/>
+            <span>${f}</span>
+          </label>`).join('')}
+      </div>
+    </div>
   </div>`,
   footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ยกเลิก</button>
     <button onclick="saveItem()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">บันทึก</button>`});
@@ -2954,7 +2965,8 @@ async function saveItem(){
   if(!name){showToast('กรุณาระบุชื่อวัสดุ','error');return;}
   let code=qs('#it-code')?.value?.trim();
   if(!code&&!id){const {data:_maxRow}=await db.from('inventory_items').select('code').order('code',{ascending:false}).limit(1);const _lastNum=_maxRow?.[0]?.code?parseInt(_maxRow[0].code.replace('ITM-',''))||0:0;code='ITM-'+pad4(_lastNum+1);}
-  const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,weight_per_unit:parseFloat(qs('#it-weight')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null};
+  const checkedFacs=[...document.querySelectorAll('.it-fac:checked')].map(c=>c.value);
+  const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,weight_per_unit:parseFloat(qs('#it-weight')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null,allowed_factories:checkedFacs.length>0?checkedFacs:null};
   let error;
   if(id){({error}=await db.from('inventory_items').update(payload).eq('id',id));}
   else{({error}=await db.from('inventory_items').insert({...payload,code,created_by:currentUser.id}));}
@@ -3582,8 +3594,13 @@ function openStockInModal(preItem=null) {
 /* ─── Modal เบิกวัสดุ ─── */
 function openWithdrawModal(preItem=null) {
   const apv = isManager();
-  const itemOpts = _invItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
   const userFac = currentUser?.factory||'';
+  // กรองวัสดุตามสิทธิ์โรงงาน — Admin/Manager เห็นทั้งหมด
+  const visibleItems = isManager() ? _invItems : _invItems.filter(i=>{
+    if(!i.allowed_factories||i.allowed_factories.length===0) return true; // ของส่วนกลาง
+    return userFac && i.allowed_factories.includes(userFac);
+  });
+  const itemOpts = visibleItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
   const userDept = currentUser?.department||'';
   const facOpts = FACTORIES().map(f=>`<option ${f===userFac?'selected':''}>${f}</option>`).join('');
   const deptOpts = (_invConfig.departments||[]).map(d=>`<option ${d===userDept?'selected':''}>${escapeHtml(d)}</option>`).join('');
