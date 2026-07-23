@@ -214,6 +214,20 @@ const MANAGE_MENUS = [
 // SECTION 2B: PERMISSION TEMPLATES — admin ใช้กด 1 คลิกเพื่อ pre-fill สิทธิ์
 // =====================================================================
 // เมนู System 2 (Inventory) สำหรับ Permission Matrix
+const PM_MENUS_FOR_PERM = [
+  { key:'pm-dashboard', label:'ตารางรอบ PM',       icon:'layout-dashboard' },
+  { key:'pm-log',       label:'บันทึก PM',          icon:'clipboard-check' },
+  { key:'pm-meter',     label:'บันทึกเลขมิเตอร์',  icon:'gauge' },
+  { key:'pm-downtime',  label:'Downtime Log',       icon:'alert-triangle' },
+  { key:'pm-history',   label:'ประวัติต่อเครื่อง',  icon:'history' },
+  { key:'pm-items',     label:'รายการ PM',           icon:'list-checks' },
+  { key:'pm-repair',    label:'บันทึกซ่อม',         icon:'wrench' },
+  { key:'pm-parts',     label:'คลังอะไหล่',         icon:'package' },
+  { key:'pm-report',    label:'รายงาน PM',           icon:'file-bar-chart' },
+  { key:'pm-oee',       label:'OEE / Availability', icon:'activity' },
+  { key:'pm-machines',  label:'เครื่องจักร',        icon:'settings-2' },
+  { key:'pm-settings',  label:'ตั้งค่า PM',         icon:'settings' },
+];
 const INV_MENUS_FOR_PERM = [
   { key:'inv-dashboard',  label:'ภาพรวมคลัง',     icon:'layout-dashboard' },
   { key:'inv-balance',    label:'วัสดุคงเหลือ',    icon:'package-search' },
@@ -8276,6 +8290,13 @@ function renderPermissionMatrix(block, userId, extraDash, extraManage, userRole,
       <span class="text-sm text-secondary-700">${escapeHtml(m.label)}</span>
     </label>`).join('');
 
+  const pmRows = PM_MENUS_FOR_PERM.map(m => `
+    <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-amber-50 rounded-lg px-2">
+      <input type="checkbox" class="perm-manage-cb rounded" value="${m.key}" ${extraManage.includes(m.key) ? 'checked' : ''}>
+      <i data-lucide="${m.icon}" class="w-4 h-4 text-amber-400 flex-shrink-0"></i>
+      <span class="text-sm text-secondary-700">${escapeHtml(m.label)}</span>
+    </label>`).join('');
+
   block.innerHTML = `
     ${noteHtml}
     <div class="mb-3 flex items-center gap-2 flex-wrap">
@@ -8310,6 +8331,13 @@ function renderPermissionMatrix(block, userId, extraDash, extraManage, userRole,
       </p>
       <p class="text-[11px] text-cyan-500 mb-2">กำหนดเมนูที่ผู้ใช้นี้เข้าถึงได้ใน inventory.html</p>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-0.5">${invRows}</div>
+    </div>
+    <div class="mb-4 border border-amber-100 rounded-xl p-3 bg-amber-50/40">
+      <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+        <i data-lucide="wrench" class="w-3.5 h-3.5"></i>System 3 — PM เครื่องจักร
+      </p>
+      <p class="text-[11px] text-amber-500 mb-2">กำหนดเมนูที่ผู้ใช้นี้เข้าถึงได้ใน pm.html</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-0.5">${pmRows}</div>
     </div>
     <div class="flex flex-wrap items-center gap-2 sm:gap-3 pt-2 border-t border-secondary-100">
       <button id="perm-save-btn" data-uid="${userId}" class="px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition flex items-center gap-1.5">

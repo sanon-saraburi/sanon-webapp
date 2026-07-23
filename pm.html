@@ -3619,6 +3619,44 @@ async function renderSettingsPage() {
       <p class="text-xs text-slate-400 mt-2">แสดงใน dropdown ตอนเพิ่ม/แก้ไขเครื่องจักร</p>
     </div>`:''}
 
+    <!-- จัดการสิทธิ์ผู้ใช้ PM (admin only) -->
+    ${isAdmin()?`
+    <div class="bg-white rounded-xl shadow-sm p-5 md:col-span-2">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-semibold text-gray-800">สิทธิ์การเข้าใช้งาน PM</h3>
+          <p class="text-xs text-gray-400 mt-0.5">กำหนดเมนูที่แต่ละผู้ใช้เข้าได้ในระบบ PM</p>
+        </div>
+        <button onclick="loadPmUsersForPerm()" class="flex items-center gap-1.5 text-sm px-4 py-2 bg-amber-600 text-white rounded-xl hover:bg-amber-700">
+          <i data-lucide="users" class="w-4 h-4"></i>โหลดรายชื่อผู้ใช้
+        </button>
+      </div>
+      <!-- Role-level permissions -->
+      <div class="mb-4 bg-blue-50 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-sm font-semibold text-blue-700 flex items-center gap-1.5">
+            <i data-lucide="shield" class="w-4 h-4"></i>สิทธิ์ตาม Role
+          </p>
+          <div class="flex items-center gap-2">
+            <select id="pm-role-sel" class="border border-blue-200 rounded-lg px-2 py-1 text-xs bg-white">
+              <option value="user">user</option>
+              <option value="management">management</option>
+              <option value="manager">manager</option>
+              <option value="supervisor">supervisor</option>
+              <option value="operator">operator</option>
+              <option value="clerk">clerk</option>
+            </select>
+            <button onclick="loadPmRolePerm()" class="text-xs px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700">โหลด</button>
+          </div>
+        </div>
+        <div id="pm-role-perm-area" class="text-xs text-blue-400">เลือก Role แล้วกด "โหลด"</div>
+      </div>
+      <!-- User list table -->
+      <div id="pm-users-perm-table">
+        <div class="text-sm text-gray-400 text-center py-6">กดปุ่ม "โหลดรายชื่อผู้ใช้" เพื่อแสดงรายการ</div>
+      </div>
+    </div>`:''}
+
     <!-- ลิงก์ระบบอื่น -->
     <div class="bg-white rounded-xl shadow-sm p-5 md:col-span-2">
       <h3 class="font-semibold text-gray-800 mb-3">ระบบที่เกี่ยวข้อง</h3>
@@ -3633,6 +3671,220 @@ async function renderSettingsPage() {
     </div>
   </div>`;
   refreshIcons();
+}
+
+// =====================================================================
+// SECTION 15E: PM USER PERMISSIONS (admin only)
+// =====================================================================
+// เมนู PM ที่กำหนดสิทธิ์ได้ (ไม่รวม action button)
+const PM_PERM_MENUS = PM_MENUS.filter(m => m.key !== 'pm-meter-add');
+const PM_PERM_GROUPS = [
+  { label:'ดูข้อมูล',    keys:['pm-dashboard','pm-history','pm-oee','pm-report'] },
+  { label:'บันทึกข้อมูล', keys:['pm-log','pm-meter','pm-downtime'] },
+  { label:'จัดการ',      keys:['pm-items','pm-repair','pm-parts','pm-machines'] },
+  { label:'ตั้งค่า',     keys:['pm-settings'] },
+];
+
+async function loadPmUsersForPerm() {
+  const el = qs('#pm-users-perm-table');
+  if (!el) { showToast('ไม่พบ element #pm-users-perm-table','error'); return; }
+  el.innerHTML = `<div class="text-sm text-gray-400 text-center py-4"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+
+  let users, perms;
+  try {
+    const [usersRes, permsRes] = await Promise.all([
+      db.from('app_users').select('id,username,full_name,role,status,factory').order('role').order('username'),
+      db.from('user_permissions').select('user_id,extra_manage'),
+    ]);
+    if (usersRes.error) throw new Error('app_users: ' + usersRes.error.message);
+    users = usersRes.data || [];
+    perms = permsRes.data || [];
+  } catch(e) {
+    el.innerHTML = `<div class="text-sm text-red-500 text-center py-4">โหลดไม่สำเร็จ: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+
+  if (!users.length) { el.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">ไม่พบผู้ใช้</div>'; return; }
+
+  const permMap = {};
+  (perms||[]).forEach(p => { permMap[p.user_id] = (p.extra_manage||[]).filter(k=>k.startsWith('pm-')); });
+
+  const roleColor = { admin:'bg-purple-100 text-purple-700', manager:'bg-blue-100 text-blue-700',
+    supervisor:'bg-teal-100 text-teal-700', operator:'bg-green-100 text-green-700',
+    management:'bg-indigo-100 text-indigo-700', user:'bg-gray-100 text-gray-600',
+    clerk:'bg-orange-100 text-orange-600' };
+
+  el.innerHTML = `
+  <div class="overflow-x-auto rounded-xl border border-gray-100">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-xs text-gray-500">
+      <tr>
+        <th class="text-left px-4 py-2.5">ผู้ใช้</th>
+        <th class="text-left px-4 py-2.5">Role</th>
+        <th class="text-left px-4 py-2.5">โรงงาน</th>
+        <th class="text-left px-4 py-2.5">สิทธิ์ PM ที่กำหนด</th>
+        <th class="text-center px-4 py-2.5">จัดการ</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${users.filter(u=>u.role!=='admin').map(u => {
+        const pmPerms = permMap[u.id] || [];
+        const badge   = `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${roleColor[u.role]||'bg-gray-100 text-gray-600'}">${u.role}</span>`;
+        const permBadges = pmPerms.length
+          ? pmPerms.map(k=>{ const m=PM_PERM_MENUS.find(x=>x.key===k); return m?`<span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-xs">${m.label}</span>`:''; }).join(' ')
+          : `<span class="text-xs text-gray-400">${ROLE_DEFAULT_MENUS[u.role]?.length?'ตาม Role ('+ROLE_DEFAULT_MENUS[u.role].length+' เมนู)':'ไม่มีสิทธิ์'}</span>`;
+        const statusDot = u.status==='active'?'bg-green-400':'bg-gray-300';
+        return `<tr class="border-t hover:bg-gray-50">
+          <td class="px-4 py-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full ${statusDot} flex-shrink-0"></span>
+              <div>
+                <div class="font-medium text-gray-800">${escapeHtml(u.full_name||u.username)}</div>
+                <div class="text-xs text-gray-400">${escapeHtml(u.username)}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-2.5">${badge}</td>
+          <td class="px-4 py-2.5 text-gray-500 text-xs">${escapeHtml(u.factory||'-')}</td>
+          <td class="px-4 py-2.5"><div class="flex flex-wrap gap-1">${permBadges}</div></td>
+          <td class="px-4 py-2.5 text-center">
+            <button onclick="openPmUserPermModal('${u.id}','${escapeHtml(u.username)}','${u.role}')"
+              class="text-xs px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 inline mr-1"></i>กำหนดสิทธิ์
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+  refreshIcons();
+}
+
+async function openPmUserPermModal(userId, username, role) {
+  openModal(`กำหนดสิทธิ์ PM — ${escapeHtml(username)}`,
+    `<div class="py-6 text-center text-gray-400 text-sm"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i>กำลังโหลด…</div>`,
+    '', '580px');
+  refreshIcons();
+
+  const { data: perm } = await db.from('user_permissions')
+    .select('extra_manage').eq('user_id', userId).maybeSingle();
+  const current = (perm?.extra_manage||[]).filter(k=>k.startsWith('pm-'));
+
+  const roleDefault = ROLE_DEFAULT_MENUS[role] || [];
+  const hasRoleDefault = roleDefault.length > 0;
+
+  const groupHtml = PM_PERM_GROUPS.map(g => {
+    const items = PM_PERM_MENUS.filter(m => g.keys.includes(m.key));
+    return `<div>
+      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">${g.label}</p>
+      <div class="space-y-1">
+        ${items.map(m => `
+        <label class="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+          <input type="checkbox" class="pm-perm-cb rounded" value="${m.key}" ${current.includes(m.key)?'checked':''}>
+          <i data-lucide="${m.icon}" class="w-4 h-4 text-gray-400 flex-shrink-0"></i>
+          <span class="text-sm text-gray-700">${escapeHtml(m.label)}</span>
+          ${roleDefault.includes(m.key)?'<span class="ml-auto text-xs text-blue-400">role default</span>':''}
+        </label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  qs('#modal-body').innerHTML = `
+    <div class="space-y-4">
+      ${hasRoleDefault?`<div class="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-600 flex items-start gap-2">
+        <i data-lucide="info" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+        <span>Role "<b>${role}</b>" มีสิทธิ์ default ${roleDefault.length} เมนูอยู่แล้ว — สิทธิ์ที่ตั้งที่นี่จะ <b>แทนที่</b> ทั้งหมด</span>
+      </div>`:'<div class="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 text-xs text-amber-700 flex items-start gap-2"><i data-lucide="shield" class="w-4 h-4 flex-shrink-0 mt-0.5"></i><span>Role "<b>'+role+'</b>" ไม่มีสิทธิ์ default — ต้องกำหนดที่นี่ทั้งหมด</span></div>'}
+      <div class="grid grid-cols-2 gap-4">${groupHtml}</div>
+      <div class="pt-2 border-t flex items-center gap-2">
+        <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-600">
+          <input type="checkbox" id="pm-perm-select-all" class="rounded">เลือกทั้งหมด
+        </label>
+        <span class="text-xs text-gray-400 ml-auto">เปลี่ยนแปลงจะมีผลหลัง Login ครั้งถัดไป</span>
+      </div>
+    </div>`;
+  refreshIcons();
+
+  // Select all toggle
+  qs('#pm-perm-select-all')?.addEventListener('change', function() {
+    qs('#modal-body').querySelectorAll('.pm-perm-cb').forEach(cb => cb.checked = this.checked);
+  });
+
+  qs('#modal-footer').innerHTML = `
+    <button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+    <button onclick="clearPmUserPerm('${userId}')" class="px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">ล้างสิทธิ์</button>
+    <button onclick="savePmUserPerm('${userId}')" class="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700">บันทึกสิทธิ์</button>`;
+}
+
+async function savePmUserPerm(userId) {
+  const checked = Array.from(qs('#modal-body').querySelectorAll('.pm-perm-cb:checked')).map(cb=>cb.value);
+  // อ่าน extra_manage เดิม (non-pm keys) แล้วรวมกับ pm keys ใหม่
+  const { data: perm } = await db.from('user_permissions').select('extra_manage').eq('user_id', userId).maybeSingle();
+  const nonPm = (perm?.extra_manage||[]).filter(k=>!k.startsWith('pm-'));
+  const merged = [...nonPm, ...checked];
+  const { error } = await db.from('user_permissions').upsert(
+    { user_id: userId, extra_manage: merged, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  );
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  showToast('บันทึกสิทธิ์สำเร็จ','success');
+  closeModal();
+  loadPmUsersForPerm();
+}
+
+async function clearPmUserPerm(userId) {
+  if (!confirm('ล้างสิทธิ์ PM ของผู้ใช้นี้ทั้งหมด?')) return;
+  const { data: perm } = await db.from('user_permissions').select('extra_manage').eq('user_id', userId).maybeSingle();
+  const nonPm = (perm?.extra_manage||[]).filter(k=>!k.startsWith('pm-'));
+  await db.from('user_permissions').upsert(
+    { user_id: userId, extra_manage: nonPm, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  );
+  showToast('ล้างสิทธิ์ PM แล้ว','info');
+  closeModal();
+  loadPmUsersForPerm();
+}
+
+async function loadPmRolePerm() {
+  const role = qs('#pm-role-sel')?.value;
+  if (!role) return;
+  const el = qs('#pm-role-perm-area');
+  if (!el) return;
+  el.innerHTML = `<div class="text-xs text-blue-400 py-2"><i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin inline mr-1"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+
+  const { data: rp } = await db.from('role_permissions').select('extra_manage').eq('role_name', role).maybeSingle();
+  const current = (rp?.extra_manage||[]).filter(k=>k.startsWith('pm-'));
+
+  el.innerHTML = `
+    <div class="grid grid-cols-3 sm:grid-cols-4 gap-1 mb-3">
+      ${PM_PERM_MENUS.map(m=>`
+      <label class="flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-blue-100/60 cursor-pointer">
+        <input type="checkbox" class="pm-role-cb rounded" value="${m.key}" ${current.includes(m.key)?'checked':''}>
+        <span class="text-xs text-blue-800">${escapeHtml(m.label)}</span>
+      </label>`).join('')}
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="savePmRolePerm('${role}')" class="text-xs px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1">
+        <i data-lucide="save" class="w-3.5 h-3.5"></i>บันทึกสิทธิ์ Role: ${role}
+      </button>
+      <span class="text-xs text-blue-400">มีผลกับผู้ใช้ทุกคนที่มี Role นี้ หลัง Login ครั้งถัดไป</span>
+    </div>`;
+  refreshIcons();
+}
+
+async function savePmRolePerm(role) {
+  const checked = Array.from(qs('#pm-role-perm-area').querySelectorAll('.pm-role-cb:checked')).map(cb=>cb.value);
+  const { data: rp } = await db.from('role_permissions').select('extra_manage').eq('role_name', role).maybeSingle();
+  const nonPm = (rp?.extra_manage||[]).filter(k=>!k.startsWith('pm-'));
+  const merged = [...nonPm, ...checked];
+  const { error } = await db.from('role_permissions').upsert(
+    { role_name: role, extra_manage: merged, updated_at: new Date().toISOString() },
+    { onConflict: 'role_name' }
+  );
+  if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
+  showToast(`บันทึกสิทธิ์ Role "${role}" สำเร็จ`,'success');
 }
 
 // =====================================================================
@@ -3711,6 +3963,7 @@ async function loadPmData() {
 // =====================================================================
 let _meterSelectedMachine = '';   // id เครื่องที่เลือก
 let _meterFilterMonth     = '';   // 'YYYY-MM' หรือ '' = ทั้งหมด
+let _meterLogsCache       = [];   // cache สำหรับ print/export
 
 // กรองเฉพาะเครื่องที่ต้องกรอก meter เอง:
 // 1. sync_source='manual' (ไม่มี auto-sync meter 1)
@@ -3767,6 +4020,12 @@ async function renderMeterPage() {
       <div class="flex items-center gap-2 flex-wrap">
         <button onclick="openCsvImportModal()" class="flex items-center gap-1.5 px-3 py-2 border border-gray-200 bg-white text-gray-600 rounded-xl text-sm hover:bg-gray-50">
           <i data-lucide="file-up" class="w-4 h-4"></i>นำเข้า CSV
+        </button>
+        <button onclick="exportMeterExcel()" class="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl text-sm hover:bg-emerald-700">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Excel
+        </button>
+        <button onclick="printMeterReport()" class="flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white rounded-xl text-sm hover:bg-gray-700">
+          <i data-lucide="printer" class="w-4 h-4"></i>พิมพ์
         </button>
         <button onclick="openMeterLogModal()" class="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 shadow-sm">
           <i data-lucide="plus" class="w-4 h-4"></i>เพิ่มข้อมูลมิเตอร์
@@ -3830,6 +4089,7 @@ async function loadMeterTableData() {
 
   const { data: logs, error } = await q;
   if (error) { el.innerHTML = `<div class="p-6 text-red-500 text-sm">โหลดไม่สำเร็จ: ${error.message}</div>`; return; }
+  _meterLogsCache = logs || [];
 
   const countEl = qs('#meter-row-count');
   if (countEl) countEl.textContent = `${(logs||[]).length} รายการ`;
@@ -3930,6 +4190,159 @@ async function loadMeterTableData() {
 }
 
 async function renderMeterTable() { await loadMeterTableData(); }
+
+function _getMeterReportTitle() {
+  const machines = getMeterMachines();
+  const mName = _meterSelectedMachine
+    ? (machines.find(m=>m.id===_meterSelectedMachine)?.name || 'ทุกเครื่อง')
+    : 'ทุกเครื่อง';
+  const MN = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const period = _meterFilterMonth
+    ? (() => { const [y,m]=_meterFilterMonth.split('-'); return `${MN[+m]} ${+y+543}`; })()
+    : 'ทุกช่วงเวลา';
+  return { mName, period };
+}
+
+function exportMeterExcel() {
+  const table = qs('#meter-table-body table');
+  if (!table) { showToast('ไม่มีข้อมูล','warn'); return; }
+  if (typeof XLSX === 'undefined') { showToast('ไม่พบ XLSX library','error'); return; }
+  const { mName, period } = _getMeterReportTitle();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.table_to_sheet(table);
+  XLSX.utils.book_append_sheet(wb, ws, 'มิเตอร์');
+  XLSX.writeFile(wb, `Meter_${mName}_${period}.xlsx`);
+}
+
+function printMeterReport() {
+  if (!_meterLogsCache.length) { showToast('ไม่มีข้อมูล — กรุณาโหลดข้อมูลก่อน','warn'); return; }
+  const { mName, period } = _getMeterReportTitle();
+  const logs = _meterLogsCache;
+
+  // KPI summary
+  const now   = new Date();
+  const curYM = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthLogs = _meterFilterMonth ? logs : logs.filter(r=>r.log_date?.startsWith(curYM));
+  const totalEngHrs  = logs.reduce((s,r)=>s+(Number(r.engine_hours)||0), 0);
+  const monthEngHrs  = monthLogs.reduce((s,r)=>s+(Number(r.engine_hours)||0), 0);
+  const totalBdCnt   = logs.reduce((s,r)=>s+(Number(r.breakdown_count)||0), 0);
+  const totalBdMin   = logs.reduce((s,r)=>s+(Number(r.breakdown_min)||0), 0);
+
+  // Table rows
+  const rowsHtml = logs.map((r,i) => {
+    const hrs    = r.engine_hours ?? Math.max(0,(r.engine_stop||0)-(r.engine_start||0));
+    const hydHrs = r.hydraulic_hours ?? (r.hydraulic_stop!=null&&r.hydraulic_start!=null ? Math.max(0,r.hydraulic_stop-r.hydraulic_start) : null);
+    const hasBd  = r.breakdown_count > 0;
+    return `<tr>
+      <td>${r.log_date||'-'}</td>
+      <td>${escapeHtml(r.pm_machines?.name||'-')}</td>
+      <td>${escapeHtml(r.pm_machines?.factory||'-')}</td>
+      <td class="r">${r.engine_start!=null?Number(r.engine_start).toFixed(1):'-'}</td>
+      <td class="r">${r.engine_stop!=null?Number(r.engine_stop).toFixed(1):'-'}</td>
+      <td class="r bold blue">${hrs>0?hrs.toFixed(1):'0'}</td>
+      <td class="r">${hydHrs!=null?hydHrs.toFixed(1):'-'}</td>
+      <td class="c">${hasBd?`${r.breakdown_count} ครั้ง / ${r.breakdown_min} นาที`:'-'}</td>
+      <td>${escapeHtml(r.notes||'')}</td>
+    </tr>`;
+  }).join('');
+
+  // tfoot
+  const totalHrs = logs.reduce((s,r)=>s+(Number(r.engine_hours)||0),0);
+  const totalHyd = logs.reduce((s,r)=>s+(Number(r.hydraulic_hours)||0),0);
+
+  const w = window.open('','_blank','width=1100,height=800');
+  if (!w) { showToast('กรุณาอนุญาต Popup','warn'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>รายงานมิเตอร์ — ${mName} ${period}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+    body{font-family:'Kanit',sans-serif;padding:20px;font-size:12px;color:#1f2937;background:#fff;}
+    .header{margin-bottom:14px;}
+    h1{font-size:17px;font-weight:700;color:#1e3a5f;margin-bottom:2px;}
+    .sub{font-size:10.5px;color:#6b7280;}
+    /* KPI */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+    .kpi-card{border-radius:10px;padding:12px 14px;border:1px solid #e5e7eb;border-left-width:4px;}
+    .kpi-card.blue{border-left-color:#3b82f6;}
+    .kpi-card.orange{border-left-color:#f97316;}
+    .kpi-card.red{border-left-color:#ef4444;}
+    .kpi-card.gray{border-left-color:#9ca3af;}
+    .kpi-label{font-size:10px;color:#6b7280;margin-bottom:4px;}
+    .kpi-val{font-size:24px;font-weight:700;line-height:1;}
+    .kpi-unit{font-size:10px;color:#9ca3af;margin-top:3px;}
+    .kv-blue{color:#2563eb;} .kv-orange{color:#ea580c;} .kv-red{color:#dc2626;} .kv-gray{color:#374151;}
+    /* Section title */
+    .section-title{font-size:12px;font-weight:600;color:#1e3a5f;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #1e3a5f;}
+    /* Table */
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:#1e3a5f!important;}
+    th{background:#1e3a5f;color:#fff;padding:7px 8px;font-size:10px;font-weight:600;text-align:left;}
+    td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;vertical-align:middle;}
+    tr:nth-child(even) td{background:#f8fafc;}
+    tfoot td{background:#f1f5f9!important;font-weight:600;font-size:11px;color:#1e3a5f;}
+    td.r,th.r{text-align:right;}
+    td.c,th.c{text-align:center;}
+    td.bold{font-weight:700;}
+    td.blue{color:#2563eb;}
+    @media print{body{padding:8mm;}@page{size:A4 landscape;margin:8mm;}}
+  </style></head><body>
+  <div class="header">
+    <h1>รายงานบันทึกเลขมิเตอร์เครื่องจักร — สานนท์ จำกัด</h1>
+    <div class="sub">เครื่องจักร: <b>${escapeHtml(mName)}</b> &nbsp;|&nbsp; ช่วงเวลา: <b>${period}</b> &nbsp;|&nbsp; จำนวน: <b>${logs.length} รายการ</b> &nbsp;|&nbsp; พิมพ์: ${new Date().toLocaleDateString('th-TH')}</div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-label">ชม.รวมทั้งหมด</div>
+      <div class="kpi-val kv-blue">${totalEngHrs.toFixed(1)}</div>
+      <div class="kpi-unit">ชั่วโมง</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">ชม.${_meterFilterMonth?period:'เดือนนี้'}</div>
+      <div class="kpi-val kv-orange">${monthEngHrs.toFixed(1)}</div>
+      <div class="kpi-unit">ชั่วโมง</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Breakdown รวม</div>
+      <div class="kpi-val kv-red">${totalBdCnt}</div>
+      <div class="kpi-unit">${totalBdMin} นาทีรวม</div>
+    </div>
+    <div class="kpi-card gray">
+      <div class="kpi-label">วันที่บันทึก</div>
+      <div class="kpi-val kv-gray">${new Set(logs.map(r=>r.log_date)).size}</div>
+      <div class="kpi-unit">วัน</div>
+    </div>
+  </div>
+  <div class="section-title">ประวัติบันทึกเลขมิเตอร์</div>
+  <table>
+    <thead>
+      <tr>
+        <th>วันที่</th>
+        <th>เครื่องจักร</th>
+        <th>โรงงาน</th>
+        <th class="r">มิเตอร์เริ่ม</th>
+        <th class="r">มิเตอร์หยุด</th>
+        <th class="r">ชม.เครื่องยนต์</th>
+        <th class="r">ชม.ไฮโดรลิค</th>
+        <th class="c">Breakdown</th>
+        <th>หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5">รวม</td>
+        <td class="r">${totalHrs.toFixed(1)}</td>
+        <td class="r">${totalHyd>0?totalHyd.toFixed(1):'-'}</td>
+        <td class="c">${totalBdCnt} ครั้ง</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`);
+  w.document.close();
+}
 
 function calcMonthHours(logs, field, filterMonth = '') {
   const now = new Date();
