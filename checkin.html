@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0">
+<title>ระบบเช็คอินพักเที่ยง v2 — สานนท์</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Kanit',sans-serif;}
+html,body{height:100%;}
+body{background:#f1f5f9;color:#1e293b;font-size:15px;}
+input,select,button,textarea{font-family:'Kanit',sans-serif;font-size:14px;}
+input[type=text],input[type=password],input[type=date],select{
+  width:100%;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;
+  outline:none;background:#fff;transition:border .15s;
+}
+input[type=text]:focus,input[type=password]:focus,
+input[type=date]:focus,select:focus{border-color:#1a3a5c;box-shadow:0 0 0 3px rgba(26,58,92,.08);}
+button{cursor:pointer;border-radius:8px;border:1px solid #cbd5e1;
+  padding:9px 18px;background:#fff;color:#334155;transition:all .15s;}
+button:hover{background:#f8fafc;}
+label.lbl{font-size:12px;color:#64748b;display:block;margin-bottom:4px;}
+
+/* ===== AUTH ===== */
+#auth-screen{display:flex;align-items:center;justify-content:center;
+  min-height:100vh;background:linear-gradient(135deg,#1a3a5c,#0f2540);}
+.auth-card{background:#fff;border-radius:16px;padding:36px 40px;
+  width:360px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+.auth-logo{text-align:center;margin-bottom:24px;}
+.auth-logo .brand{font-size:20px;font-weight:600;color:#1a3a5c;}
+.auth-logo .sub{font-size:13px;color:#64748b;margin-top:4px;}
+.auth-field{margin-bottom:14px;}
+.auth-btn{width:100%;padding:11px;background:#1a3a5c;color:#fff;
+  border:none;border-radius:8px;font-size:15px;font-weight:500;margin-top:4px;}
+.auth-btn:hover{background:#14304f;}
+.auth-err{color:#dc2626;font-size:13px;margin-top:8px;text-align:center;min-height:18px;}
+.auth-ver{font-size:11px;color:#94a3b8;text-align:center;margin-top:16px;}
+
+/* ===== APP SHELL ===== */
+#app{display:none;height:100vh;overflow:hidden;}
+.layout{display:flex;height:100vh;width:100%;}
+
+/* Sidebar */
+.sidebar{width:230px;flex-shrink:0;background:#1a3a5c;color:#fff;
+  display:flex;flex-direction:column;height:100vh;overflow-y:auto;
+  scrollbar-width:none;transition:width .2s;}
+.sidebar::-webkit-scrollbar{display:none;}
+.sb-header{padding:16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.sb-brand{font-size:15px;font-weight:600;}
+.sb-sub{font-size:11px;opacity:.55;margin-top:3px;}
+.sb-menu{padding:8px 0;flex:1;}
+.sb-sec{font-size:10px;color:rgba(255,255,255,.35);padding:10px 16px 3px;
+  letter-spacing:.06em;text-transform:uppercase;}
+.sb-item{display:flex;align-items:center;gap:10px;padding:10px 16px;
+  font-size:14px;cursor:pointer;color:rgba(255,255,255,.7);transition:all .15s;border-left:3px solid transparent;}
+.sb-item:hover,.sb-item.active{background:rgba(255,255,255,.1);color:#fff;}
+.sb-item.active{border-left-color:#60a5fa;}
+.sb-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.sb-user-name{font-size:13px;font-weight:500;color:#fff;}
+.sb-user-role{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;}
+.sb-logout{font-size:12px;color:rgba(255,255,255,.45);cursor:pointer;margin-top:6px;display:inline-block;}
+.sb-logout:hover{color:#fff;}
+
+/* Content */
+.content-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 20px;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.menu-toggle{display:none;background:none;border:none;font-size:22px;padding:0 4px;color:#1a3a5c;}
+.topbar-title{font-size:16px;font-weight:500;color:#1a3a5c;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.clock{font-size:16px;font-weight:600;color:#334155;font-variant-numeric:tabular-nums;}
+.scanner-tag{font-size:12px;color:#64748b;background:#f1f5f9;
+  padding:4px 10px;border-radius:20px;border:1px solid #e2e8f0;}
+.page-content{flex:1;overflow-y:auto;padding:16px 20px 80px;}
+
+/* ===== CARDS ===== */
+.card{background:#fff;border-radius:12px;padding:18px 20px;
+  border:1px solid #e2e8f0;margin-bottom:14px;}
+.card-hd{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;gap:8px;}
+.card-title{font-size:15px;font-weight:500;color:#1a3a5c;}
+
+/* ===== BADGE ===== */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500;}
+.b-out  {background:#fff7ed;color:#c2410c;}
+.b-in   {background:#f0fdf4;color:#15803d;}
+.b-late {background:#fef2f2;color:#b91c1c;}
+.b-gray {background:#f1f5f9;color:#475569;}
+.b-blue {background:#eff6ff;color:#1d4ed8;}
+.b-manual{background:#f8fafc;color:#64748b;font-size:11px;}
+
+/* ===== STATS ===== */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+.stat-card{background:#fff;border-radius:12px;padding:16px 18px;border:1px solid #e2e8f0;}
+.stat-num{font-size:32px;font-weight:600;line-height:1;}
+.stat-lbl{font-size:12px;color:#64748b;margin-top:6px;}
+.s-out  .stat-num{color:#d97706;}
+.s-late .stat-num{color:#dc2626;}
+.s-ok   .stat-num{color:#16a34a;}
+
+/* ===== TABLE ===== */
+.tbl-wrap{overflow:auto;}
+.tbl-wrap.fixed-h{max-height:calc(100vh - 330px);}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px;}
+thead th{position:sticky;top:0;background:#f8fafc;text-align:left;
+  padding:8px 12px;color:#64748b;font-weight:500;border-bottom:1px solid #e2e8f0;white-space:nowrap;}
+tbody td{padding:9px 12px;border-bottom:1px solid #f8fafc;vertical-align:middle;}
+tbody tr:hover td{background:#f8fafc;}
+tbody tr:last-child td{border-bottom:none;}
+.emp-name{font-weight:500;}
+.emp-dept{font-size:12px;color:#94a3b8;margin-top:1px;}
+
+/* ===== GUARD SCREEN ===== */
+.guard-grid{display:grid;grid-template-columns:420px 1fr;gap:16px;}
+.gate-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.gate-tab{padding:7px 16px;border-radius:20px;border:1px solid #cbd5e1;
+  background:#fff;font-size:13px;color:#475569;cursor:pointer;transition:all .15s;}
+.gate-tab.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c;}
+.gate-tab:hover:not(.active){background:#f8fafc;}
+.scan-row{display:flex;gap:8px;margin-bottom:4px;}
+.scan-row input{flex:1;font-size:16px !important;}
+.btn-scan{padding:10px 18px;background:#1a3a5c;color:#fff;border:none;white-space:nowrap;font-size:14px;}
+.btn-scan:hover{background:#14304f;}
+.scan-msg{font-size:13px;color:#dc2626;min-height:18px;margin-top:4px;}
+.result-box{margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px;display:none;}
+.emp-row-av{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.avatar{width:44px;height:44px;border-radius:50%;background:#dbeafe;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:600;font-size:15px;color:#1e40af;flex-shrink:0;}
+.action-box{border-radius:8px;padding:12px 14px;margin-bottom:12px;}
+.action-box.out {background:#fff7ed;border:1px solid #fed7aa;}
+.action-box.in  {background:#f0fdf4;border:1px solid #bbf7d0;}
+.action-box.warn{background:#fef2f2;border:1px solid #fecaca;}
+.action-lbl{font-weight:600;font-size:14px;}
+.action-lbl.out {color:#c2410c;}
+.action-lbl.in  {color:#15803d;}
+.action-lbl.warn{color:#b91c1c;}
+.action-det{font-size:13px;color:#64748b;margin-top:4px;}
+.btn-confirm{width:100%;padding:11px;font-size:15px;font-weight:500;border:none;border-radius:8px;}
+.btn-co{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;}
+.btn-ci{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}
+.btn-co:hover{background:#fed7aa;}
+.btn-ci:hover{background:#bbf7d0;}
+.success-box{display:none;text-align:center;padding:20px 0;}
+.success-icon{font-size:48px;}
+.success-msg{font-size:16px;font-weight:500;margin-top:10px;}
+.success-det{font-size:13px;color:#64748b;margin-top:4px;}
+.btn-reset{margin-top:14px;background:#f1f5f9;color:#334155;}
+.search-sec{margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;display:none;}
+.btn-search-t{width:100%;background:#f8fafc;color:#475569;font-size:13px;}
+.s-item{padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;
+  margin-bottom:6px;cursor:pointer;transition:background .1s;}
+.s-item:hover{background:#f0f9ff;border-color:#1a3a5c;}
+.log-empty{text-align:center;color:#cbd5e1;padding:20px;font-size:13px;}
+
+/* ===== PASS FORM (ใบอนุญาตผ่าน style) ===== */
+.pass-form{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-top:14px;}
+.pass-hd{display:flex;align-items:center;gap:12px;padding:12px 16px;}
+.pass-hd.hd-out {background:#1a3a5c;color:#fff;}
+.pass-hd.hd-in  {background:#166534;color:#fff;}
+.pass-hd.hd-warn{background:#7f1d1d;color:#fff;}
+.pass-logo{font-size:22px;line-height:1;}
+.pass-title{font-size:14px;font-weight:600;line-height:1.3;}
+.pass-co{font-size:11px;opacity:.7;margin-top:2px;}
+.pass-body{padding:10px 16px;border-bottom:1px solid #f1f5f9;}
+.pass-row{display:flex;align-items:baseline;gap:10px;padding:5px 0;
+  border-bottom:1px dashed #f1f5f9;}
+.pass-row:last-child{border-bottom:none;}
+.pass-lbl{font-size:11px;color:#94a3b8;min-width:72px;flex-shrink:0;text-transform:uppercase;letter-spacing:.4px;}
+.pass-val{font-size:14px;color:#1e293b;font-weight:500;}
+.pass-reason{padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+.pass-reason label{font-size:12px;color:#475569;margin-bottom:6px;display:block;}
+.pass-actions{padding:12px 16px;}
+.btn-confirm-out{width:100%;padding:11px;font-size:15px;font-weight:500;border:none;
+  border-radius:8px;background:#1a3a5c;color:#fff;cursor:pointer;}
+.btn-confirm-out:hover{background:#14304f;}
+.btn-confirm-in{width:100%;padding:11px;font-size:15px;font-weight:500;border:none;
+  border-radius:8px;background:#166534;color:#fff;cursor:pointer;}
+.btn-confirm-in:hover{background:#14532d;}
+.reason-warn{font-size:12px;color:#dc2626;margin-top:4px;display:none;}
+
+/* ===== MODAL ===== */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:300;align-items:center;justify-content:center;padding:16px;}
+.modal-box{background:#fff;border-radius:12px;padding:24px;
+  width:420px;max-width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:500;color:#1a3a5c;margin-bottom:16px;}
+.modal-footer{display:flex;gap:8px;margin-top:16px;}
+.modal-footer button{flex:1;padding:10px;}
+.btn-primary{background:#1a3a5c;color:#fff;border:none;}
+.btn-primary:hover{background:#14304f;}
+.form-field{margin-bottom:12px;}
+.form-err{color:#dc2626;font-size:13px;margin-top:8px;min-height:18px;}
+
+/* ===== FILTER ROW ===== */
+.filter-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;}
+.filter-row .fg{display:flex;flex-direction:column;gap:4px;}
+.filter-row label{font-size:12px;color:#64748b;}
+.filter-row input,.filter-row select{width:auto;min-width:140px;}
+.btn-filter{padding:9px 18px;background:#1a3a5c;color:#fff;border:none;height:38px;}
+
+/* ===== CSV IMPORT ===== */
+.csv-preview{margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;overflow:auto;max-height:300px;}
+.csv-preview table{min-width:400px;}
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
+  background:#1a3a5c;border-top:1px solid rgba(255,255,255,.1);
+  padding:6px 0 10px;z-index:200;}
+.bn-inner{display:flex;overflow-x:auto;scrollbar-width:none;}
+.bn-inner::-webkit-scrollbar{display:none;}
+.bn-item{flex:1;min-width:60px;display:flex;flex-direction:column;
+  align-items:center;gap:2px;color:rgba(255,255,255,.55);cursor:pointer;
+  font-size:10px;padding:4px 8px;transition:color .15s;}
+.bn-item.active,.bn-item:hover{color:#fff;}
+.bn-icon{font-size:20px;line-height:1;}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:900px){
+  .guard-grid{grid-template-columns:1fr;}
+  .stats-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:768px){
+  .sidebar{position:fixed;left:-230px;top:0;bottom:0;z-index:250;transition:left .25s;}
+  .sidebar.open{left:0;}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);
+    z-index:240;opacity:0;transition:opacity .25s;}
+  .sidebar-overlay.open{display:block;opacity:1;}
+  .menu-toggle{display:block;}
+  .bottom-nav{display:block;}
+  .page-content{padding:12px 12px 80px;}
+  .topbar{padding:10px 14px;}
+  .scanner-tag{display:none;}
+  .stats-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
+  .stat-num{font-size:24px;}
+  .stat-lbl{font-size:11px;}
+  .card{padding:14px 14px;}
+}
+@media(max-width:400px){
+  .stats-grid{grid-template-columns:1fr 1fr;}
+}
+
+/* ===== VISITOR ===== */
+.vtab-bar{display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;}
+.vtab-bar::-webkit-scrollbar{display:none;}
+.vtab{padding:9px 16px;font-size:13px;color:#64748b;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}
+.vtab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;font-weight:500;}
+.vtab:hover:not(.active){color:#334155;background:#f8fafc;}
+.v-panel{display:none;}
+.v-panel.active{display:block;}
+.v-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:480px){.v-form-grid{grid-template-columns:1fr;}}
+.v-entry-ff{margin-bottom:10px;}
+</style>
+</head>
+<body>
+
+<!-- ===== AUTH ===== -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="brand">บริษัท สานนท์ จำกัด</div>
+      <div class="sub">ระบบบันทึกเวลาพักพนักงาน</div>
+    </div>
+    <div class="auth-field">
+      <label class="lbl">ชื่อผู้ใช้</label>
+      <input type="text" id="u" placeholder="username" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="auth-field">
+      <label class="lbl">รหัสผ่าน</label>
+      <input type="password" id="p" placeholder="password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="auth-btn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="auth-err" id="auth-err"></div>
+    <div style="text-align:center;margin-top:12px;">
+      <a href="#" onclick="openRegister();return false;" style="font-size:13px;color:#6b8cba;text-decoration:none;border-bottom:1px dashed #6b8cba;">
+        สมัครสมาชิก / ขอสิทธิ์เข้าใช้
+      </a>
+    </div>
+    <div class="auth-ver">v2.0 — ระบบแยกจาก System 1/2/3</div>
+  </div>
+</div>
+
+<!-- ===== REGISTER MODAL ===== -->
+<div id="reg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:28px 24px;width:360px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.25);">
+    <h2 style="font-size:18px;font-weight:600;color:#1a3a5c;margin-bottom:4px;">สมัครสมาชิก</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">บัญชีจะรอการอนุมัติจาก Admin ก่อนใช้งานได้</p>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:#64748b;font-weight:500;">ชื่อ-นามสกุล <span style="color:#dc2626">*</span></label>
+      <input id="reg-fullname" type="text" placeholder="ชื่อ-นามสกุล"
+        style="width:100%;margin-top:4px;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:#64748b;font-weight:500;">ชื่อผู้ใช้ (Username) <span style="color:#dc2626">*</span></label>
+      <input id="reg-username" type="text" placeholder="ตัวพิมพ์เล็ก ไม่มีช่องว่าง"
+        style="width:100%;margin-top:4px;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:#64748b;font-weight:500;">รหัสผ่าน <span style="color:#dc2626">*</span></label>
+      <input id="reg-pw" type="password" placeholder="อย่างน้อย 6 ตัวอักษร"
+        style="width:100%;margin-top:4px;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;color:#64748b;font-weight:500;">ยืนยันรหัสผ่าน <span style="color:#dc2626">*</span></label>
+      <input id="reg-pw2" type="password" placeholder="พิมพ์รหัสผ่านอีกครั้ง"
+        style="width:100%;margin-top:4px;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box;">
+    </div>
+    <div id="reg-err" style="font-size:12px;color:#dc2626;min-height:18px;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="closeRegister()" style="flex:1;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;font-size:14px;font-family:inherit;cursor:pointer;color:#64748b;">ยกเลิก</button>
+      <button onclick="doRegister()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#1a3a5c;color:#fff;font-size:14px;font-family:inherit;cursor:pointer;font-weight:500;">สมัครสมาชิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app">
+  <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar">
+      <div class="sb-header">
+        <div class="sb-brand">สานนท์ — เช็คอิน</div>
+        <div class="sb-sub">Checkin System v2</div>
+      </div>
+      <div class="sb-menu">
+        <div class="sb-sec">หน้าหลัก</div>
+        <div class="sb-item" onclick="nav('ck-guard')">🔍 <span>บันทึกเข้า-ออก</span></div>
+        <div class="sb-item" onclick="nav('ck-supervisor')">📊 <span>Dashboard</span></div>
+        <div class="sb-item" onclick="nav('ck-visitor')">🏢 <span>บุคคลภายนอก</span></div>
+        <div class="sb-sec">ข้อมูล</div>
+        <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
+        <div class="sb-item perm-sup" onclick="nav('ck-employees')">👥 <span>จัดการพนักงาน</span></div>
+        <div class="sb-item perm-admin" onclick="nav('ck-users')">🔑 <span>จัดการผู้ใช้</span></div>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-user-name" id="sb-name"></div>
+        <div class="sb-user-role" id="sb-role"></div>
+        <div class="sb-logout" onclick="doLogout()">ออกจากระบบ</div>
+      </div>
+    </div>
+
+    <div class="content-wrap">
+      <div class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="topbar-title" id="topbar-title">บันทึกเข้า-ออก</div>
+        </div>
+        <div class="topbar-right">
+          <div class="scanner-tag" id="scanner-tag"></div>
+          <div class="clock" id="clock">--:--:--</div>
+        </div>
+      </div>
+      <div class="page-content" id="page-content"></div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="bn-inner">
+      <div class="bn-item" onclick="nav('ck-guard')"><div class="bn-icon">🔍</div>บันทึก</div>
+      <div class="bn-item" onclick="nav('ck-supervisor')"><div class="bn-icon">📊</div>Dashboard</div>
+      <div class="bn-item" onclick="nav('ck-visitor')"><div class="bn-icon">🏢</div>ภายนอก</div>
+      <div class="bn-item perm-sup" onclick="nav('ck-report')"><div class="bn-icon">📋</div>รายงาน</div>
+      <div class="bn-item perm-sup" onclick="nav('ck-employees')"><div class="bn-icon">👥</div>พนักงาน</div>
+      <div class="bn-item perm-admin" onclick="nav('ck-users')"><div class="bn-icon">🔑</div>ผู้ใช้</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+<div class="modal-overlay" id="modal-emp">
+  <div class="modal-box">
+    <div class="modal-title" id="memp-title">เพิ่มพนักงาน</div>
+    <input type="hidden" id="memp-orig">
+    <div class="form-field"><label class="lbl">รหัสพนักงาน *</label><input type="text" id="memp-id" placeholder="EMP001"></div>
+    <div class="form-field"><label class="lbl">ชื่อ-นามสกุล *</label><input type="text" id="memp-name" placeholder="สมชาย ใจดี"></div>
+    <div class="form-field"><label class="lbl">แผนก</label><input type="text" id="memp-dept" placeholder="แผนกผลิต"></div>
+    <div class="form-field"><label class="lbl">รหัส QR / Barcode</label><input type="text" id="memp-qr" placeholder="ถ้าว่างจะใช้รหัสพนักงานแทน"></div>
+    <div class="form-err" id="memp-err"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="saveEmp()">บันทึก</button>
+      <button onclick="closeModal('modal-emp')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-user">
+  <div class="modal-box">
+    <div class="modal-title" id="musr-title">เพิ่มผู้ใช้</div>
+    <input type="hidden" id="musr-id">
+    <div class="form-field"><label class="lbl">ชื่อผู้ใช้ (username) *</label><input type="text" id="musr-username" placeholder="guard01"></div>
+    <div class="form-field"><label class="lbl">รหัสผ่าน *</label><input type="password" id="musr-pw" placeholder="กรอกรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)"></div>
+    <div class="form-field"><label class="lbl">ชื่อ-นามสกุล *</label><input type="text" id="musr-name" placeholder="สมชาย ยาม"></div>
+    <div class="form-field"><label class="lbl">สิทธิ์</label>
+      <select id="musr-role">
+        <option value="guard">Guard — ยาม (สแกนได้)</option>
+        <option value="supervisor">Supervisor — ดู Dashboard + รายงาน</option>
+        <option value="admin">Admin — เต็มสิทธิ์</option>
+      </select>
+    </div>
+    <div class="form-field"><label class="lbl">สถานะ</label>
+      <select id="musr-status">
+        <option value="active">Active</option>
+        <option value="pending">Pending (รออนุมัติ)</option>
+        <option value="inactive">Inactive</option>
+      </select>
+    </div>
+    <div class="form-err" id="musr-err"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="saveUser()">บันทึก</button>
+      <button onclick="closeModal('modal-user')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-csv">
+  <div class="modal-box" style="width:600px;">
+    <div class="modal-title">นำเข้าพนักงานจาก CSV</div>
+    <p style="font-size:13px;color:#64748b;margin-bottom:12px;">
+      รูปแบบ CSV: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">employee_id,name,department,qr_code</code>
+    </p>
+    <input type="file" id="csv-file" accept=".csv" onchange="handleCsv(event)"
+      style="border:2px dashed #cbd5e1;padding:20px;text-align:center;
+      border-radius:8px;cursor:pointer;background:#f8fafc;width:100%;">
+    <div id="csv-preview"></div>
+    <div class="form-err" id="csv-err"></div>
+    <div class="modal-footer" id="csv-footer" style="display:none;">
+      <button class="btn-primary" onclick="importCsv()">นำเข้าทั้งหมด</button>
+      <button onclick="closeModal('modal-csv')">ยกเลิก</button>
+    </div>
+    <div style="margin-top:8px;">
+      <button onclick="closeModal('modal-csv')" style="background:none;border:none;color:#94a3b8;font-size:13px;">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: เพิ่มนัดหมาย -->
+<div class="modal-overlay" id="modal-appt">
+  <div class="modal-box">
+    <div class="modal-title">📅 เพิ่มนัดหมายล่วงหน้า</div>
+    <div class="form-field"><label class="lbl">ชื่อ-นามสกุล <span style="color:#dc2626;">*</span></label><input type="text" id="va-name" placeholder="ชื่อ นามสกุล"></div>
+    <div class="form-field"><label class="lbl">เลขบัตรปชช./Passport</label><input type="text" id="va-idcard" placeholder="1234567890123"></div>
+    <div class="form-field"><label class="lbl">บริษัท/หน่วยงาน</label><input type="text" id="va-company" placeholder="บริษัท / หน่วยงาน"></div>
+    <div class="form-field"><label class="lbl">วัตถุประสงค์ <span style="color:#dc2626;">*</span></label><select id="va-purpose"></select></div>
+    <div class="form-field"><label class="lbl">ติดต่อแผนก / บุคคลใน</label><input type="text" id="va-contact" placeholder="เช่น แผนกผลิต, คุณสมชาย"></div>
+    <div class="form-field"><label class="lbl">วันที่นัดหมาย <span style="color:#dc2626;">*</span></label><input type="date" id="va-date"></div>
+    <div class="form-field"><label class="lbl">หมายเหตุ</label><input type="text" id="va-notes" placeholder="(ถ้ามี)"></div>
+    <div class="form-err" id="va-err"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="saveAppointment()">💾 บันทึกนัดหมาย</button>
+      <button onclick="closeModal('modal-appt')">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SECTION 0 — CONFIG
+// ============================================================
+const SUPABASE_URL = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq';
+const sb           = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const OVERTIME_MIN = 60;
+const SESSION_KEY  = '_sn_ck2_sess'; // แยก key จากระบบอื่น
+
+// ============================================================
+// SECTION 1 — STATE
+// ============================================================
+let currentUser = null;
+let currentGate = 'GATE_1';
+let scanEmp     = null;
+let csvRows     = [];
+
+// Gate names (โหลดจาก DB, fallback = ประตู 1-4)
+let gateNames = {GATE_1:'ประตู 1',GATE_2:'ประตู 2',GATE_3:'ประตู 3',GATE_4:'ประตู 4'};
+
+// เหตุผลพัก (mutable — โหลดจาก DB, fallback = default list)
+const REASON_OPTS_DEFAULT = ['ทานข้าว','ธุระส่วนตัว','พบแพทย์','ออกรถ','อื่นๆ'];
+let reasonOpts = [...REASON_OPTS_DEFAULT];
+
+// กฎเวลาพักตามเหตุผล (โหลดจาก DB, ใช้ค่า default ถ้าไม่มี)
+// รูปแบบ: {reason: [{min: N, label: 'สถานะ'}, ...]}  (เรียงจากน้อย→มาก)
+const DEFAULT_REASON_RULES = {
+  'ทานข้าว':     [{min:30,  label:'สาย'}],
+  'ธุระส่วนตัว': [{min:120, label:'เกินกำหนด'}, {min:180, label:'ลาครึ่งวัน'}],
+  'พบแพทย์':     [{min:240, label:'ลาครึ่งวัน'}],
+  'ออกรถ':       [{min:60,  label:'เกินกำหนด'}],
+  'อื่นๆ':       [{min:60,  label:'เกินกำหนด'}],
+};
+let reasonRules = JSON.parse(JSON.stringify(DEFAULT_REASON_RULES));
+
+// LABEL_OPTS สำหรับ dropdown ใน settings
+const LABEL_OPTS = ['เกินกำหนด','สาย','ลาครึ่งวัน','ลาเต็มวัน','ไม่อนุญาต'];
+
+// ===== VISITOR CONSTANTS =====
+const VISIT_PURPOSES = ['ติดต่องาน','ส่งของ/Delivery','ซ่อมบำรุง','เยี่ยมชมโรงงาน','ประชุม','อื่นๆ'];
+const VEHICLE_TYPES  = ['ไม่มียานพาหนะ','รถยนต์','มอเตอร์ไซค์','รถกระบะ','รถบรรทุก'];
+let _vTab = 'entry'; // entry | exit | appointment
+
+// ============================================================
+// SECTION 2 — AUTH (checkin_users — แยกจากระบบอื่น)
+// ============================================================
+async function doLogin() {
+  const u   = document.getElementById('u').value.trim();
+  const p   = document.getElementById('p').value.trim();
+  const err = document.getElementById('auth-err');
+  err.textContent = '';
+  if (!u || !p) { err.textContent = 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'; return; }
+
+  const { data, error } = await sb.from('checkin_users')
+    .select('*').eq('username', u).eq('password', p).eq('status', 'active').limit(1);
+
+  if (error || !data?.length) { err.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
+
+  localStorage.setItem('_sn_ck_lastuser', u);
+  currentUser = data[0];
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+  bootApp();
+}
+
+function doLogout() {
+  currentUser = null;
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('app').style.display         = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  const lastUser = localStorage.getItem('_sn_ck_lastuser');
+  document.getElementById('u').value = lastUser || '';
+  document.getElementById('p').value = '';
+  setTimeout(()=>document.getElementById(lastUser ? 'p' : 'u')?.focus(), 50);
+}
+
+function openRegister() {
+  document.getElementById('reg-fullname').value = '';
+  document.getElementById('reg-username').value = '';
+  document.getElementById('reg-pw').value       = '';
+  document.getElementById('reg-pw2').value      = '';
+  document.getElementById('reg-err').textContent = '';
+  document.getElementById('reg-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('reg-fullname').focus(), 50);
+}
+
+function closeRegister() {
+  document.getElementById('reg-modal').style.display = 'none';
+}
+
+async function doRegister() {
+  const fullname = document.getElementById('reg-fullname').value.trim();
+  const username = document.getElementById('reg-username').value.trim().toLowerCase();
+  const pw       = document.getElementById('reg-pw').value;
+  const pw2      = document.getElementById('reg-pw2').value;
+  const err      = document.getElementById('reg-err');
+  err.textContent = '';
+
+  if (!fullname) { err.textContent = 'กรุณากรอกชื่อ-นามสกุล'; return; }
+  if (!username) { err.textContent = 'กรุณากรอก Username'; return; }
+  if (username.includes(' ')) { err.textContent = 'Username ต้องไม่มีช่องว่าง'; return; }
+  if (pw.length < 6)  { err.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'; return; }
+  if (pw !== pw2)     { err.textContent = 'รหัสผ่านไม่ตรงกัน'; return; }
+
+  // ตรวจ username ซ้ำ
+  const { data: existing } = await sb.from('checkin_users').select('id').eq('username', username).limit(1);
+  if (existing?.length) { err.textContent = 'Username นี้ถูกใช้งานแล้ว'; return; }
+
+  const { error } = await sb.from('checkin_users').insert({
+    name:     fullname,
+    username: username,
+    password: pw,
+    role:     'guard',
+    status:   'pending'
+  });
+
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+
+  closeRegister();
+  const authErr = document.getElementById('auth-err');
+  authErr.style.color = '#16a34a';
+  authErr.textContent = '✅ สมัครสมาชิกสำเร็จ! รอ Admin อนุมัติก่อนเข้าใช้งานได้';
+  setTimeout(() => { authErr.textContent = ''; authErr.style.color = ''; }, 5000);
+}
+
+// ============================================================
+// SECTION 3 — ROUTER
+// ============================================================
+const PAGE_TITLES = {
+  'ck-guard':      'บันทึกเข้า-ออก',
+  'ck-supervisor': 'Dashboard Supervisor',
+  'ck-visitor':    'บุคคลภายนอก',
+  'ck-report':     'รายงาน',
+  'ck-employees':  'จัดการพนักงาน',
+  'ck-users':      'จัดการผู้ใช้',
+};
+
+function nav(page) {
+  // Permission check
+  const role = currentUser?.role;
+  if (['ck-report','ck-employees'].includes(page) && role === 'guard') return;
+  if (['ck-users'].includes(page) && role !== 'admin') return;
+
+  document.querySelectorAll('.sb-item,.bn-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`.sb-item,.bn-item`).forEach(el => {
+    if ((el.getAttribute('onclick')||'').includes(`'${page}'`)) el.classList.add('active');
+  });
+  document.getElementById('topbar-title').textContent = PAGE_TITLES[page] || page;
+  closeSidebar();
+
+  const c = document.getElementById('page-content');
+  c.innerHTML = '<div class="log-empty">กำลังโหลด...</div>';
+
+  if      (page === 'ck-guard')      renderGuard();
+  else if (page === 'ck-supervisor') renderSupervisor();
+  else if (page === 'ck-visitor')    renderVisitor();
+  else if (page === 'ck-report')     renderReport();
+  else if (page === 'ck-employees')  renderEmployees();
+  else if (page === 'ck-users')      renderUsers();
+}
+
+// ============================================================
+// SECTION 4 — UTILS
+// ============================================================
+function fmtTime(s) {
+  if (!s) return '-';
+  try {
+    const d = new Date(s.replace(' ','T').split('+')[0].split('.')[0]);
+    return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  } catch(e){ return s; }
+}
+function fmtDate(s) {
+  if (!s) return '-';
+  try {
+    const d = new Date(s.replace(' ','T').split('+')[0]);
+    return d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'});
+  } catch(e){ return s; }
+}
+function minAgo(s) {
+  if (!s) return 0;
+  // parse เป็น local (ไม่เพิ่ม Z) เพราะ DB เก็บเวลาไทย (local)
+  return Math.floor((Date.now() - new Date(s.replace(' ','T').split('+')[0]).getTime()) / 60000);
+}
+// ใช้ timezone Asia/Bangkok ให้ตรงกับเวลาจริงในไทย (sv-SE → format YYYY-MM-DD HH:MM:SS)
+function todayStr() { return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Bangkok'}); }
+function nowStr()   { return new Date().toLocaleString('sv-SE',{timeZone:'Asia/Bangkok'}).replace('T',' '); }
+function initials(n) { return (n||'').split(' ').map(w=>w[0]).join('').slice(0,2)||'??'; }
+function escHtml(s)  { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function gateName(g) { return gateNames[g] || g.replace('GATE_','ประตู '); }
+
+// คำนวณสถานะจาก reason + duration → HTML badge
+function getStatusBadge(reason, durationMin, dbStatus, checkoutTime) {
+  // elapsed: ถ้า RETURNED ใช้ duration_min ที่บันทึกแล้ว, ถ้ายังออกอยู่ใช้ live minAgo
+  const elapsed = (dbStatus==='RETURNED') ? (durationMin||0) : minAgo(checkoutTime);
+  // rules เรียงจาก threshold มากไปน้อย (เช็คสถานะแย่ที่สุดก่อน)
+  const rules = (reasonRules[reason]||[]).slice().sort((a,b)=>b.min-a.min);
+  if (dbStatus==='RETURNED') {
+    for (const r of rules) {
+      if (elapsed >= r.min) return `<span class="badge b-late">${escHtml(r.label)}</span>`;
+    }
+    return `<span class="badge b-in">กลับแล้ว</span>`;
+  }
+  // ACTIVE หรือ OVERDUE (ยังออกอยู่)
+  for (const r of rules) {
+    if (elapsed >= r.min) return `<span class="badge b-late">${escHtml(r.label)}</span>`;
+  }
+  if (dbStatus==='OVERDUE') return `<span class="badge b-late">เกินกำหนด</span>`;
+  return `<span class="badge b-out">ออกอยู่</span>`;
+}
+
+// คำนวณ limit นาทีที่ต่ำที่สุดของ reason (ใช้สำหรับ trigger OVERDUE)
+function getReasonLimit(reason) {
+  const rules = reasonRules[reason];
+  if (!rules?.length) return OVERTIME_MIN;
+  return Math.min(...rules.map(r=>r.min));
+}
+
+async function updateOverdue() {
+  // ดึง ACTIVE sessions ทั้งหมด แล้วเช็ค per-reason limit
+  const { data: active } = await sb.from('checkin_lunch_sessions')
+    .select('session_id,checkout_time,reason')
+    .eq('status','ACTIVE').is('checkin_time',null);
+  if (!active?.length) return;
+
+  const toOverdue = [];
+  for (const s of active) {
+    const elapsed = minAgo(s.checkout_time);
+    const limit   = getReasonLimit(s.reason);  // นาทีที่ต่ำที่สุดของ reason
+    if (elapsed >= limit) toOverdue.push(s.session_id);
+  }
+  if (toOverdue.length) {
+    await sb.from('checkin_lunch_sessions').update({status:'OVERDUE'})
+      .in('session_id', toOverdue);
+  }
+}
+
+function openModal(id)  { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sb-overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sb-overlay').classList.remove('open');
+}
+
+// ============================================================
+// SECTION 5 — GUARD SCREEN
+// ============================================================
+function renderGuard() {
+  const gn = gateName(currentGate);
+  document.getElementById('page-content').innerHTML = `
+  <div class="gate-tabs">
+    ${Object.keys(gateNames).sort().map(g=>`
+      <div class="gate-tab${g===currentGate?' active':''}" onclick="selectGate('${g}')">
+        ${escHtml(gateName(g))}
+      </div>`).join('')}
+  </div>
+  <div class="guard-grid">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">สแกนบัตร — ${escHtml(gn)}</div>
+        <span class="badge b-blue" style="font-size:12px;">รปภ.: ${escHtml(currentUser.name)}</span>
+      </div>
+      <label class="lbl">รหัสพนักงาน / QR Code</label>
+      <div class="scan-row">
+        <input type="text" id="scan-input" placeholder="สแกนหรือพิมพ์รหัส เช่น EMP001"
+          autofocus onkeydown="if(event.key==='Enter')doLookup()">
+        <button class="btn-scan" onclick="openCamera()" title="สแกนด้วยกล้อง" style="background:#0f766e;padding:10px 14px;">📷</button>
+        <button class="btn-scan" onclick="doLookup()">สแกน</button>
+      </div>
+      <div class="scan-msg" id="scan-msg"></div>
+      <div id="result-box" style="display:none;"></div>
+      <div class="success-box" id="success-box">
+        <div class="success-icon" id="suc-icon"></div>
+        <div class="success-msg"  id="suc-msg"></div>
+        <div class="success-det"  id="suc-det"></div>
+        <button class="btn-reset" onclick="resetScan()">สแกนรายการถัดไป ▶</button>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;">
+        <button class="btn-search-t" onclick="toggleSearch()">🔍 ลืมบัตร? ค้นหาชื่อ</button>
+        <div class="search-sec" id="search-sec">
+          <input type="text" id="search-inp" placeholder="พิมพ์ชื่อหรือรหัส..."
+            style="margin-top:8px;" oninput="doSearch(this.value)">
+          <div id="search-res" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">บันทึกวันนี้ — ${escHtml(gn)}</div>
+        <button onclick="loadGuardLog()" style="font-size:12px;padding:5px 12px;">↻</button>
+      </div>
+      <div id="guard-log"><div class="log-empty">กำลังโหลด...</div></div>
+    </div>
+  </div>`;
+  loadGuardLog();
+  setTimeout(()=>document.getElementById('scan-input')?.focus(),100);
+}
+
+function selectGate(g) { currentGate=g; renderGuard(); }
+
+async function doLookup(empId) {
+  const q   = empId || (document.getElementById('scan-input')?.value||'').trim();
+  const msg = document.getElementById('scan-msg');
+  if (!q) return;
+  if (msg) msg.textContent = '';
+
+  let { data } = await sb.from('checkin_employees').select('*')
+    .or(`employee_id.eq.${q},qr_code.eq.${q}`).limit(1);
+  if (!data?.length) {
+    ({ data } = await sb.from('checkin_employees').select('*').ilike('name',`%${q}%`).limit(1));
+  }
+  if (!data?.length) { if(msg) msg.textContent='⚠ ไม่พบพนักงานในระบบ'; return; }
+
+  const emp = data[0];
+  await updateOverdue();
+  const today = todayStr();
+  const { data: sess } = await sb.from('checkin_lunch_sessions').select('*')
+    .eq('employee_id',emp.employee_id).eq('session_date',today)
+    .is('checkin_time',null).order('checkout_time',{ascending:false}).limit(1);
+
+  scanEmp = {...emp, status: sess?.length?'OUT':'IN', session: sess?.[0]||null, _manual:!!empId};
+  showResult(scanEmp);
+}
+
+function showResult(e) {
+  document.getElementById('success-box').style.display = 'none';
+  const box = document.getElementById('result-box');
+  box.style.display = 'block';
+  const now = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  const gn  = gateName(currentGate);
+
+  if (e.status === 'IN') {
+    // กำลังจะ CHECK-OUT
+    box.innerHTML = `
+    <div class="pass-form">
+      <div class="pass-hd hd-out">
+        <div class="pass-logo">📤</div>
+        <div>
+          <div class="pass-title">ออกพักเที่ยง</div>
+          <div class="pass-co">บริษัท สานนท์ จำกัด</div>
+        </div>
+      </div>
+      <div class="pass-body">
+        <div class="pass-row">
+          <span class="pass-lbl">ชื่อ-สกุล</span>
+          <span class="pass-val">${escHtml(e.name)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">แผนก</span>
+          <span class="pass-val" style="color:#64748b;">${escHtml(e.department||'-')} · ${escHtml(e.employee_id)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">ประตูออก</span>
+          <span class="pass-val">${escHtml(gn)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">เวลาออก</span>
+          <span class="pass-val" style="color:#c2410c;font-size:16px;">${now} น.</span>
+        </div>
+        ${e._manual?'<div class="pass-row"><span class="pass-lbl">หมายเหตุ</span><span class="badge b-manual">ลืมบัตร/Manual</span></div>':''}
+      </div>
+      <div class="pass-reason">
+        <label>เหตุผลที่ออก <span style="color:#dc2626;">*</span></label>
+        <select id="reason-sel">
+          <option value="">— เลือกเหตุผล —</option>
+          ${reasonOpts.map(r=>`<option value="${escHtml(r)}">${escHtml(r)}</option>`).join('')}
+        </select>
+        <div class="reason-warn" id="reason-warn">กรุณาเลือกเหตุผล</div>
+      </div>
+      <div class="pass-actions">
+        <button class="btn-confirm-out" onclick="doConfirm()">📤 ยืนยัน — ออก ${escHtml(gn)}</button>
+      </div>
+    </div>`;
+  } else {
+    // กำลังจะ CHECK-IN (กลับเข้า)
+    const min  = minAgo(e.session?.checkout_time);
+    const over = min > OVERTIME_MIN;
+    box.innerHTML = `
+    <div class="pass-form">
+      <div class="pass-hd ${over?'hd-warn':'hd-in'}">
+        <div class="pass-logo">${over?'⚠️':'📥'}</div>
+        <div>
+          <div class="pass-title">กลับเข้าทำงาน${over?' — เกินเวลา':''}</div>
+          <div class="pass-co">บริษัท สานนท์ จำกัด</div>
+        </div>
+      </div>
+      <div class="pass-body">
+        <div class="pass-row">
+          <span class="pass-lbl">ชื่อ-สกุล</span>
+          <span class="pass-val">${escHtml(e.name)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">แผนก</span>
+          <span class="pass-val" style="color:#64748b;">${escHtml(e.department||'-')} · ${escHtml(e.employee_id)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">ออกไปเมื่อ</span>
+          <span class="pass-val">${fmtTime(e.session?.checkout_time)} น.</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">ระยะเวลา</span>
+          <span class="pass-val" style="color:${over?'#b91c1c':'#15803d'};font-size:16px;">${min} นาที${over?' ⚠ เกินกำหนด':''}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">ประตูเข้า</span>
+          <span class="pass-val">${escHtml(gn)}</span>
+        </div>
+        <div class="pass-row">
+          <span class="pass-lbl">เวลากลับ</span>
+          <span class="pass-val" style="color:#15803d;font-size:16px;">${now} น.</span>
+        </div>
+      </div>
+      <div class="pass-actions">
+        <button class="btn-confirm-in" onclick="doConfirm()">📥 ยืนยัน — เข้า ${escHtml(gn)}</button>
+      </div>
+    </div>`;
+  }
+}
+
+async function doConfirm() {
+  if (!scanEmp) return;
+  const action = scanEmp.status==='IN'?'OUT':'IN';
+
+  // ตรวจสอบ reason เฉพาะตอน OUT
+  let reason = '';
+  if (action === 'OUT') {
+    const sel = document.getElementById('reason-sel');
+    reason = sel ? sel.value : '';
+    if (!reason) {
+      const w = document.getElementById('reason-warn');
+      if (w) w.style.display='block';
+      if (sel) sel.focus();
+      return;
+    }
+  }
+
+  const now=nowStr(), today=todayStr();
+
+  await sb.from('checkin_gate_logs').insert({
+    employee_id: scanEmp.employee_id, gate_id: currentGate,
+    action, method: scanEmp._manual?'MANUAL':'SCAN',
+    timestamp: now, scanned_by: currentUser.name,
+  });
+
+  let duration=0;
+  if (action==='OUT') {
+    await sb.from('checkin_lunch_sessions').insert({
+      employee_id: scanEmp.employee_id, checkout_time: now,
+      checkout_gate: currentGate, status:'ACTIVE', session_date: today,
+      reason: reason,
+    });
+  } else if (scanEmp.session) {
+    const outD = new Date(scanEmp.session.checkout_time.replace(' ','T'));
+    duration   = Math.round((Date.now()-outD.getTime())/60000);
+    await sb.from('checkin_lunch_sessions').update({
+      checkin_time: now, checkin_gate: currentGate,
+      duration_min: duration, status:'RETURNED',
+    }).eq('session_id', scanEmp.session.session_id);
+  }
+
+  const t   = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  const gn  = gateName(currentGate);
+  document.getElementById('result-box').style.display  = 'none';
+  document.getElementById('success-box').style.display = 'block';
+  document.getElementById('suc-icon').textContent = action==='OUT'?'🟡':'🟢';
+  document.getElementById('suc-msg').textContent  = action==='OUT'
+    ? `${scanEmp.name} ออก${reason?' ('+reason+')':''}` : `${scanEmp.name} กลับเข้าทำงาน`;
+  document.getElementById('suc-det').textContent  = action==='OUT'
+    ? `เวลาออก ${t} น. · ${gn} · บันทึกโดย ${currentUser.name}`
+    : `เวลากลับ ${t} น. · ออกไป ${duration} นาที · ${gn}`;
+  loadGuardLog();
+}
+
+function resetScan() {
+  scanEmp=null;
+  const inp=document.getElementById('scan-input');
+  if (inp) { inp.value=''; inp.focus(); }
+  const msg=document.getElementById('scan-msg');
+  if (msg) msg.textContent='';
+  document.getElementById('result-box').style.display  = 'none';
+  document.getElementById('success-box').style.display = 'none';
+}
+
+let _srchOpen=false;
+function toggleSearch() {
+  _srchOpen=!_srchOpen;
+  const el=document.getElementById('search-sec');
+  if (el) el.style.display=_srchOpen?'block':'none';
+  if (_srchOpen) setTimeout(()=>document.getElementById('search-inp')?.focus(),50);
+}
+async function doSearch(q) {
+  const el=document.getElementById('search-res');
+  if (!q) { el.innerHTML=''; return; }
+  const { data } = await sb.from('checkin_employees').select('*')
+    .or(`employee_id.ilike.%${q}%,name.ilike.%${q}%`).limit(8);
+  if (!data?.length) { el.innerHTML='<div style="color:#aaa;font-size:13px;padding:6px 0">ไม่พบ</div>'; return; }
+  el.innerHTML = data.map(e=>`
+    <div class="s-item" onclick="selectEmp('${e.employee_id}')">
+      <div style="font-weight:500;">${escHtml(e.name)}</div>
+      <div style="font-size:12px;color:#94a3b8;">${e.employee_id} · ${escHtml(e.department||'')}</div>
+    </div>`).join('');
+}
+function selectEmp(id) {
+  const sec=document.getElementById('search-sec');
+  if (sec) sec.style.display='none'; _srchOpen=false;
+  doLookup(id);
+}
+
+async function loadGuardLog() {
+  const el=document.getElementById('guard-log');
+  if (!el) return;
+  const { data } = await sb.from('checkin_gate_logs')
+    .select('*, checkin_employees(name,department)')
+    .eq('gate_id',currentGate).gte('timestamp',todayStr()+'T00:00:00')
+    .order('timestamp',{ascending:false}).limit(20);
+  if (!data?.length) { el.innerHTML='<div class="log-empty">ยังไม่มีการสแกนวันนี้</div>'; return; }
+  el.innerHTML=`<div class="tbl-wrap fixed-h"><table>
+    <thead><tr><th>พนักงาน</th><th>เวลา</th><th>สถานะ</th><th>บันทึกโดย</th></tr></thead>
+    <tbody>${data.map(r=>{
+      const emp=r.checkin_employees||{};
+      return `<tr>
+        <td><div class="emp-name">${escHtml(emp.name||r.employee_id)}</div>
+          <div class="emp-dept">${escHtml(emp.department||'')}${r.method==='MANUAL'?' <span class="badge b-manual">ลืมบัตร</span>':''}</div></td>
+        <td style="white-space:nowrap;">${fmtTime(r.timestamp)} น.</td>
+        <td><span class="badge ${r.action==='OUT'?'b-out':'b-in'}">${r.action==='OUT'?'ออก':'เข้า'}</span></td>
+        <td style="color:#64748b;font-size:12px;">${escHtml(r.scanned_by||'-')}</td>
+      </tr>`;}).join('')}
+    </tbody></table></div>`;
+}
+
+// ============================================================
+// SECTION 5B — VISITOR MANAGEMENT (บุคคลภายนอก)
+// ============================================================
+function selectGateVisitor(g) { currentGate = g; renderVisitor(); }
+
+function renderVisitor() {
+  const isSup = ['admin','supervisor'].includes(currentUser?.role);
+  document.getElementById('page-content').innerHTML = `
+  <div class="gate-tabs">
+    ${Object.keys(gateNames).sort().map(g=>`
+      <div class="gate-tab${g===currentGate?' active':''}" onclick="selectGateVisitor('${g}')">
+        ${escHtml(gateName(g))}
+      </div>`).join('')}
+  </div>
+  <div class="guard-grid">
+
+    <!-- Left: Input Panel -->
+    <div class="card">
+      <div class="card-hd" style="padding-bottom:8px;margin-bottom:0;border-bottom:none;">
+        <div class="card-title">🏢 บุคคลภายนอก</div>
+        <span class="badge b-blue" style="font-size:12px;">รปภ.: ${escHtml(currentUser.name)}</span>
+      </div>
+      <div class="vtab-bar" style="margin-top:10px;">
+        <div class="vtab${_vTab==='entry'?' active':''}" onclick="switchVTab('entry')">📝 เข้าใหม่</div>
+        <div class="vtab${_vTab==='exit'?' active':''}" onclick="switchVTab('exit')">🚪 บันทึกออก</div>
+        ${isSup?`<div class="vtab${_vTab==='appointment'?' active':''}" onclick="switchVTab('appointment')">📅 นัดหมาย</div>`:''}
+      </div>
+
+      <!-- Tab: เข้าใหม่ -->
+      <div id="v-panel-entry" class="v-panel${_vTab==='entry'?' active':''}">
+        <div id="v-entry-form">
+          <div class="v-entry-ff" style="display:grid;grid-template-columns:1fr 1fr 80px;gap:10px;">
+            <div><label class="lbl">ชื่อ-นามสกุล <span style="color:#dc2626;">*</span></label>
+              <input type="text" id="v-name" placeholder="ชื่อ นามสกุล"></div>
+            <div><label class="lbl">เลขบัตรปชช./Passport</label>
+              <input type="text" id="v-idcard" placeholder="1234567890123"></div>
+            <div><label class="lbl">จำนวน (คน)</label>
+              <input type="number" id="v-count" value="1" min="1" max="999"
+                style="text-align:center;padding:9px 6px;"></div>
+          </div>
+          <div class="v-form-grid v-entry-ff">
+            <div><label class="lbl">บริษัท/หน่วยงาน</label>
+              <input type="text" id="v-company" placeholder="บริษัท / หน่วยงาน"></div>
+            <div><label class="lbl">วัตถุประสงค์ <span style="color:#dc2626;">*</span></label>
+              <select id="v-purpose">
+                <option value="">— เลือก —</option>
+                ${VISIT_PURPOSES.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('')}
+              </select></div>
+          </div>
+          <div class="form-field">
+            <label class="lbl">ติดต่อแผนก / บุคคลใน</label>
+            <input type="text" id="v-contact" placeholder="เช่น แผนกผลิต, คุณสมชาย">
+          </div>
+          <div class="v-form-grid v-entry-ff">
+            <div><label class="lbl">ยานพาหนะ</label>
+              <select id="v-vtype" onchange="togglePlate()">
+                ${VEHICLE_TYPES.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('')}
+              </select></div>
+            <div id="v-plate-wrap" style="display:none;">
+              <label class="lbl">ทะเบียน</label>
+              <input type="text" id="v-plate" placeholder="กก 1234 กทม.">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="lbl">หมายเหตุ</label>
+            <input type="text" id="v-notes" placeholder="(ถ้ามี)">
+          </div>
+          <div class="scan-msg" id="v-err" style="margin-bottom:8px;"></div>
+          <button onclick="saveVisitorIn()"
+            style="width:100%;padding:11px;font-size:15px;font-weight:500;border:none;
+            border-radius:8px;background:#1a3a5c;color:#fff;cursor:pointer;">
+            📝 บันทึกเข้า — ${escHtml(gateName(currentGate))}
+          </button>
+        </div>
+        <div id="v-entry-success" style="display:none;text-align:center;padding:24px 0;">
+          <div class="success-icon">✅</div>
+          <div class="success-msg" id="v-suc-msg" style="margin-top:10px;font-size:16px;font-weight:500;"></div>
+          <div class="success-det" id="v-suc-det" style="font-size:13px;color:#64748b;margin-top:6px;"></div>
+          <button class="btn-reset" onclick="resetVisitorForm()" style="margin-top:16px;background:#f1f5f9;color:#334155;border-radius:8px;padding:9px 20px;">➕ บันทึกคนถัดไป</button>
+        </div>
+      </div>
+
+      <!-- Tab: บันทึกออก -->
+      <div id="v-panel-exit" class="v-panel${_vTab==='exit'?' active':''}">
+        <p style="font-size:12px;color:#64748b;margin-bottom:10px;">ผู้เยี่ยมชมที่ยังอยู่ในโรงงาน — คลิกเพื่อบันทึกออก</p>
+        <div id="v-exit-list"><div class="log-empty">กำลังโหลด...</div></div>
+      </div>
+
+      <!-- Tab: นัดหมาย (supervisor+) -->
+      ${isSup?`<div id="v-panel-appointment" class="v-panel${_vTab==='appointment'?' active':''}">
+        <div id="v-appt-content"><div class="log-empty">กำลังโหลด...</div></div>
+      </div>`:''}
+    </div>
+
+    <!-- Right: วันนี้ -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📋 ผู้เยี่ยมชมวันนี้</div>
+        <button onclick="loadVisitorToday()" style="font-size:12px;padding:5px 12px;">↻</button>
+      </div>
+      <div id="v-today-list"><div class="log-empty">กำลังโหลด...</div></div>
+    </div>
+
+  </div>`;
+
+  loadVisitorToday();
+  if (_vTab === 'exit')        loadVisitorExitList();
+  if (_vTab === 'appointment') loadAppointments();
+}
+
+function switchVTab(tab) {
+  _vTab = tab;
+  document.querySelectorAll('.vtab').forEach(el=>{
+    el.classList.toggle('active', (el.getAttribute('onclick')||'').includes(`'${tab}'`));
+  });
+  document.querySelectorAll('.v-panel').forEach(el=>el.classList.remove('active'));
+  const panel = document.getElementById(`v-panel-${tab}`);
+  if (panel) panel.classList.add('active');
+  if (tab === 'exit')        loadVisitorExitList();
+  if (tab === 'appointment') loadAppointments();
+}
+
+function togglePlate() {
+  const t = document.getElementById('v-vtype')?.value;
+  const w = document.getElementById('v-plate-wrap');
+  if (w) w.style.display = (!t || t === 'ไม่มียานพาหนะ') ? 'none' : '';
+}
+
+async function saveVisitorIn() {
+  const name    = (document.getElementById('v-name')?.value||'').trim();
+  const idcard  = (document.getElementById('v-idcard')?.value||'').trim();
+  const company = (document.getElementById('v-company')?.value||'').trim();
+  const purpose = document.getElementById('v-purpose')?.value||'';
+  const contact = (document.getElementById('v-contact')?.value||'').trim();
+  const vtype   = document.getElementById('v-vtype')?.value||'';
+  const plate   = (document.getElementById('v-plate')?.value||'').trim();
+  const notes   = (document.getElementById('v-notes')?.value||'').trim();
+  const pcount  = parseInt(document.getElementById('v-count')?.value)||1;
+  const err     = document.getElementById('v-err');
+
+  if (!name)    { if(err) err.textContent='⚠ กรุณากรอกชื่อ-นามสกุล'; return; }
+  if (!purpose) { if(err) err.textContent='⚠ กรุณาเลือกวัตถุประสงค์'; return; }
+  if(err) err.textContent='';
+
+  const now   = nowStr();
+  const today = todayStr();
+
+  const { error } = await sb.from('checkin_visitors').insert({
+    visit_type:    'walkin',
+    name,
+    id_card:       idcard||null,
+    company:       company||null,
+    vehicle_type:  vtype||null,
+    vehicle_plate: (vtype && vtype!=='ไม่มียานพาหนะ' && plate) ? plate : null,
+    visit_purpose: purpose,
+    contact_person:contact||null,
+    person_count:  pcount,
+    gate_in:       currentGate,
+    checkin_time:  now,
+    status:        'IN',
+    scanned_by:    currentUser.name,
+    session_date:  today,
+    notes:         notes||null,
+  });
+
+  if (error) { if(err) err.textContent='เกิดข้อผิดพลาด กรุณาลองใหม่'; return; }
+
+  const t = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('v-entry-form').style.display    = 'none';
+  document.getElementById('v-entry-success').style.display = 'block';
+  document.getElementById('v-suc-msg').textContent = `บันทึกเข้าแล้ว — ${name}${pcount>1?' ('+pcount+' คน)':''}`;
+  document.getElementById('v-suc-det').textContent = `${purpose} · ${t} น. · ${gateName(currentGate)}`;
+  loadVisitorToday();
+}
+
+function resetVisitorForm() {
+  document.getElementById('v-entry-form').style.display    = 'block';
+  document.getElementById('v-entry-success').style.display = 'none';
+  ['v-name','v-idcard','v-company','v-contact','v-plate','v-notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const cnt=document.getElementById('v-count'); if(cnt) cnt.value='1';
+  const p=document.getElementById('v-purpose'); if(p) p.value='';
+  const vt=document.getElementById('v-vtype');  if(vt) vt.value='ไม่มียานพาหนะ';
+  togglePlate();
+  document.getElementById('v-err').textContent='';
+  document.getElementById('v-name')?.focus();
+}
+
+// คำนวณระยะเวลาผู้เยี่ยมชม
+function visitorDuration(v) {
+  if (!v.checkin_time) return '-';
+  const start = new Date(v.checkin_time.replace(' ','T').split('+')[0]);
+  if (v.checkout_time) {
+    // ออกแล้ว → คำนวณจาก checkin → checkout
+    const end  = new Date(v.checkout_time.replace(' ','T').split('+')[0]);
+    const diff = Math.round((end - start) / 60000);
+    const h = Math.floor(diff/60), m = diff%60;
+    return h>0 ? `${h} ชม. ${m} น.` : `${diff} นาที`;
+  } else {
+    // ยังอยู่ → นับจาก checkin จนถึงตอนนี้
+    const diff = Math.round((Date.now() - start.getTime()) / 60000);
+    const h = Math.floor(diff/60), m = diff%60;
+    return h>0 ? `${h} ชม. ${m} น. ⏱` : `${diff} นาที ⏱`;
+  }
+}
+
+let _visitorExitData = [];
+
+async function loadVisitorExitList() {
+  const el = document.getElementById('v-exit-list');
+  if (!el) return;
+  el.innerHTML = '<div class="log-empty">กำลังโหลด...</div>';
+  const today = todayStr();
+  const { data } = await sb.from('checkin_visitors')
+    .select('*').eq('session_date',today).eq('status','IN')
+    .order('checkin_time',{ascending:false});
+
+  _visitorExitData = data || [];
+
+  if (!_visitorExitData.length) {
+    el.innerHTML = '<div class="log-empty">ไม่มีผู้เยี่ยมชมที่ยังอยู่ในโรงงาน</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="scan-row" style="margin-bottom:10px;">
+      <input type="text" id="v-exit-search" placeholder="ค้นหาชื่อ..."
+        oninput="filterVisitorExit(this.value)" style="font-size:14px;">
+      <button class="btn-scan" onclick="loadVisitorExitList()" style="padding:10px 12px;">↻</button>
+    </div>
+    <div id="v-exit-rows"></div>`;
+  renderVisitorExitRows(_visitorExitData);
+}
+
+function filterVisitorExit(q) {
+  const rows = q
+    ? _visitorExitData.filter(v=>(v.name||'').toLowerCase().includes(q.toLowerCase())
+        || (v.company||'').toLowerCase().includes(q.toLowerCase()))
+    : _visitorExitData;
+  renderVisitorExitRows(rows);
+}
+
+function renderVisitorExitRows(rows) {
+  const el = document.getElementById('v-exit-rows');
+  if (!el) return;
+  if (!rows.length) { el.innerHTML = '<div class="log-empty">ไม่พบรายการที่ตรงกัน</div>'; return; }
+  el.innerHTML = rows.map(v=>{
+    const elapsed = minAgo(v.checkin_time);
+    return `<div class="s-item" onclick="confirmVisitorOut(${v.id})">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="min-width:0;">
+          <div style="font-weight:500;">${escHtml(v.name)}</div>
+          <div style="font-size:12px;color:#94a3b8;">
+            ${escHtml(v.visit_purpose||'-')} · ${escHtml(v.company||'-')} · เข้า ${fmtTime(v.checkin_time)} น.
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <span class="badge b-out" style="font-size:11px;">${elapsed} นาที</span>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">แตะเพื่อบันทึกออก</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function confirmVisitorOut(id) {
+  const { data:rows } = await sb.from('checkin_visitors').select('name,checkin_time').eq('id',id).limit(1);
+  const v = rows?.[0];
+  if (!v) return;
+  const duration = minAgo(v.checkin_time);
+  if (!confirm(`บันทึกออก: ${v.name}\nอยู่ในโรงงาน ${duration} นาที`)) return;
+
+  const now = nowStr();
+  await sb.from('checkin_visitors').update({
+    checkout_time: now,
+    gate_out:      currentGate,
+    status:        'OUT',
+  }).eq('id', id);
+
+  loadVisitorExitList();
+  loadVisitorToday();
+}
+
+async function loadVisitorToday() {
+  const el = document.getElementById('v-today-list');
+  if (!el) return;
+  const today = todayStr();
+  const { data } = await sb.from('checkin_visitors')
+    .select('*').eq('session_date',today)
+    .order('checkin_time',{ascending:false}).limit(40);
+
+  if (!data?.length) {
+    el.innerHTML = '<div class="log-empty">ยังไม่มีผู้เยี่ยมชมวันนี้</div>';
+    return;
+  }
+
+  const inside     = data.filter(v=>v.status==='IN').length;
+  const totalPax   = data.reduce((s,v)=>s+(v.person_count||1),0);
+  const insidePax  = data.filter(v=>v.status==='IN').reduce((s,v)=>s+(v.person_count||1),0);
+
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <div style="background:#fff7ed;border-radius:8px;padding:8px 14px;text-align:center;border:1px solid #fed7aa;flex:1;min-width:64px;">
+        <div style="font-size:22px;font-weight:600;color:#d97706;">${insidePax}</div>
+        <div style="font-size:11px;color:#64748b;">คนยังอยู่</div>
+      </div>
+      <div style="background:#f0fdf4;border-radius:8px;padding:8px 14px;text-align:center;border:1px solid #bbf7d0;flex:1;min-width:64px;">
+        <div style="font-size:22px;font-weight:600;color:#15803d;">${totalPax - insidePax}</div>
+        <div style="font-size:11px;color:#64748b;">คนออกแล้ว</div>
+      </div>
+      <div style="background:#eff6ff;border-radius:8px;padding:8px 14px;text-align:center;border:1px solid #bfdbfe;flex:1;min-width:64px;">
+        <div style="font-size:22px;font-weight:600;color:#1d4ed8;">${totalPax}</div>
+        <div style="font-size:11px;color:#64748b;">รวมวันนี้</div>
+      </div>
+    </div>
+    <div class="tbl-wrap fixed-h"><table>
+      <thead><tr><th>ชื่อ</th><th>วัตถุประสงค์</th><th>คน</th><th>เข้า</th><th>ออก</th><th>ระยะเวลา</th><th>สถานะ</th></tr></thead>
+      <tbody>${data.map(v=>{
+        const dur = visitorDuration(v);
+        return `<tr${v.status==='IN'?' style="background:#fffbeb;"':''}>
+          <td>
+            <div class="emp-name">${escHtml(v.name)}</div>
+            <div class="emp-dept">${escHtml(v.company||'')}${v.vehicle_plate?` · ${escHtml(v.vehicle_plate)}`:''}</div>
+          </td>
+          <td style="font-size:12px;color:#475569;">${escHtml(v.visit_purpose||'-')}</td>
+          <td style="text-align:center;font-weight:500;">${v.person_count||1}</td>
+          <td style="white-space:nowrap;">${fmtTime(v.checkin_time)} น.</td>
+          <td style="white-space:nowrap;">${v.checkout_time?fmtTime(v.checkout_time)+' น.':'-'}</td>
+          <td style="white-space:nowrap;${v.status==='IN'?'color:#d97706;':''}">${dur}</td>
+          <td><span class="badge ${v.status==='IN'?'b-out':'b-in'}">${v.status==='IN'?'ยังอยู่':'ออกแล้ว'}</span></td>
+        </tr>`;}).join('')}
+      </tbody></table></div>`;
+}
+
+// ===== APPOINTMENTS =====
+async function loadAppointments() {
+  const el = document.getElementById('v-appt-content');
+  if (!el) return;
+  const today = todayStr();
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">
+      <div>
+        <label class="lbl" style="margin-bottom:3px;">วันที่นัดหมาย</label>
+        <input type="date" id="v-appt-date" value="${today}"
+          onchange="loadApptTable()" style="width:auto;min-width:150px;">
+      </div>
+      <button onclick="openApptModal()"
+        style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:8px 14px;border-radius:8px;white-space:nowrap;">
+        + เพิ่มนัดหมาย
+      </button>
+    </div>
+    <div id="v-appt-table"><div class="log-empty">กำลังโหลด...</div></div>`;
+  setTimeout(()=>loadApptTable(), 0);
+}
+
+async function loadApptTable() {
+  const date = document.getElementById('v-appt-date')?.value || todayStr();
+  const el   = document.getElementById('v-appt-table');
+  if (!el) return;
+  el.innerHTML = '<div class="log-empty">กำลังโหลด...</div>';
+
+  const { data } = await sb.from('checkin_visitors')
+    .select('*').eq('appt_date', date).eq('visit_type','appointment')
+    .order('created_at',{ascending:true});
+
+  if (!data?.length) {
+    el.innerHTML = `<div class="log-empty">ไม่มีนัดหมายในวันที่เลือก<br>
+      <span style="font-size:12px;color:#94a3b8;">กด + เพิ่มนัดหมาย เพื่อลงทะเบียนล่วงหน้า</span></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>ชื่อ</th><th>บริษัท</th><th>วัตถุประสงค์</th><th>ติดต่อ</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${data.map(v=>`<tr>
+      <td>
+        <div class="emp-name">${escHtml(v.name)}</div>
+        ${v.id_card?`<div class="emp-dept">บัตร: ${escHtml(v.id_card)}</div>`:''}
+      </td>
+      <td>${escHtml(v.company||'-')}</td>
+      <td style="font-size:12px;">${escHtml(v.visit_purpose||'-')}</td>
+      <td style="font-size:12px;">${escHtml(v.contact_person||'-')}</td>
+      <td><span class="badge ${v.status==='IN'?'b-out':v.status==='OUT'?'b-in':'b-gray'}">
+        ${v.status==='IN'?'เข้าแล้ว':v.status==='OUT'?'ออกแล้ว':'รอ'}
+      </span></td>
+      <td>${v.status==='PENDING'?
+        `<button onclick="confirmApptIn(${v.id})"
+          style="font-size:12px;background:#1a3a5c;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;">✓ เข้า</button>`:
+        '—'
+      }</td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+async function confirmApptIn(id) {
+  const now = nowStr(), today = todayStr();
+  await sb.from('checkin_visitors').update({
+    checkin_time: now,
+    gate_in:      currentGate,
+    status:       'IN',
+    scanned_by:   currentUser.name,
+    session_date: today,
+  }).eq('id', id);
+  loadApptTable();
+  loadVisitorToday();
+}
+
+function openApptModal() {
+  document.getElementById('va-err').textContent = '';
+  ['va-name','va-idcard','va-company','va-contact','va-notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  // populate purpose dropdown
+  const sel = document.getElementById('va-purpose');
+  if (sel) {
+    sel.innerHTML = `<option value="">— เลือก —</option>`
+      + VISIT_PURPOSES.map(p=>`<option value="${escHtml(p)}">${escHtml(p)}</option>`).join('');
+  }
+  const apptDate = document.getElementById('v-appt-date')?.value || todayStr();
+  const dateFld = document.getElementById('va-date');
+  if (dateFld) dateFld.value = apptDate;
+  openModal('modal-appt');
+}
+
+async function saveAppointment() {
+  const name    = (document.getElementById('va-name')?.value||'').trim();
+  const purpose = document.getElementById('va-purpose')?.value||'';
+  const date    = document.getElementById('va-date')?.value||'';
+  const err     = document.getElementById('va-err');
+
+  if (!name)    { if(err) err.textContent='⚠ กรุณากรอกชื่อ'; return; }
+  if (!purpose) { if(err) err.textContent='⚠ กรุณาเลือกวัตถุประสงค์'; return; }
+  if (!date)    { if(err) err.textContent='⚠ กรุณาเลือกวันที่นัด'; return; }
+  if (err) err.textContent='';
+
+  const { error } = await sb.from('checkin_visitors').insert({
+    visit_type:     'appointment',
+    name,
+    id_card:        (document.getElementById('va-idcard')?.value||'').trim()||null,
+    company:        (document.getElementById('va-company')?.value||'').trim()||null,
+    visit_purpose:  purpose,
+    contact_person: (document.getElementById('va-contact')?.value||'').trim()||null,
+    notes:          (document.getElementById('va-notes')?.value||'').trim()||null,
+    appt_date:      date,
+    status:         'PENDING',
+  });
+
+  if (error) { if(err) err.textContent='เกิดข้อผิดพลาด กรุณาลองใหม่'; return; }
+  closeModal('modal-appt');
+  loadApptTable();
+}
+
+// ============================================================
+// SECTION 6 — SUPERVISOR DASHBOARD
+// ============================================================
+async function renderSupervisor() {
+  document.getElementById('page-content').innerHTML=`
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="stat-card s-out"><div class="stat-num" id="sv-out">…</div><div class="stat-lbl">ออกพักอยู่</div></div>
+      <div class="stat-card s-late"><div class="stat-num" id="sv-late">…</div><div class="stat-lbl">เกินเวลา</div></div>
+      <div class="stat-card s-ok"><div class="stat-num" id="sv-ok">…</div><div class="stat-lbl">กลับแล้ววันนี้</div></div>
+      <div class="stat-card" style="border:1px solid #e2e8f0;"><div class="stat-num" id="sv-vis" style="color:#7c3aed;">…</div><div class="stat-lbl">ผู้เยี่ยมชมวันนี้</div></div>
+    </div>
+    <div id="sv-overdue"></div>
+    <div id="sv-active"></div>
+    <div id="sv-log"></div>
+    <div id="sv-visitor"></div>`;
+  await updateOverdue();
+  const today=todayStr();
+  const { data: sessions } = await sb.from('checkin_lunch_sessions')
+    .select('*, checkin_employees(name,department,employee_id)')
+    .eq('session_date',today).order('checkout_time',{ascending:false});
+  if (!sessions) return;
+
+  const active  = sessions.filter(s=>s.status==='ACTIVE');
+  const overdue = sessions.filter(s=>s.status==='OVERDUE');
+  const returned= sessions.filter(s=>s.status==='RETURNED');
+
+  document.getElementById('sv-out').textContent  = active.length;
+  document.getElementById('sv-late').textContent = overdue.length;
+  document.getElementById('sv-ok').textContent   = returned.length;
+
+  // ดึงผู้เยี่ยมชมวันนี้
+  const { data: visRows } = await sb.from('checkin_visitors')
+    .select('id,name,visit_purpose,company,status,checkin_time,checkout_time')
+    .eq('session_date', today).order('checkin_time',{ascending:false}).limit(20);
+  const vis = visRows||[];
+  document.getElementById('sv-vis').textContent = vis.length;
+  const visInside = vis.filter(v=>v.status==='IN');
+  document.getElementById('sv-visitor').innerHTML = vis.length ? `
+    <div class="card"><div class="card-hd">
+      <div class="card-title">🏢 ผู้เยี่ยมชมวันนี้</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${visInside.length?`<span class="badge b-out">${visInside.length} คนยังอยู่</span>`:''}
+        <button onclick="nav('ck-visitor')" style="font-size:12px;padding:5px 12px;">ดูทั้งหมด</button>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>ชื่อ</th><th>วัตถุประสงค์</th><th>บริษัท</th><th>เข้า</th><th>ออก</th><th>สถานะ</th></tr></thead>
+      <tbody>${vis.map(v=>`<tr${v.status==='IN'?' style="background:#fffbeb;"':''}>
+        <td class="emp-name">${escHtml(v.name)}</td>
+        <td style="font-size:12px;">${escHtml(v.visit_purpose||'-')}</td>
+        <td style="font-size:12px;">${escHtml(v.company||'-')}</td>
+        <td style="white-space:nowrap;">${fmtTime(v.checkin_time)} น.</td>
+        <td style="white-space:nowrap;">${v.checkout_time?fmtTime(v.checkout_time)+' น.':'-'}</td>
+        <td><span class="badge ${v.status==='IN'?'b-out':'b-in'}">${v.status==='IN'?'ยังอยู่':'ออกแล้ว'}</span></td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>` : '';
+
+  function sessionTable(arr,showMin=true) {
+    return `<div class="tbl-wrap fixed-h"><table>
+      <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ออกจาก</th>${showMin?'<th>สถานะ</th>':''}</tr></thead>
+      <tbody>${arr.map(s=>{
+        const emp=s.checkin_employees||{};
+        const min=minAgo(s.checkout_time);
+        const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
+        return `<tr${s.status==='OVERDUE'?' style="background:#fff8f8;"':''}>
+          <td><div class="emp-name">${escHtml(emp.name||'')}</div>
+            <div class="emp-dept">${escHtml(emp.department||'')} · ${emp.employee_id||''}</div></td>
+          <td><span style="font-size:13px;color:#475569;">${escHtml(s.reason||'-')}</span></td>
+          <td>${fmtTime(s.checkout_time)} น.</td>
+          <td>${gateName(s.checkout_gate||'')}</td>
+          ${showMin?`<td>${badge} <span style="font-size:11px;color:#94a3b8;">${min}น.</span></td>`:''}
+        </tr>`;}).join('')}
+      </tbody></table></div>`;
+  }
+
+  document.getElementById('sv-overdue').innerHTML = overdue.length?`
+    <div class="card"><div class="card-hd">
+      <div class="card-title">⚠️ เกินเวลา</div>
+      <span class="badge b-late">${overdue.length} คน</span>
+    </div>${sessionTable(overdue)}</div>`:'';
+
+  document.getElementById('sv-active').innerHTML = active.length?`
+    <div class="card"><div class="card-hd">
+      <div class="card-title">🟡 ออกพักอยู่</div>
+      <span class="badge b-gray">${active.length} คน</span>
+    </div>${sessionTable(active)}</div>`:'';
+
+  document.getElementById('sv-log').innerHTML=`
+    <div class="card"><div class="card-hd">
+      <div class="card-title">📋 บันทึกวันนี้</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="badge b-gray">${sessions.length} รายการ</span>
+        <button onclick="renderSupervisor()" style="font-size:12px;padding:5px 12px;">↻ รีเฟรช</button>
+      </div>
+    </div>
+    ${sessions.length?`<div class="tbl-wrap fixed-h"><table>
+      <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ประตูออก</th>
+        <th>เวลากลับ</th><th>ประตูกลับ</th><th>รวม(นาที)</th><th>สถานะ</th></tr></thead>
+      <tbody>${sessions.map(s=>{
+        const emp=s.checkin_employees||{};
+        const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
+        return `<tr><td><div class="emp-name">${escHtml(emp.name||'')}</div>
+          <div class="emp-dept">${escHtml(emp.department||'')}</div></td>
+          <td><span style="font-size:12px;color:#475569;">${escHtml(s.reason||'-')}</span></td>
+          <td>${fmtTime(s.checkout_time)} น.</td>
+          <td>${gateName(s.checkout_gate||'-')}</td>
+          <td>${s.checkin_time?fmtTime(s.checkin_time)+' น.':'-'}</td>
+          <td>${gateName(s.checkin_gate||'-')}</td>
+          <td>${s.duration_min?Math.round(s.duration_min):'-'}</td>
+          <td>${badge}</td></tr>`;}).join('')}
+      </tbody></table></div>`:'<div class="log-empty">ยังไม่มีข้อมูลวันนี้</div>'}
+    </div>`;
+}
+
+// ============================================================
+// SECTION 7 — REPORTS
+// ============================================================
+async function renderReport() {
+  const today=todayStr(), weekAgo=new Date(Date.now()-6*86400000).toLocaleDateString('sv-SE',{timeZone:'Asia/Bangkok'});
+  document.getElementById('page-content').innerHTML=`
+    <div class="card">
+      <div class="card-hd"><div class="card-title">📋 รายงานการเข้า-ออก</div></div>
+      <div class="filter-row">
+        <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="rp-from" value="${weekAgo}"></div>
+        <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="rp-to" value="${today}"></div>
+        <div class="fg"><label>พนักงาน (เว้นว่าง=ทั้งหมด)</label>
+          <input type="text" id="rp-emp" placeholder="รหัสหรือชื่อ" style="min-width:180px;"></div>
+        <button class="btn-filter" onclick="loadReport()">ค้นหา</button>
+        <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;">⬇ CSV</button>
+      </div>
+      <div id="rp-summary" style="margin-bottom:14px;"></div>
+      <div id="rp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+    </div>`;
+}
+
+let _rpData = [];
+async function loadReport() {
+  const from=document.getElementById('rp-from').value;
+  const to  =document.getElementById('rp-to').value;
+  const emp =document.getElementById('rp-emp').value.trim();
+  document.getElementById('rp-table').innerHTML='<div class="log-empty">กำลังโหลด...</div>';
+
+  let q = sb.from('checkin_lunch_sessions')
+    .select('*, checkin_employees(name,department,employee_id)')
+    .gte('session_date',from).lte('session_date',to)
+    .order('checkout_time',{ascending:false});
+
+  const { data } = await q;
+  let rows = data || [];
+
+  if (emp) {
+    rows = rows.filter(s => {
+      const e = s.checkin_employees||{};
+      return (e.name||'').includes(emp) || (e.employee_id||'').includes(emp);
+    });
+  }
+  _rpData = rows;
+
+  // Summary
+  const total   = rows.length;
+  const returned= rows.filter(r=>r.status==='RETURNED').length;
+  const overdue = rows.filter(r=>r.status==='OVERDUE').length;
+  const avgMin  = returned>0
+    ? Math.round(rows.filter(r=>r.duration_min).reduce((s,r)=>s+r.duration_min,0)/returned) : 0;
+
+  document.getElementById('rp-summary').innerHTML=`
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="stat-card"><div class="stat-num" style="font-size:24px;color:#1a3a5c;">${total}</div><div class="stat-lbl">รายการทั้งหมด</div></div>
+      <div class="stat-card s-ok"><div class="stat-num" style="font-size:24px;">${returned}</div><div class="stat-lbl">กลับตรงเวลา</div></div>
+      <div class="stat-card s-late"><div class="stat-num" style="font-size:24px;">${overdue}</div><div class="stat-lbl">เกินเวลา</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px;color:#7c3aed;">${avgMin}</div><div class="stat-lbl">เฉลี่ยนาที/ครั้ง</div></div>
+    </div>`;
+
+  if (!rows.length) { document.getElementById('rp-table').innerHTML='<div class="log-empty">ไม่พบข้อมูลในช่วงที่เลือก</div>'; return; }
+
+  document.getElementById('rp-table').innerHTML=`
+    <div class="tbl-wrap" style="max-height:50vh;"><table>
+      <thead><tr><th>วันที่</th><th>พนักงาน</th><th>แผนก</th><th>เหตุผล</th>
+        <th>เวลาออก</th><th>ประตูออก</th><th>เวลากลับ</th><th>ประตูกลับ</th><th>รวม(นาที)</th><th>สถานะ</th></tr></thead>
+      <tbody>${rows.map(s=>{
+        const emp=s.checkin_employees||{};
+        const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
+        return `<tr><td style="white-space:nowrap;">${fmtDate(s.session_date)}</td>
+          <td><div class="emp-name">${escHtml(emp.name||'')}</div><div class="emp-dept">${emp.employee_id||''}</div></td>
+          <td>${escHtml(emp.department||'')}</td>
+          <td><span style="font-size:12px;">${escHtml(s.reason||'-')}</span></td>
+          <td>${fmtTime(s.checkout_time)} น.</td>
+          <td>${gateName(s.checkout_gate||'-')}</td>
+          <td>${s.checkin_time?fmtTime(s.checkin_time)+' น.':'-'}</td>
+          <td>${gateName(s.checkin_gate||'-')}</td>
+          <td>${s.duration_min?Math.round(s.duration_min):'-'}</td>
+          <td>${badge}</td></tr>`;}).join('')}
+      </tbody></table></div>`;
+}
+
+function exportReport() {
+  if (!_rpData.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
+  const rows=[['วันที่','รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','เวลาออก','ประตูออก','เวลากลับ','ประตูกลับ','รวม(นาที)','สถานะ']];
+  _rpData.forEach(s=>{
+    const e=s.checkin_employees||{};
+    // สถานะจาก reason rules (ไม่ใช้แค่ s.status)
+    const statusText = s.status==='RETURNED'
+      ? (() => {
+          const rules=(reasonRules[s.reason]||[]).slice().sort((a,b)=>b.min-a.min);
+          for (const r of rules) { if ((s.duration_min||0)>=r.min) return r.label; }
+          return 'กลับแล้ว';
+        })()
+      : s.status==='OVERDUE' ? 'เกินกำหนด' : 'ออกอยู่';
+    rows.push([s.session_date,e.employee_id||'',e.name||'',e.department||'',
+      s.reason||'',fmtTime(s.checkout_time),gateName(s.checkout_gate||''),
+      s.checkin_time?fmtTime(s.checkin_time):'',
+      gateName(s.checkin_gate||''),
+      s.duration_min?Math.round(s.duration_min):'',statusText]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`checkin_report_${todayStr()}.csv`;
+  a.click();
+}
+
+// ============================================================
+// SECTION 8 — EMPLOYEE MANAGEMENT + CSV
+// ============================================================
+async function renderEmployees() {
+  document.getElementById('page-content').innerHTML=`
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">👥 รายชื่อพนักงาน</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="openModal('modal-csv')" style="background:#0f766e;color:#fff;border:none;font-size:13px;padding:8px 14px;">⬆ นำเข้า CSV</button>
+          <button onclick="printAllCards()" style="background:#7c3aed;color:#fff;border:none;font-size:13px;padding:8px 14px;">🪪 พิมพ์ทั้งหมด</button>
+          <button onclick="openEmpModal()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:8px 14px;">+ เพิ่มพนักงาน</button>
+        </div>
+      </div>
+      <div class="filter-row" style="margin-bottom:12px;">
+        <input type="text" id="emp-search" placeholder="ค้นหาชื่อหรือรหัส..." style="max-width:280px;" oninput="filterEmpTable(this.value)">
+      </div>
+      <div id="emp-table"><div class="log-empty">กำลังโหลด...</div></div>
+    </div>`;
+  await loadEmpTable();
+}
+
+let _empAll = [];
+async function loadEmpTable() {
+  const { data } = await sb.from('checkin_employees').select('*').order('employee_id');
+  _empAll = data||[];
+  renderEmpTable(_empAll);
+}
+
+function renderEmpTable(rows) {
+  const el=document.getElementById('emp-table');
+  if (!el) return;
+  if (!rows.length) { el.innerHTML='<div class="log-empty">ไม่พบพนักงาน</div>'; return; }
+  el.innerHTML=`<div class="tbl-wrap fixed-h"><table>
+    <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>QR Code</th><th></th></tr></thead>
+    <tbody>${rows.map(e=>`<tr>
+      <td>${e.employee_id}</td>
+      <td>${escHtml(e.name)}</td>
+      <td>${escHtml(e.department||'-')}</td>
+      <td><code style="font-size:11px;">${escHtml(e.qr_code||e.employee_id)}</code></td>
+      <td style="display:flex;gap:6px;">
+        <button onclick="printEmpCard('${e.employee_id}')" style="font-size:12px;padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">🪪 พิมพ์</button>
+        <button onclick="openEmpModal('${e.employee_id}')" style="font-size:12px;padding:4px 10px;">แก้ไข</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function filterEmpTable(q) {
+  if (!q) { renderEmpTable(_empAll); return; }
+  renderEmpTable(_empAll.filter(e=>(e.name||'').includes(q)||(e.employee_id||'').includes(q)||(e.department||'').includes(q)));
+}
+
+// ============================================================
+// SECTION 8B — พิมพ์บัตรพนักงาน (QR Code + Barcode)
+// ============================================================
+function _empInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) return (parts[0][0]||'') + (parts[1][0]||'');
+  return name[0] || '?';
+}
+
+function _cardHtml(emps, autoPrint) {
+  const cards = emps.map(e => {
+    const code = e.qr_code || e.employee_id;
+    return `
+      <div class="emp-card" id="card-${e.employee_id}">
+        <div class="card-header">
+          <div style="font-size:13px;font-weight:600;">บริษัท สานนท์ จำกัด</div>
+          <div style="font-size:10px;opacity:.75;margin-top:2px;">ระบบเช็คอินพักเที่ยง</div>
+        </div>
+        <div class="card-body">
+          <div class="avatar">${_empInitials(e.name)}</div>
+          <div class="emp-name">${escHtml(e.name)}</div>
+          <div class="emp-dept">${escHtml(e.department||'—')}</div>
+          <div class="emp-id">รหัส: ${escHtml(e.employee_id)}</div>
+          <div class="codes">
+            <div class="code-box">
+              <canvas id="qr-${e.employee_id}" width="90" height="90"></canvas>
+              <div class="code-lbl">QR Code</div>
+            </div>
+            <div class="code-box">
+              <svg id="bc-${e.employee_id}"></svg>
+              <div class="code-lbl">Barcode</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>บัตรพนักงาน</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Kanit',sans-serif;}
+  body{background:#e2e8f0;padding:20px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;}
+  .emp-card{background:#fff;border-radius:12px;width:240px;overflow:hidden;
+    box-shadow:0 2px 12px rgba(0,0,0,.12);break-inside:avoid;}
+  .card-header{background:#1a3a5c;color:#fff;padding:10px 14px;text-align:center;}
+  .card-body{padding:16px 14px;text-align:center;}
+  .avatar{width:52px;height:52px;border-radius:50%;background:#dbeafe;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;font-weight:600;color:#1e40af;margin:0 auto 10px;}
+  .emp-name{font-size:15px;font-weight:600;color:#1e293b;line-height:1.3;}
+  .emp-dept{font-size:12px;color:#64748b;margin-top:3px;}
+  .emp-id{font-size:11px;color:#94a3b8;margin-top:3px;letter-spacing:.5px;}
+  .codes{display:flex;justify-content:center;gap:12px;margin-top:14px;align-items:flex-end;}
+  .code-box{text-align:center;}
+  .code-lbl{font-size:9px;color:#94a3b8;margin-top:3px;letter-spacing:.3px;}
+  canvas{display:block;}
+  svg{display:block;}
+  @media print{
+    body{background:#fff;padding:0;gap:8px;}
+    .emp-card{box-shadow:none;border:1px solid #e2e8f0;}
+    @page{margin:10mm;}
+  }
+<\/style>
+<\/head><body>
+${cards}
+<script>
+window.onload = function() {
+  const emps = ${JSON.stringify(emps.map(e=>({id:e.employee_id,code:e.qr_code||e.employee_id})))};
+  emps.forEach(function(e) {
+    var cv = document.getElementById('qr-'+e.id);
+    if (cv) QRCode.toCanvas(cv, e.code, {width:90,margin:1,errorCorrectionLevel:'M'});
+    var sv = document.getElementById('bc-'+e.id);
+    if (sv) JsBarcode(sv, e.code, {format:'CODE128',width:1.2,height:38,displayValue:false,margin:0});
+  });
+  ${autoPrint ? 'setTimeout(function(){window.print();},800);' : ''}
+};
+<\/script>
+<\/body><\/html>`;
+}
+
+function printEmpCard(empId) {
+  const emp = _empAll.find(e=>e.employee_id===empId);
+  if (!emp) return;
+  const win = window.open('','_blank','width=320,height=480');
+  win.document.write(_cardHtml([emp], true));
+  win.document.close();
+}
+
+function printAllCards() {
+  const rows = _empAll;
+  if (!rows.length) { alert('ยังไม่มีข้อมูลพนักงาน'); return; }
+  const win = window.open('','_blank','width=900,height=600');
+  win.document.write(_cardHtml(rows, true));
+  win.document.close();
+}
+
+// ============================================================
+// SECTION 8C — Camera QR Scanner (สแกนด้วยกล้อง)
+// ============================================================
+let _camStream = null;
+
+function _ensureCameraModal() {
+  if (document.getElementById('modal-camera')) return;
+  const div = document.createElement('div');
+  div.id = 'modal-camera';
+  div.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;align-items:center;justify-content:center;';
+  div.innerHTML = `
+    <div style="background:#0f172a;border-radius:16px;padding:20px;width:360px;max-width:95vw;text-align:center;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">📷 สแกน QR Code พนักงาน</div>
+      <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;">
+        <video id="cam-video" style="width:100%;display:block;" playsinline muted></video>
+        <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;">
+          <div style="width:180px;height:180px;border:3px solid #22d3ee;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.35);"></div>
+        </div>
+      </div>
+      <canvas id="cam-canvas" style="display:none;"></canvas>
+      <div id="cam-msg" style="font-size:13px;color:#94a3b8;margin-top:12px;min-height:18px;">กำลังเปิดกล้อง...</div>
+      <button onclick="closeCamera()" style="margin-top:14px;padding:10px 28px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:14px;font-family:inherit;cursor:pointer;">ปิด</button>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+async function openCamera() {
+  _ensureCameraModal();
+  const modal = document.getElementById('modal-camera');
+  modal.style.display = 'flex';
+  document.getElementById('cam-msg').textContent = 'กำลังเปิดกล้อง...';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+    });
+    _camStream = stream;
+    const video = document.getElementById('cam-video');
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById('cam-msg').textContent = 'เล็งกล้องไปที่ QR Code ของพนักงาน';
+    _startQrScan();
+  } catch(e) {
+    document.getElementById('cam-msg').textContent = 'ไม่สามารถเปิดกล้องได้: ' + e.message;
+  }
+}
+
+function _startQrScan() {
+  const video  = document.getElementById('cam-video');
+  const canvas = document.getElementById('cam-canvas');
+  const ctx    = canvas.getContext('2d');
+
+  function tick() {
+    if (!_camStream) return;
+    if (video.readyState >= video.HAVE_ENOUGH_DATA) {
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = (typeof jsQR === 'function') ? jsQR(img.data, img.width, img.height) : null;
+      if (code && code.data) {
+        closeCamera();
+        const inp = document.getElementById('scan-input');
+        if (inp) { inp.value = code.data; }
+        doLookup(code.data);
+        return;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function closeCamera() {
+  if (_camStream) {
+    _camStream.getTracks().forEach(t => t.stop());
+    _camStream = null;
+  }
+  const modal = document.getElementById('modal-camera');
+  if (modal) modal.style.display = 'none';
+}
+
+async function openEmpModal(id) {
+  document.getElementById('memp-err').textContent='';
+  if (id) {
+    const { data } = await sb.from('checkin_employees').select('*').eq('employee_id',id).limit(1);
+    const e=data?.[0];
+    if (e) {
+      document.getElementById('memp-orig').value = e.employee_id;
+      document.getElementById('memp-id').value   = e.employee_id;
+      document.getElementById('memp-name').value = e.name;
+      document.getElementById('memp-dept').value = e.department||'';
+      document.getElementById('memp-qr').value   = e.qr_code||'';
+      document.getElementById('memp-title').textContent='แก้ไขพนักงาน';
+    }
+  } else {
+    ['memp-orig','memp-id','memp-name','memp-dept','memp-qr'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('memp-title').textContent='เพิ่มพนักงาน';
+  }
+  openModal('modal-emp');
+}
+
+async function saveEmp() {
+  const id   = document.getElementById('memp-id').value.trim();
+  const name = document.getElementById('memp-name').value.trim();
+  const dept = document.getElementById('memp-dept').value.trim();
+  const qr   = document.getElementById('memp-qr').value.trim()||id;
+  const orig = document.getElementById('memp-orig').value;
+  const err  = document.getElementById('memp-err');
+  if (!id||!name) { err.textContent='กรุณากรอกรหัสและชื่อพนักงาน'; return; }
+  if (orig) {
+    await sb.from('checkin_employees').update({employee_id:id,name,department:dept,qr_code:qr}).eq('employee_id',orig);
+  } else {
+    const { error } = await sb.from('checkin_employees').insert({employee_id:id,name,department:dept,qr_code:qr});
+    if (error) { err.textContent='รหัสพนักงานซ้ำหรือเกิดข้อผิดพลาด'; return; }
+  }
+  closeModal('modal-emp');
+  loadEmpTable();
+}
+
+// CSV Import
+function handleCsv(e) {
+  const file=e.target.files[0];
+  if (!file) return;
+  document.getElementById('csv-err').textContent='';
+  document.getElementById('csv-footer').style.display='none';
+  Papa.parse(file,{
+    header:true, skipEmptyLines:true,
+    complete(results) {
+      const rows=results.data.filter(r=>r.employee_id&&r.name);
+      if (!rows.length) { document.getElementById('csv-err').textContent='ไม่พบข้อมูลในไฟล์ หรือรูปแบบไม่ถูกต้อง'; return; }
+      csvRows=rows;
+      document.getElementById('csv-preview').innerHTML=`
+        <p style="font-size:13px;color:#64748b;margin:10px 0 6px;">พบข้อมูล ${rows.length} รายการ:</p>
+        <div class="csv-preview"><table>
+          <thead><tr><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>QR</th></tr></thead>
+          <tbody>${rows.slice(0,5).map(r=>`<tr>
+            <td>${escHtml(r.employee_id)}</td><td>${escHtml(r.name)}</td>
+            <td>${escHtml(r.department||'')}</td><td>${escHtml(r.qr_code||r.employee_id)}</td>
+          </tr>`).join('')}
+          ${rows.length>5?`<tr><td colspan="4" style="color:#aaa;font-size:12px;text-align:center;">... และอีก ${rows.length-5} รายการ</td></tr>`:''}
+          </tbody></table></div>`;
+      document.getElementById('csv-footer').style.display='flex';
+    },
+    error() { document.getElementById('csv-err').textContent='ไม่สามารถอ่านไฟล์ได้'; }
+  });
+}
+
+async function importCsv() {
+  if (!csvRows.length) return;
+  const inserts = csvRows.map(r=>({
+    employee_id: r.employee_id, name: r.name,
+    department: r.department||'', qr_code: r.qr_code||r.employee_id,
+  }));
+  const { error } = await sb.from('checkin_employees').upsert(inserts,{onConflict:'employee_id'});
+  if (error) { document.getElementById('csv-err').textContent='เกิดข้อผิดพลาดในการนำเข้า'; return; }
+  closeModal('modal-csv');
+  document.getElementById('csv-file').value='';
+  document.getElementById('csv-preview').innerHTML='';
+  csvRows=[];
+  loadEmpTable();
+}
+
+// ============================================================
+// SECTION 9 — USER MANAGEMENT
+// ============================================================
+async function renderUsers() {
+  const isAdmin = currentUser.role === 'admin';
+  document.getElementById('page-content').innerHTML=`
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd">
+        <div class="card-title">🔑 จัดการผู้ใช้ระบบเช็คอิน</div>
+        <button onclick="openUserModal()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:8px 14px;">+ เพิ่มผู้ใช้</button>
+      </div>
+      <div id="user-table"><div class="log-empty">กำลังโหลด...</div></div>
+    </div>
+    ${isAdmin?`
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-hd">
+        <div class="card-title">🚪 ตั้งค่าชื่อประตู</div>
+        <span class="badge b-gray" style="font-size:11px;">Admin only</span>
+      </div>
+      <div id="gate-list" style="margin-bottom:12px;"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button onclick="addGate()"
+          style="font-size:13px;color:#1a3a5c;border-color:#1a3a5c;background:#f0f6ff;padding:8px 16px;border-radius:8px;">
+          ➕ เพิ่มประตู
+        </button>
+        <button onclick="saveGateNames()"
+          style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:9px 20px;border-radius:8px;">
+          💾 บันทึกชื่อประตู
+        </button>
+        <span id="gate-save-msg" style="font-size:12px;color:#16a34a;display:none;">✓ บันทึกแล้ว</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">⏱ กำหนดเวลาพักตามเหตุผล</div>
+        <span class="badge b-gray" style="font-size:11px;">Admin only</span>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">ตั้งได้ 2 ระดับต่อเหตุผล — ระดับ 1 = เริ่มนับว่าเกิน, ระดับ 2 = ขั้นรุนแรง (เว้นว่าง = ไม่ใช้)</p>
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>เหตุผล</th>
+          <th>ระดับ 1 (นาที)</th><th>สถานะระดับ 1</th>
+          <th>ระดับ 2 (นาที)</th><th>สถานะระดับ 2</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="rr-tbody"></tbody>
+      </table>
+      </div>
+      <div style="margin-top:10px;">
+        <button onclick="addReasonRow()" style="font-size:12px;color:#1a3a5c;border-color:#1a3a5c;background:#f0f6ff;padding:7px 14px;border-radius:8px;">➕ เพิ่มเหตุผล</button>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+        <button onclick="saveReasonRules()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:9px 20px;border-radius:8px;">💾 บันทึกกฎเวลาพัก</button>
+        <button onclick="resetReasonRules()" style="font-size:12px;color:#64748b;border-color:#e2e8f0;padding:9px 16px;">↺ คืนค่าเริ่มต้น</button>
+        <span id="rr-save-msg" style="font-size:12px;color:#16a34a;display:none;">✓ บันทึกแล้ว</span>
+      </div>
+    </div>`:''}`;
+  loadUserTable();
+  if (isAdmin) setTimeout(()=>{ renderGateList(); initReasonTable(); }, 50);
+}
+
+// render dynamic gate list ใน settings
+function renderGateList() {
+  const el = document.getElementById('gate-list');
+  if (!el) return;
+  const keys = Object.keys(gateNames).sort();
+  const canDel = keys.length > 1;
+  el.innerHTML = keys.map(k=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:11px;color:#94a3b8;min-width:52px;flex-shrink:0;">${k.replace('_',' ')}</span>
+      <input type="text" id="gname-${k}" value="${escHtml(gateNames[k])}"
+        placeholder="ชื่อประตู" style="flex:1;min-width:0;">
+      <button onclick="removeGate('${k}')"
+        style="color:#dc2626;background:#fff5f5;border-color:#fecaca;
+        padding:7px 10px;font-size:12px;border-radius:6px;white-space:nowrap;flex-shrink:0;
+        ${canDel?'':'opacity:.35;pointer-events:none;'}">
+        🗑 ลบ
+      </button>
+    </div>`).join('');
+}
+
+function addGate() {
+  const nums = Object.keys(gateNames).map(k=>parseInt(k.replace('GATE_',''))).filter(n=>!isNaN(n));
+  const next  = nums.length ? Math.max(...nums)+1 : 1;
+  const key   = `GATE_${next}`;
+  gateNames[key] = `ประตู ${next}`;
+  renderGateList();
+  setTimeout(()=>document.getElementById(`gname-${key}`)?.focus(), 50);
+}
+
+function removeGate(key) {
+  if (Object.keys(gateNames).length <= 1) return;
+  if (!confirm(`ลบ "${gateNames[key]}" ?`)) return;
+  delete gateNames[key];
+  // ถ้า currentGate ถูกลบ → เปลี่ยนไปประตูแรก
+  if (currentGate === key) currentGate = Object.keys(gateNames).sort()[0];
+  renderGateList();
+}
+
+async function saveGateNames() {
+  // อ่านค่าจาก input ทุก row ก่อนบันทึก
+  const names = {};
+  Object.keys(gateNames).forEach(k=>{
+    const v = (document.getElementById(`gname-${k}`)?.value||'').trim();
+    names[k] = v || gateNames[k];
+  });
+  await sb.from('checkin_config').upsert({key:'gate_names', value: names},{onConflict:'key'});
+  gateNames = names;
+  if (currentGate && !gateNames[currentGate]) currentGate = Object.keys(gateNames).sort()[0];
+  const msg = document.getElementById('gate-save-msg');
+  if (msg) { msg.style.display='inline'; setTimeout(()=>msg.style.display='none',2500); }
+}
+
+// สร้าง option HTML สำหรับ dropdown สถานะ
+function _labelOpts(selected='') {
+  return `<option value="">-- ไม่ใช้ --</option>`
+    + LABEL_OPTS.map(l=>`<option value="${escHtml(l)}"${l===selected?' selected':''}>${escHtml(l)}</option>`).join('');
+}
+
+// เพิ่มแถวใหม่ในตาราง reason rules
+function addReasonRow(name='', r1={}, r2={}) {
+  const tbody = document.getElementById('rr-tbody');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="rr-name" value="${escHtml(name)}" placeholder="ชื่อเหตุผล"
+      style="width:110px;padding:5px 8px;font-size:13px;"></td>
+    <td><input type="number" class="rr-1-min" value="${r1.min||''}" placeholder="นาที"
+      min="1" max="9999" style="width:65px;padding:5px 8px;font-size:13px;"></td>
+    <td><select class="rr-1-lbl" style="padding:5px 8px;font-size:13px;min-width:110px;">${_labelOpts(r1.label||'')}</select></td>
+    <td><input type="number" class="rr-2-min" value="${r2.min||''}" placeholder="นาที"
+      min="1" max="9999" style="width:65px;padding:5px 8px;font-size:13px;"></td>
+    <td><select class="rr-2-lbl" style="padding:5px 8px;font-size:13px;min-width:110px;">${_labelOpts(r2.label||'')}</select></td>
+    <td><button onclick="this.closest('tr').remove()"
+      style="color:#dc2626;background:#fff5f5;border-color:#fecaca;padding:5px 10px;font-size:12px;border-radius:6px;">🗑 ลบ</button></td>`;
+  tbody.appendChild(tr);
+}
+
+// เรนเดอร์แถวทั้งหมดจาก reasonOpts + reasonRules ปัจจุบัน
+function initReasonTable() {
+  const tbody = document.getElementById('rr-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  reasonOpts.forEach(r => {
+    const rules = reasonRules[r]||[];
+    addReasonRow(r, rules[0]||{}, rules[1]||{});
+  });
+}
+
+async function saveReasonRules() {
+  const tbody = document.getElementById('rr-tbody');
+  if (!tbody) { return; }
+  const rules = {};
+  const newReasonOpts = [];
+
+  Array.from(tbody.rows).forEach(tr=>{
+    const name = tr.querySelector('.rr-name')?.value.trim();
+    const m1   = parseInt(tr.querySelector('.rr-1-min')?.value)||0;
+    const l1   = tr.querySelector('.rr-1-lbl')?.value||'';
+    const m2   = parseInt(tr.querySelector('.rr-2-min')?.value)||0;
+    const l2   = tr.querySelector('.rr-2-lbl')?.value||'';
+    if (!name) return;
+    newReasonOpts.push(name);
+    const arr = [];
+    if (m1 && l1) arr.push({min:m1, label:l1});
+    if (m2 && l2) arr.push({min:m2, label:l2});
+    arr.sort((a,b)=>a.min-b.min);
+    if (arr.length) rules[name] = arr;
+  });
+
+  await sb.from('checkin_config').upsert([
+    {key:'reason_list',  value: newReasonOpts},
+    {key:'reason_rules', value: rules},
+  ],{onConflict:'key'});
+
+  reasonOpts  = newReasonOpts;
+  reasonRules = {...DEFAULT_REASON_RULES, ...rules};
+  const msg = document.getElementById('rr-save-msg');
+  if (msg) { msg.style.display='inline'; setTimeout(()=>msg.style.display='none',2500); }
+}
+
+async function resetReasonRules() {
+  if (!confirm('รีเซ็ตเป็นค่าเริ่มต้น?')) return;
+  await sb.from('checkin_config').upsert([
+    {key:'reason_list',  value: REASON_OPTS_DEFAULT},
+    {key:'reason_rules', value: DEFAULT_REASON_RULES},
+  ],{onConflict:'key'});
+  reasonOpts  = [...REASON_OPTS_DEFAULT];
+  reasonRules = JSON.parse(JSON.stringify(DEFAULT_REASON_RULES));
+  initReasonTable();  // re-render table ไม่ต้อง re-render ทั้งหน้า
+}
+
+const ROLE_LABEL = {admin:'Admin',supervisor:'Supervisor',guard:'Guard'};
+const ROLE_BADGE = {admin:'b-late',supervisor:'b-blue',guard:'b-gray'};
+
+async function loadUserTable() {
+  const { data } = await sb.from('checkin_users').select('*').order('id');
+  const el=document.getElementById('user-table');
+  if (!el) return;
+  if (!data?.length) { el.innerHTML='<div class="log-empty">ยังไม่มีผู้ใช้</div>'; return; }
+  const STATUS_BADGE = { active:'b-in', pending:'b-late', inactive:'b-gray' };
+  const STATUS_LABEL = { active:'Active', pending:'รออนุมัติ', inactive:'Inactive' };
+  el.innerHTML=`<div class="tbl-wrap fixed-h"><table>
+    <thead><tr><th>Username</th><th>ชื่อ</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${data.map(u=>`<tr ${u.status==='pending'?'style="background:#fff7ed;"':''}>
+      <td><code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;">${escHtml(u.username)}</code></td>
+      <td>${escHtml(u.name)}</td>
+      <td><span class="badge ${ROLE_BADGE[u.role]||'b-gray'}">${ROLE_LABEL[u.role]||u.role}</span></td>
+      <td><span class="badge ${STATUS_BADGE[u.status]||'b-gray'}">${STATUS_LABEL[u.status]||u.status}</span></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${u.status==='pending'?`<button onclick="approveUser(${u.id})" style="font-size:12px;padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;">✅ อนุมัติ</button>`:''}
+        <button onclick="openUserModal(${u.id})" style="font-size:12px;padding:4px 10px;">แก้ไข</button>
+      </td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+async function openUserModal(id) {
+  document.getElementById('musr-err').textContent='';
+  document.getElementById('musr-pw').placeholder = id ? 'กรอกรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)' : 'รหัสผ่าน';
+  if (id) {
+    const { data } = await sb.from('checkin_users').select('*').eq('id',id).limit(1);
+    const u=data?.[0];
+    if (u) {
+      document.getElementById('musr-id').value       = u.id;
+      document.getElementById('musr-username').value = u.username;
+      document.getElementById('musr-pw').value       = '';
+      document.getElementById('musr-name').value     = u.name;
+      document.getElementById('musr-role').value     = u.role;
+      document.getElementById('musr-status').value   = u.status;
+      document.getElementById('musr-title').textContent='แก้ไขผู้ใช้';
+    }
+  } else {
+    ['musr-id','musr-username','musr-pw','musr-name'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('musr-role').value='guard';
+    document.getElementById('musr-status').value='active';
+    document.getElementById('musr-title').textContent='เพิ่มผู้ใช้';
+  }
+  openModal('modal-user');
+}
+
+async function approveUser(id) {
+  if (!confirm('อนุมัติบัญชีนี้ให้ใช้งานได้?')) return;
+  const { error } = await sb.from('checkin_users').update({ status: 'active' }).eq('id', id);
+  if (error) { alert('เกิดข้อผิดพลาด'); return; }
+  loadUserTable();
+}
+
+async function saveUser() {
+  const id       = document.getElementById('musr-id').value;
+  const username = document.getElementById('musr-username').value.trim();
+  const pw       = document.getElementById('musr-pw').value.trim();
+  const name     = document.getElementById('musr-name').value.trim();
+  const role     = document.getElementById('musr-role').value;
+  const status   = document.getElementById('musr-status').value;
+  const err      = document.getElementById('musr-err');
+  if (!username||!name) { err.textContent='กรุณากรอก Username และชื่อ'; return; }
+  if (!id&&!pw)         { err.textContent='กรุณากรอกรหัสผ่าน'; return; }
+
+  const payload = {username,name,role,status};
+  if (pw) payload.password=pw;
+
+  if (id) {
+    const { error } = await sb.from('checkin_users').update(payload).eq('id',id);
+    if (error) { err.textContent='Username ซ้ำหรือเกิดข้อผิดพลาด'; return; }
+  } else {
+    const { error } = await sb.from('checkin_users').insert({...payload,password:pw});
+    if (error) { err.textContent='Username ซ้ำหรือเกิดข้อผิดพลาด'; return; }
+  }
+  closeModal('modal-user');
+  loadUserTable();
+}
+
+// ============================================================
+// SECTION 10 — BOOTSTRAP
+// ============================================================
+function applyPermissions(role) {
+  const showSup   = ['admin','supervisor'].includes(role);
+  const showAdmin = role==='admin';
+  document.querySelectorAll('.perm-sup').forEach(el=>el.style.display=showSup?'':'none');
+  document.querySelectorAll('.perm-admin').forEach(el=>el.style.display=showAdmin?'':'none');
+}
+
+function startClock() {
+  const el=document.getElementById('clock');
+  setInterval(()=>{ if(el) el.textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
+}
+
+async function bootApp() {
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('sb-name').textContent  = currentUser.name;
+  document.getElementById('sb-role').textContent  = ROLE_LABEL[currentUser.role]||currentUser.role;
+  document.getElementById('scanner-tag').textContent = `รปภ.: ${currentUser.name}`;
+  applyPermissions(currentUser.role);
+  startClock();
+  // โหลด config จาก DB (gate_names + reason_rules)
+  try {
+    const { data } = await sb.from('checkin_config').select('key,value')
+      .in('key',['gate_names','reason_rules','reason_list']);
+    (data||[]).forEach(row=>{
+      if (row.key==='gate_names'  && row.value) gateNames   = {...gateNames, ...row.value};
+      if (row.key==='reason_rules'&& row.value) reasonRules = {...DEFAULT_REASON_RULES, ...row.value};
+      if (row.key==='reason_list' && Array.isArray(row.value) && row.value.length)
+        reasonOpts = row.value;
+    });
+    // ตรวจ currentGate ว่ายังอยู่ใน gateNames ไหม
+    if (!gateNames[currentGate]) currentGate = Object.keys(gateNames).sort()[0];
+  } catch(e) {}
+  nav('ck-guard');
+}
+
+// Auto-restore session (ไม่ใช้ shared session — แยกจากระบบอื่น)
+(function(){
+  const s=sessionStorage.getItem(SESSION_KEY);
+  if (s) { try { currentUser=JSON.parse(s); bootApp().catch(()=>{}); } catch(e){} }
+  // Auto-fill username ล่าสุด
+  const lastUser = localStorage.getItem('_sn_ck_lastuser');
+  if (lastUser) {
+    const el = document.getElementById('u');
+    if (el) { el.value = lastUser; setTimeout(()=>document.getElementById('p')?.focus(), 50); }
+  }
+})();
+</script>
+</body>
+</html>

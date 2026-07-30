@@ -1400,7 +1400,7 @@ async function saveStockIn(e){
     if(le)throw le;
     await Promise.all([loadStockData(),loadLots()]);
     showToast('รับเข้าสำเร็จ — '+doc_no+' ('+lot_no+')','success');
-    qs('#si-form')?.reset();qs('#si-date').value=todayISO();siGenLot();navigateTo('inv-stock');
+    closeModal();navigateTo('inv-stock');
   }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
   finally{btn.disabled=false;btn.textContent='บันทึกรับเข้า';}
 }
