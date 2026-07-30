@@ -2340,8 +2340,55 @@ async function renderPmItemsPage() {
   refreshIcons();
   await loadPmData();
 
+  // วาง filter bar + cards area
+  content.innerHTML = `
+  <div class="space-y-4">
+    <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-wrap items-center gap-3">
+      <span class="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+        <i data-lucide="list-checks" class="w-4 h-4 text-amber-500"></i>รายการ PM
+      </span>
+      <select id="items-fac" onchange="onPmItemsFacChange()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        <option value="">ทุกโรงงาน</option>
+        ${_pmFactories.map(f=>`<option value="${f}">${escapeHtml(f)}</option>`).join('')}
+      </select>
+      <select id="items-mach" onchange="renderPmItemCards()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        <option value="">ทุกเครื่อง</option>
+        ${_pmMachines.filter(m=>m.is_active).sort((a,b)=>a.sort_order-b.sort_order)
+          .map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <span id="items-count" class="text-xs text-gray-400"></span>
+    </div>
+    <div id="pm-items-area"></div>
+  </div>`;
+  refreshIcons();
+  renderPmItemCards();
+}
+
+function onPmItemsFacChange() {
+  const fac     = qs('#items-fac')?.value || '';
+  const machSel = qs('#items-mach');
+  if (!machSel) return;
+  const filtered = _pmMachines.filter(m => m.is_active && (!fac || m.factory === fac))
+    .sort((a,b) => a.sort_order - b.sort_order);
+  machSel.innerHTML = `<option value="">ทุกเครื่อง</option>` +
+    filtered.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  renderPmItemCards();
+}
+
+function renderPmItemCards() {
+  const area = qs('#pm-items-area');
+  if (!area) return;
+
+  const fac  = qs('#items-fac')?.value  || '';
+  const mach = qs('#items-mach')?.value || '';
+
   const activeMachines = _pmMachines.filter(m => m.is_active)
+    .filter(m => !fac  || m.factory === fac)
+    .filter(m => !mach || m.id      === mach)
     .sort((a,b) => (a.sort_order - b.sort_order) || (a.factory||'').localeCompare(b.factory||''));
+
+  const countEl = qs('#items-count');
+  if (countEl) countEl.textContent = `แสดง ${activeMachines.length} เครื่อง`;
 
   const cards = activeMachines.map(machine => {
     const unit  = machine.meter_type === 'km' ? 'กม.' : 'ชม.';
@@ -2409,7 +2456,7 @@ async function renderPmItemsPage() {
     ยังไม่มีเครื่องจักร <a href="#" onclick="navigateTo('pm-machines')" class="text-amber-500 underline">เพิ่มเครื่องจักร</a>
   </div>`;
 
-  content.innerHTML = cards;
+  area.innerHTML = cards;
   refreshIcons();
 }
 
@@ -2679,6 +2726,22 @@ function machineFormHtml(m) {
         <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ติดตั้ง</label>
         <input id="mach-install" type="date" value="${m?.install_date||''}" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
       </div>
+      <div class="col-span-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          ชั่วโมงเดินเครื่องแผน / วัน
+          <span class="text-xs font-normal text-gray-400 ml-1">(สำหรับคำนวณ Availability)</span>
+        </label>
+        <div class="flex items-center gap-2">
+          <input id="mach-planned-hrs" type="number" step="0.5" min="0" max="24"
+            value="${m?.planned_hours_per_day??8}"
+            class="w-32 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          <span class="text-sm text-gray-500">ชม./วัน</span>
+          <span class="text-xs text-gray-400 ml-2">เช่น โรงงาน 1 กะ = 8, 2 กะ = 16, ตลอดวัน = 24</span>
+        </div>
+        <div class="mt-1.5 text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-1.5">
+          Availability = 100 − (Downtime ÷ <b>ชม.แผน×วัน</b> × 100) — ถ้ากรอกถูกต้องข้อมูลจะสะท้อนความจริง
+        </div>
+      </div>
     </div>
     <!-- Dual Meter -->
     <div class="border rounded-xl p-3 bg-teal-50 space-y-3">
@@ -2788,8 +2851,9 @@ async function saveMachine(id) {
     notes            : qs('#mach-notes')?.value?.trim()||null,
     is_active        : qs('#mach-active')?.checked!==false,
     sync_source      : syncSource,
-    sync_loader_name : syncLoaderName,
-    meter_1_label    : qs('#mach-m1-label')?.value?.trim() || 'ชม.เครื่องจักร',
+    sync_loader_name      : syncLoaderName,
+    planned_hours_per_day : parseFloat(qs('#mach-planned-hrs')?.value||'8')||8,
+    meter_1_label         : qs('#mach-m1-label')?.value?.trim() || 'ชม.เครื่องจักร',
     has_meter_2      : qs('#mach-has-m2')?.checked || false,
     meter_2_label    : qs('#mach-m2-label')?.value?.trim() || 'ชม.ไฮโดรลิค',
     current_meter_2  : qs('#mach-has-m2')?.checked ? (parseFloat(qs('#mach-meter2')?.value||'0')||0) : null,
@@ -3416,18 +3480,23 @@ async function loadOeeData() {
   const month = parseInt(qs('#oee-month')?.value || 0);
   const fac   = qs('#oee-fac')?.value || '';
 
-  let dateFrom, dateTo, totalCalendarHours;
+  let dateFrom, dateTo, daysInPeriod;
   if (month === 0) {
     dateFrom = `${year}-01-01`;
     dateTo   = `${year}-12-31`;
-    const daysInYear = (year%4===0&&(year%100!==0||year%400===0)) ? 366 : 365;
-    totalCalendarHours = daysInYear * 24;
+    daysInPeriod = (year%4===0&&(year%100!==0||year%400===0)) ? 366 : 365;
   } else {
     const lastDay = new Date(year, month, 0).getDate();
     dateFrom = `${year}-${String(month).padStart(2,'0')}-01`;
     dateTo   = `${year}-${String(month).padStart(2,'0')}-${lastDay}`;
-    totalCalendarHours = lastDay * 24;
+    daysInPeriod = lastDay;
   }
+
+  // map planned_hours_per_day จาก _pmMachines ที่โหลดไว้แล้ว
+  const plannedHrsMap = {};
+  _pmMachines.forEach(m => {
+    plannedHrsMap[m.id] = Number(m.planned_hours_per_day) || 8;
+  });
 
   const { data: downtimes } = await db.from('pm_downtime')
     .select('*,pm_machines(id,name,factory)')
@@ -3442,27 +3511,36 @@ async function loadOeeData() {
     const mid  = r.pm_machine_id;
     const name = r.pm_machines?.name || '-';
     const fct  = r.pm_machines?.factory || '-';
-    if (!machMap[mid]) machMap[mid] = { name, factory:fct, totalDownHours:0, breakdownHours:0, plannedHours:0, events:0 };
+    const plannedPerDay = plannedHrsMap[mid] || 8;
+    const plannedTotal  = plannedPerDay * daysInPeriod;
+    if (!machMap[mid]) machMap[mid] = {
+      name, factory:fct,
+      totalDownHours:0, breakdownHours:0, pmDownHours:0, events:0,
+      plannedTotal,   // ชม.แผนทั้งหมดในช่วง
+      plannedPerDay,  // ชม./วัน ที่ตั้งไว้
+    };
     const hrs = r.duration_hours || 0;
     machMap[mid].totalDownHours += hrs;
     machMap[mid].events++;
-    if (r.type === 'breakdown')   machMap[mid].breakdownHours += hrs;
-    if (r.type === 'planned_pm')  machMap[mid].plannedHours   += hrs;
+    if (r.type === 'breakdown')  machMap[mid].breakdownHours += hrs;
+    if (r.type === 'planned_pm') machMap[mid].pmDownHours    += hrs;
   });
 
   const machines = Object.values(machMap);
   const totalDown = machines.reduce((s,m)=>s+m.totalDownHours,0);
-  const avgAvail  = machines.length
-    ? machines.reduce((s,m)=>s+Math.max(0,100-(m.totalDownHours/totalCalendarHours*100)),0)/machines.length
+
+  // Availability เฉลี่ย — ใช้ plannedTotal รายเครื่อง
+  const avgAvail = machines.length
+    ? machines.reduce((s,m) => s + Math.max(0, 100 - (m.totalDownHours / m.plannedTotal * 100)), 0) / machines.length
     : 100;
 
   // KPI
   const kpiEl = qs('#oee-kpi');
   if (kpiEl) kpiEl.innerHTML = [
-    { label:'Availability เฉลี่ย', value: avgAvail.toFixed(1)+'%', color:'blue'   },
-    { label:'Downtime รวม',         value: fmtNum(totalDown)+' ชม.', color:'red'    },
-    { label:'เหตุการณ์ทั้งหมด',    value: filtered.length+' ครั้ง', color:'amber'  },
-    { label:'เครื่องที่มีข้อมูล',   value: machines.length+' เครื่อง', color:'gray' },
+    { label:'Availability เฉลี่ย', value: avgAvail.toFixed(1)+'%',        color:'blue'   },
+    { label:'Downtime รวม',         value: fmtNum(totalDown,1)+' ชม.',     color:'red'    },
+    { label:'เหตุการณ์ทั้งหมด',    value: filtered.length+' ครั้ง',       color:'amber'  },
+    { label:'เครื่องที่มีข้อมูล',   value: machines.length+' เครื่อง',    color:'gray'   },
   ].map(k=>`
     <div class="bg-white rounded-2xl shadow-sm p-4">
       <p class="text-xs text-gray-500 mb-1">${k.label}</p>
@@ -3477,12 +3555,12 @@ async function loadOeeData() {
     return;
   }
 
-  machines.sort((a,b)=>b.totalDownHours-a.totalDownHours);
+  machines.sort((a,b) => b.totalDownHours - a.totalDownHours);
 
   wrap.innerHTML = `
     <div class="px-5 py-3 border-b flex items-center justify-between">
       <h3 class="text-sm font-semibold text-gray-700">Availability รายเครื่อง</h3>
-      <span class="text-xs text-gray-400">ชั่วโมงปฏิทิน ${fmtNum(totalCalendarHours)} ชม./เครื่อง</span>
+      <span class="text-xs text-gray-400">คำนวณจากชั่วโมงแผนรายเครื่อง (${daysInPeriod} วัน)</span>
     </div>
     <div class="overflow-x-auto">
     <table class="w-full text-sm">
@@ -3490,6 +3568,8 @@ async function loadOeeData() {
         <tr>
           <th class="text-left px-4 py-2.5">เครื่องจักร</th>
           <th class="text-left px-4 py-2.5">โรงงาน</th>
+          <th class="text-right px-4 py-2.5">แผน ชม./วัน</th>
+          <th class="text-right px-4 py-2.5">ชม.แผนรวม</th>
           <th class="text-right px-4 py-2.5">Downtime (ชม.)</th>
           <th class="text-right px-4 py-2.5">Breakdown</th>
           <th class="text-right px-4 py-2.5">Planned PM</th>
@@ -3499,15 +3579,17 @@ async function loadOeeData() {
       </thead>
       <tbody>
         ${machines.map(m => {
-          const avail = Math.max(0, 100 - (m.totalDownHours / totalCalendarHours * 100));
+          const avail = Math.max(0, 100 - (m.totalDownHours / m.plannedTotal * 100));
           const color = avail >= 90 ? 'green' : avail >= 75 ? 'amber' : 'red';
           const barW  = Math.min(100, avail).toFixed(1);
           return `<tr class="border-t hover:bg-gray-50">
             <td class="px-4 py-3 font-medium text-gray-800">${escapeHtml(m.name)}</td>
             <td class="px-4 py-3 text-gray-500">${escapeHtml(m.factory)}</td>
-            <td class="px-4 py-3 text-right text-red-600 font-medium">${fmtNum(m.totalDownHours)}</td>
-            <td class="px-4 py-3 text-right text-orange-500">${fmtNum(m.breakdownHours)}</td>
-            <td class="px-4 py-3 text-right text-blue-500">${fmtNum(m.plannedHours)}</td>
+            <td class="px-4 py-3 text-right text-orange-600 font-medium">${m.plannedPerDay} ชม.</td>
+            <td class="px-4 py-3 text-right text-gray-500">${fmtNum(m.plannedTotal)} ชม.</td>
+            <td class="px-4 py-3 text-right text-red-600 font-medium">${fmtNum(m.totalDownHours,1)}</td>
+            <td class="px-4 py-3 text-right text-orange-500">${fmtNum(m.breakdownHours,1)}</td>
+            <td class="px-4 py-3 text-right text-blue-500">${fmtNum(m.pmDownHours,1)}</td>
             <td class="px-4 py-3 text-right">${m.events}</td>
             <td class="px-4 py-3 text-right">
               <div class="flex items-center gap-2 justify-end">

@@ -1542,7 +1542,7 @@ async function saveWithdraw(e){
 // SECTION 14B: inv-approvals
 // =====================================================================
 PAGE_RENDERERS['inv-approvals'] = async function(el) {
-  const {data:rows}=await db.from('inventory_transactions').select('*,inventory_items(name,unit)').eq('transaction_type','withdraw').eq('status','pending').order('created_at',{ascending:true});
+  const {data:rows}=await db.from('inventory_transactions').select('*,inventory_items(name,unit),app_users!created_by(full_name,username)').eq('transaction_type','withdraw').eq('status','pending').order('created_at',{ascending:true});
   el.innerHTML=`
   <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
     <div class="px-5 py-3 border-b"><h2 class="text-sm font-semibold text-gray-700">รออนุมัติ (${(rows||[]).length} รายการ)</h2></div>
@@ -1560,7 +1560,7 @@ PAGE_RENDERERS['inv-approvals'] = async function(el) {
           <td class="px-4 py-2 font-medium">${escapeHtml(r.inventory_items?.name||'-')}</td>
           <td class="px-4 py-2 text-right">${fmtNum(r.quantity)} ${escapeHtml(r.inventory_items?.unit||'')}</td>
           <td class="px-4 py-2 text-xs text-gray-500">${escapeHtml([r.factory,r.department].filter(Boolean).join('/')||'-')}</td>
-          <td class="px-4 py-2 text-xs">${escapeHtml(r.app_users?.full_name||r.app_users?.username||'-')}</td>
+          <td class="px-4 py-2 text-xs">${escapeHtml(r.requested_by||r.app_users?.full_name||r.app_users?.username||'-')}</td>
           <td class="px-4 py-2 sticky right-0 bg-white">
             <div class="flex gap-2">
               <button onclick="doApprove('${r.id}')" class="px-3 py-1 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600">อนุมัติ</button>
@@ -2686,7 +2686,8 @@ PAGE_RENDERERS['inv-settings'] = async function(el) {
   el.innerHTML=`
   <div class="space-y-4">
     <div class="flex gap-2 flex-wrap">
-      ${[['items','วัสดุ/อะไหล่'],['suppliers','ผู้จำหน่าย'],['config','ประเภท/หน่วย/คลัง'],['users','ผู้ใช้งาน']].map(([k,l])=>`
+      ${[['items','วัสดุ/อะไหล่'],['suppliers','ผู้จำหน่าย'],['config','ประเภท/หน่วย/คลัง'],['users','ผู้ใช้งาน'],...(isAdmin()?[['line','🔔 LINE แจ้งเตือน']]:[])]
+        .map(([k,l])=>`
       <button onclick="settingsTab('${k}')" id="stab-${k}" class="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-100">${l}</button>`).join('')}
     </div>
     <div id="settings-content" class="bg-white rounded-2xl shadow-sm overflow-hidden p-5 min-h-64"></div>
@@ -2777,6 +2778,9 @@ async function settingsTab(tab){
         </div>
       </div>`).join('')}
     </div>`;
+  } else if(tab==='line'){
+    if(!isAdmin()){c.innerHTML='<div class="py-8 text-center text-gray-400">เฉพาะ Admin เท่านั้น</div>';return;}
+    await renderLineTokenSettings(c);
   } else if(tab==='users'){
     if(!isAdmin()){c.innerHTML='<div class="py-8 text-center text-gray-400">เฉพาะ Admin เท่านั้น</div>';return;}
     const {data:users}=await db.from('app_users').select('id,username,full_name,role,status,factory,department').order('username');
@@ -2851,6 +2855,133 @@ async function saveUserFactory(userId){
   if(currentUser&&currentUser.id===userId){currentUser.factory=factory;currentUser.department=department;sessionStorage.setItem(SESSION_KEY,JSON.stringify(currentUser));}
   showToast('บันทึกสำเร็จ','success');closeModal();
   await settingsTab('users');
+}
+
+// =====================================================================
+// LINE Token Settings — จัดการ LINE Notify Token ต่อโรงงาน
+// =====================================================================
+const _LINE_FACTORIES = ['CDE','Propel','Sanon1','Sanon2','ทั่วไป'];
+
+async function renderLineTokenSettings(container) {
+  container.innerHTML = '<div class="py-6 text-center text-gray-400 text-sm">กำลังโหลด...</div>';
+  const { data: tokens, error } = await db
+    .from('line_tokens')
+    .select('*')
+    .eq('system_name', 'inventory')
+    .order('factory');
+  if (error) {
+    container.innerHTML = `<div class="py-6 text-center text-red-400 text-sm">โหลดไม่สำเร็จ: ${error.message}</div>`;
+    return;
+  }
+
+  // map factory → token row
+  const tokenMap = {};
+  (tokens || []).forEach(t => { tokenMap[t.factory] = t; });
+
+  container.innerHTML = `
+    <div class="space-y-4">
+      <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed">
+        <b>วิธีรับ LINE Notify Token:</b><br>
+        1. เข้า <a href="https://notify-bot.line.me/my/" target="_blank" class="underline">notify-bot.line.me/my</a> → Generate Token<br>
+        2. ตั้งชื่อ → เลือก Group LINE ของโรงงาน → สร้าง Token<br>
+        3. Copy Token มาวางด้านล่าง → กด บันทึก<br>
+        4. เปิดใช้งาน (toggle เขียว) เพื่อเริ่มรับแจ้งเตือน
+      </div>
+      <div class="grid gap-3">
+        ${_LINE_FACTORIES.map(fac => {
+          const row = tokenMap[fac] || {};
+          const enabled = row.enabled || false;
+          const token   = row.token   || '';
+          const hasToken = token.length > 0;
+          return `
+          <div class="bg-white border border-gray-200 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${fac==='CDE'?'bg-blue-100 text-blue-700':fac==='Propel'?'bg-purple-100 text-purple-700':fac==='Sanon1'?'bg-green-100 text-green-700':fac==='Sanon2'?'bg-teal-100 text-teal-700':'bg-gray-100 text-gray-600'}">${fac.substring(0,2)}</span>
+                <div>
+                  <p class="text-sm font-semibold text-gray-700">${fac === 'ทั่วไป' ? 'ทั่วไป (Fallback)' : 'โรงงาน ' + fac}</p>
+                  <p class="text-xs text-gray-400">${fac === 'ทั่วไป' ? 'ใช้เมื่อไม่พบ token ของโรงงาน' : 'แจ้งเตือนไปยัง LINE Group ของ ' + fac}</p>
+                </div>
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="text-xs text-gray-500">${enabled ? 'เปิดใช้' : 'ปิด'}</span>
+                <div class="relative">
+                  <input type="checkbox" id="lt-en-${fac}" ${enabled ? 'checked' : ''} onchange="toggleLineToken('${fac}',this.checked)"
+                    class="sr-only peer">
+                  <div class="w-10 h-6 bg-gray-200 rounded-full peer peer-checked:bg-green-500 transition-colors"></div>
+                  <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow peer-checked:translate-x-4 transition-transform"></div>
+                </div>
+              </label>
+            </div>
+            <div class="flex gap-2">
+              <input type="password" id="lt-tok-${fac}"
+                value="${escapeHtml(token)}"
+                placeholder="วาง LINE Notify Token ที่นี่…"
+                class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-400 focus:outline-none ${hasToken ? 'border-green-300 bg-green-50' : ''}"/>
+              <button onclick="saveLineToken('${fac}')"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 font-medium whitespace-nowrap">
+                บันทึก
+              </button>
+              ${hasToken ? `<button onclick="testLineToken('${fac}')" title="ทดสอบส่ง"
+                class="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
+                ทดสอบ
+              </button>` : ''}
+            </div>
+            ${hasToken ? `<p class="text-xs text-green-600 mt-1.5 flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i>มี Token แล้ว${enabled ? ' — เปิดใช้งาน' : ' — ปิดอยู่'}</p>` :
+              `<p class="text-xs text-gray-400 mt-1.5">ยังไม่มี Token</p>`}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  refreshIcons();
+}
+
+async function saveLineToken(factory) {
+  const token   = qs(`#lt-tok-${factory}`)?.value?.trim() || '';
+  const enabled = qs(`#lt-en-${factory}`)?.checked ?? false;
+  const { error } = await db.from('line_tokens').upsert({
+    system_name: 'inventory',
+    factory,
+    token,
+    enabled,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'system_name,factory' });
+  if (error) { showToast('บันทึกไม่สำเร็จ: ' + error.message, 'error'); return; }
+  showToast(`บันทึก Token ${factory} สำเร็จ`, 'success');
+  await settingsTab('line');
+}
+
+async function toggleLineToken(factory, enabled) {
+  const { error } = await db.from('line_tokens')
+    .update({ enabled, updated_at: new Date().toISOString() })
+    .eq('system_name', 'inventory')
+    .eq('factory', factory);
+  if (error) { showToast('แก้ไขไม่สำเร็จ', 'error'); return; }
+  showToast(`${enabled ? 'เปิด' : 'ปิด'} การแจ้งเตือน ${factory} แล้ว`, enabled ? 'success' : 'info');
+}
+
+async function testLineToken(factory) {
+  const token = qs(`#lt-tok-${factory}`)?.value?.trim() || '';
+  if (!token) { showToast('ไม่มี Token', 'error'); return; }
+  showToast('กำลังทดสอบส่ง LINE…', 'info');
+  try {
+    const { error } = await db.functions.invoke('inventory-alert', {
+      body: {
+        type:      'realtime',
+        item_code: 'TEST-001',
+        item_name: 'ทดสอบระบบแจ้งเตือน LINE',
+        unit:      'ชิ้น',
+        stock_qty: 2,
+        min_stock: 5,
+        location:  factory,
+        token,
+      },
+    });
+    if (error) throw error;
+    showToast('ส่งข้อความทดสอบสำเร็จ — ตรวจสอบ LINE Group', 'success');
+  } catch(e) {
+    showToast('ส่งไม่สำเร็จ: ' + (e.message||e), 'error');
+  }
 }
 
 async function openUserPermModal(u, currentInvPerms){
