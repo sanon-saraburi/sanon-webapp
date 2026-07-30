@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 /* ===== BASE ===== */
@@ -120,11 +120,17 @@ tbody tr:last-child td{border-bottom:none;}
 
 /* ===== GUARD SCREEN ===== */
 .guard-grid{display:grid;grid-template-columns:420px 1fr;gap:16px;}
-.gate-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
-.gate-tab{padding:7px 16px;border-radius:20px;border:1px solid #cbd5e1;
-  background:#fff;font-size:13px;color:#475569;cursor:pointer;transition:all .15s;}
-.gate-tab.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c;}
-.gate-tab:hover:not(.active){background:#f8fafc;}
+.gate-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;
+  background:#f1f5f9;padding:8px 10px;border-radius:14px;border:2px solid #e2e8f0;
+  align-items:center;}
+.gate-tabs::before{content:'🚪 เลือกประตู:';font-size:11px;font-weight:600;
+  color:#94a3b8;letter-spacing:.4px;white-space:nowrap;margin-right:4px;}
+.gate-tab{padding:9px 20px;border-radius:10px;border:2px solid #cbd5e1;
+  background:#fff;font-size:13px;font-weight:500;color:#475569;
+  cursor:pointer;transition:all .15s;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.gate-tab.active{background:#1a3a5c;color:#fff;border-color:#1a3a5c;
+  box-shadow:0 3px 10px rgba(26,58,92,.35);transform:translateY(-1px);font-weight:600;}
+.gate-tab:hover:not(.active){background:#e8f0fe;border-color:#93c5fd;color:#1e40af;}
 .scan-row{display:flex;gap:8px;margin-bottom:4px;}
 .scan-row input{flex:1;font-size:16px !important;}
 .btn-scan{padding:10px 18px;background:#1a3a5c;color:#fff;border:none;white-space:nowrap;font-size:14px;}
@@ -404,7 +410,7 @@ tbody tr:last-child td{border-bottom:none;}
     <div class="form-field"><label class="lbl">รหัสผ่าน *</label><input type="password" id="musr-pw" placeholder="กรอกรหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)"></div>
     <div class="form-field"><label class="lbl">ชื่อ-นามสกุล *</label><input type="text" id="musr-name" placeholder="สมชาย ยาม"></div>
     <div class="form-field"><label class="lbl">สิทธิ์</label>
-      <select id="musr-role">
+      <select id="musr-role" onchange="resetPermToRole()">
         <option value="guard">Guard — ยาม (สแกนได้)</option>
         <option value="supervisor">Supervisor — ดู Dashboard + รายงาน</option>
         <option value="admin">Admin — เต็มสิทธิ์</option>
@@ -417,6 +423,16 @@ tbody tr:last-child td{border-bottom:none;}
         <option value="inactive">Inactive</option>
       </select>
     </div>
+
+    <!-- PERMISSION MATRIX -->
+    <div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:14px;margin-top:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;color:#1a3a5c;">🔐 สิทธิ์เข้าถึงเมนู</div>
+        <button type="button" onclick="resetPermToRole()" style="font-size:11px;padding:4px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;color:#64748b;">↺ รีเซ็ตตาม Role</button>
+      </div>
+      <div id="musr-perm-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+    </div>
+
     <div class="form-err" id="musr-err"></div>
     <div class="modal-footer">
       <button class="btn-primary" onclick="saveUser()">บันทึก</button>
@@ -591,6 +607,34 @@ async function doRegister() {
 }
 
 // ============================================================
+// SECTION 2B — PERMISSION DEFINITIONS
+// ============================================================
+const CK_PERM_MENUS = [
+  { id:'ck-guard',     label:'🔍 บันทึกเข้า-ออก',  group:'หน้าหลัก' },
+  { id:'ck-visitor',   label:'🏢 บุคคลภายนอก',     group:'หน้าหลัก' },
+  { id:'ck-supervisor',label:'📊 Dashboard',       group:'ข้อมูล' },
+  { id:'ck-report',    label:'📋 รายงาน',          group:'ข้อมูล' },
+  { id:'ck-stats',     label:'📈 สถิติรายเดือน',   group:'ข้อมูล' },
+  { id:'ck-employees', label:'👥 จัดการพนักงาน',   group:'ข้อมูล' },
+  { id:'ck-users',     label:'🔑 จัดการผู้ใช้',    group:'Admin' },
+];
+const CK_ROLE_PERMS = {
+  guard:      ['ck-guard','ck-visitor'],
+  supervisor: ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees'],
+  admin:      ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees','ck-users'],
+};
+
+function ckCanAccess(page) {
+  if (!currentUser) return false;
+  if (currentUser.role === 'admin') return true;
+  // ถ้ามี permissions override ใช้อันนั้น
+  const perms = currentUser.permissions;
+  if (perms && Array.isArray(perms)) return perms.includes(page);
+  // ไม่มี → ใช้ role default
+  return (CK_ROLE_PERMS[currentUser.role] || []).includes(page);
+}
+
+// ============================================================
 // SECTION 3 — ROUTER
 // ============================================================
 const PAGE_TITLES = {
@@ -604,10 +648,7 @@ const PAGE_TITLES = {
 };
 
 function nav(page) {
-  // Permission check
-  const role = currentUser?.role;
-  if (['ck-report','ck-stats','ck-employees'].includes(page) && role === 'guard') return;
-  if (['ck-users'].includes(page) && role !== 'admin') return;
+  if (!ckCanAccess(page)) return;
 
   document.querySelectorAll('.sb-item,.bn-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll(`.sb-item,.bn-item`).forEach(el => {
@@ -735,9 +776,8 @@ function renderGuard() {
       <label class="lbl">รหัสพนักงาน / QR Code</label>
       <div class="scan-row">
         <input type="text" id="scan-input" placeholder="สแกนหรือพิมพ์รหัส เช่น EMP001"
-          autofocus onkeydown="if(event.key==='Enter')doLookup()">
-        <button class="btn-scan" onclick="openCamera()" title="สแกนด้วยกล้อง" style="background:#0f766e;padding:10px 14px;">📷</button>
-        <button class="btn-scan" onclick="doLookup()">สแกน</button>
+          autofocus onkeydown="if(event.key==='Enter')doLookup()" oninput="_updateScanBtn()">
+        <button class="btn-scan" id="btn-scan-main" onclick="scanOrCamera()" style="min-width:90px;">📷 สแกน</button>
       </div>
       <div class="scan-msg" id="scan-msg"></div>
       <div id="result-box" style="display:none;"></div>
@@ -1570,29 +1610,106 @@ async function renderSupervisor() {
 // ============================================================
 // SECTION 7 — REPORTS
 // ============================================================
+let _rpTab = 'emp'; // 'emp' | 'visitor'
+
 async function renderReport() {
   const today=todayStr(), weekAgo=new Date(Date.now()-6*86400000).toLocaleDateString('sv-SE',{timeZone:'Asia/Bangkok'});
+
+  // โหลดรายการแผนก
+  const { data: empData } = await sb.from('checkin_employees').select('department').not('department','is',null);
+  const depts = [...new Set((empData||[]).map(e=>e.department).filter(Boolean))].sort();
+  const deptOpts = `<option value="">ทุกแผนก</option>` + depts.map(d=>`<option value="${escHtml(d)}">${escHtml(d)}</option>`).join('');
+
+  // ประตูจาก gateNames
+  const gateOpts = `<option value="">ทุกประตู</option>` +
+    Object.keys(gateNames).sort().map(k=>`<option value="${k}">${escHtml(gateName(k))}</option>`).join('');
+
   document.getElementById('page-content').innerHTML=`
     <div class="card">
-      <div class="card-hd"><div class="card-title">📋 รายงานการเข้า-ออก</div></div>
-      <div class="filter-row">
-        <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="rp-from" value="${weekAgo}"></div>
-        <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="rp-to" value="${today}"></div>
-        <div class="fg"><label>พนักงาน (เว้นว่าง=ทั้งหมด)</label>
-          <input type="text" id="rp-emp" placeholder="รหัสหรือชื่อ" style="min-width:180px;"></div>
-        <button class="btn-filter" onclick="loadReport()">ค้นหา</button>
-        <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;">⬇ CSV</button>
+      <div class="card-hd"><div class="card-title">📋 รายงาน</div></div>
+
+      <!-- Tab selector -->
+      <div class="gate-tabs" style="margin-bottom:16px;" id="rp-tabs">
+        <button class="gate-tab ${_rpTab==='emp'?'active':''}" onclick="switchRpTab('emp')">👥 พนักงาน</button>
+        <button class="gate-tab ${_rpTab==='visitor'?'active':''}" onclick="switchRpTab('visitor')">🏢 บุคคลภายนอก</button>
       </div>
-      <div id="rp-summary" style="margin-bottom:14px;"></div>
-      <div id="rp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+
+      <!-- Employee filters -->
+      <div id="rp-emp-filters" style="display:${_rpTab==='emp'?'block':'none'}">
+        <div class="filter-row" style="flex-wrap:wrap;gap:10px;">
+          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="rp-from" value="${weekAgo}"></div>
+          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="rp-to" value="${today}"></div>
+          <div class="fg"><label>พนักงาน</label>
+            <input type="text" id="rp-emp" placeholder="รหัสหรือชื่อ" style="min-width:160px;"></div>
+          <div class="fg"><label>แผนก</label>
+            <select id="rp-dept" style="min-width:140px;">${deptOpts}</select></div>
+          <div class="fg"><label>ประตู</label>
+            <select id="rp-gate" style="min-width:130px;">${gateOpts}</select></div>
+          <div class="fg"><label>สถานะ</label>
+            <select id="rp-status" style="min-width:130px;">
+              <option value="">ทุกสถานะ</option>
+              <option value="RETURNED">กลับแล้ว</option>
+              <option value="OVERDUE">เกินกำหนด</option>
+              <option value="ACTIVE">ออกอยู่</option>
+            </select></div>
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <button class="btn-filter" onclick="loadReport()">🔍 ค้นหา</button>
+            <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
+          </div>
+        </div>
+        <div id="rp-summary" style="margin-bottom:14px;"></div>
+        <div id="rp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+      </div>
+
+      <!-- Visitor filters -->
+      <div id="rp-vis-filters" style="display:${_rpTab==='visitor'?'block':'none'}">
+        <div class="filter-row" style="flex-wrap:wrap;gap:10px;">
+          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="vp-from" value="${weekAgo}"></div>
+          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="vp-to" value="${today}"></div>
+          <div class="fg"><label>ชื่อ / บริษัท</label>
+            <input type="text" id="vp-search" placeholder="ชื่อหรือบริษัท" style="min-width:160px;"></div>
+          <div class="fg"><label>ประเภท</label>
+            <select id="vp-type" style="min-width:140px;">
+              <option value="">ทุกประเภท</option>
+              <option value="walkin">Walk-in</option>
+              <option value="appointment">นัดหมาย</option>
+            </select></div>
+          <div class="fg"><label>ประตูเข้า</label>
+            <select id="vp-gate" style="min-width:130px;">${gateOpts}</select></div>
+          <div class="fg"><label>สถานะ</label>
+            <select id="vp-status" style="min-width:130px;">
+              <option value="">ทุกสถานะ</option>
+              <option value="IN">ยังอยู่ในโรงงาน</option>
+              <option value="OUT">ออกแล้ว</option>
+            </select></div>
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <button class="btn-filter" onclick="loadVisitorReport()">🔍 ค้นหา</button>
+            <button onclick="exportVisitorReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
+          </div>
+        </div>
+        <div id="vp-summary" style="margin-bottom:14px;"></div>
+        <div id="vp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+      </div>
     </div>`;
+}
+
+function switchRpTab(tab) {
+  _rpTab = tab;
+  document.querySelectorAll('#rp-tabs .gate-tab').forEach(el=>el.classList.remove('active'));
+  const activeBtn = [...document.querySelectorAll('#rp-tabs .gate-tab')].find(el=>el.textContent.includes(tab==='emp'?'พนักงาน':'บุคคลภายนอก'));
+  if (activeBtn) activeBtn.classList.add('active');
+  document.getElementById('rp-emp-filters').style.display = tab==='emp' ? 'block' : 'none';
+  document.getElementById('rp-vis-filters').style.display = tab==='visitor' ? 'block' : 'none';
 }
 
 let _rpData = [];
 async function loadReport() {
-  const from=document.getElementById('rp-from').value;
-  const to  =document.getElementById('rp-to').value;
-  const emp =document.getElementById('rp-emp').value.trim();
+  const from   = document.getElementById('rp-from').value;
+  const to     = document.getElementById('rp-to').value;
+  const emp    = document.getElementById('rp-emp').value.trim();
+  const dept   = document.getElementById('rp-dept')?.value || '';
+  const gate   = document.getElementById('rp-gate')?.value || '';
+  const status = document.getElementById('rp-status')?.value || '';
   document.getElementById('rp-table').innerHTML='<div class="log-empty">กำลังโหลด...</div>';
 
   let q = sb.from('checkin_lunch_sessions')
@@ -1600,15 +1717,14 @@ async function loadReport() {
     .gte('session_date',from).lte('session_date',to)
     .order('checkout_time',{ascending:false});
 
+  if (status) q = q.eq('status', status);
+
   const { data } = await q;
   let rows = data || [];
 
-  if (emp) {
-    rows = rows.filter(s => {
-      const e = s.checkin_employees||{};
-      return (e.name||'').includes(emp) || (e.employee_id||'').includes(emp);
-    });
-  }
+  if (emp)  rows = rows.filter(s => { const e=s.checkin_employees||{}; return (e.name||'').includes(emp)||(e.employee_id||'').includes(emp); });
+  if (dept) rows = rows.filter(s => (s.checkin_employees?.department||'') === dept);
+  if (gate) rows = rows.filter(s => s.checkout_gate === gate);
   _rpData = rows;
 
   // Summary
@@ -1672,6 +1788,104 @@ function exportReport() {
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`checkin_report_${todayStr()}.csv`;
+  a.click();
+}
+
+// ============================================================
+// SECTION 7B2 — VISITOR REPORT
+// ============================================================
+let _vpData = [];
+
+async function loadVisitorReport() {
+  const from   = document.getElementById('vp-from')?.value || '';
+  const to     = document.getElementById('vp-to')?.value || '';
+  const search = (document.getElementById('vp-search')?.value || '').trim().toLowerCase();
+  const vtype  = document.getElementById('vp-type')?.value || '';
+  const gate   = document.getElementById('vp-gate')?.value || '';
+  const status = document.getElementById('vp-status')?.value || '';
+  const tableEl= document.getElementById('vp-table');
+  const sumEl  = document.getElementById('vp-summary');
+  if (tableEl) tableEl.innerHTML='<div class="log-empty">กำลังโหลด...</div>';
+
+  let q = sb.from('checkin_visitors').select('*')
+    .gte('session_date', from).lte('session_date', to)
+    .order('checkin_time',{ascending:false});
+
+  if (vtype)  q = q.eq('visit_type', vtype);
+  if (status) q = q.eq('status', status);
+
+  const { data } = await q;
+  let rows = data || [];
+
+  if (search) rows = rows.filter(r =>
+    (r.name||'').toLowerCase().includes(search) ||
+    (r.company||'').toLowerCase().includes(search) ||
+    (r.id_card||'').includes(search)
+  );
+  if (gate) rows = rows.filter(r => r.gate_in === gate || r.gate_out === gate);
+  _vpData = rows;
+
+  // Summary
+  const total  = rows.length;
+  const inside = rows.filter(r=>r.status==='IN').length;
+  const out    = rows.filter(r=>r.status==='OUT').length;
+  const totalPersons = rows.reduce((s,r)=>s+(r.person_count||1),0);
+  if (sumEl) sumEl.innerHTML=`
+    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="stat-card"><div class="stat-num" style="font-size:24px;color:#1a3a5c;">${total}</div><div class="stat-lbl">รายการทั้งหมด</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:24px;color:#7c3aed;">${totalPersons}</div><div class="stat-lbl">จำนวนคนรวม</div></div>
+      <div class="stat-card s-late"><div class="stat-num" style="font-size:24px;">${inside}</div><div class="stat-lbl">ยังอยู่ในโรงงาน</div></div>
+      <div class="stat-card s-ok"><div class="stat-num" style="font-size:24px;">${out}</div><div class="stat-lbl">ออกแล้ว</div></div>
+    </div>`;
+
+  if (!rows.length) { if(tableEl) tableEl.innerHTML='<div class="log-empty">ไม่พบข้อมูลในช่วงที่เลือก</div>'; return; }
+
+  if (tableEl) tableEl.innerHTML=`
+    <div class="tbl-wrap" style="max-height:50vh;"><table>
+      <thead><tr><th>วันที่</th><th>ชื่อ</th><th>บริษัท/สถาบัน</th><th>จุดประสงค์</th>
+        <th>ประเภท</th><th>คน</th><th>เวลาเข้า</th><th>ประตูเข้า</th>
+        <th>เวลาออก</th><th>ประตูออก</th><th>สถานะ</th></tr></thead>
+      <tbody>${rows.map(r=>{
+        const badge = r.status==='OUT'
+          ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:9px;font-size:11px;">ออกแล้ว</span>`
+          : `<span style="background:#fef9c3;color:#854d0e;padding:2px 8px;border-radius:9px;font-size:11px;">อยู่ในโรงงาน</span>`;
+        const typeLabel = r.visit_type==='appointment'?'นัดหมาย':'Walk-in';
+        return `<tr>
+          <td style="white-space:nowrap;">${fmtDate(r.session_date)}</td>
+          <td><div class="emp-name">${escHtml(r.name||'')}</div>${r.id_card?`<div class="emp-dept">${escHtml(r.id_card)}</div>`:''}</td>
+          <td>${escHtml(r.company||'-')}</td>
+          <td style="font-size:12px;">${escHtml(r.visit_purpose||'-')}</td>
+          <td><span style="font-size:11px;background:#e0f2fe;color:#0369a1;padding:2px 7px;border-radius:8px;">${typeLabel}</span></td>
+          <td style="text-align:center;">${r.person_count||1}</td>
+          <td>${r.checkin_time?fmtTime(r.checkin_time)+' น.':'-'}</td>
+          <td>${gateName(r.gate_in||'-')}</td>
+          <td>${r.checkout_time?fmtTime(r.checkout_time)+' น.':'-'}</td>
+          <td>${gateName(r.gate_out||'-')}</td>
+          <td>${badge}</td></tr>`;
+      }).join('')}
+      </tbody></table></div>`;
+}
+
+function exportVisitorReport() {
+  if (!_vpData.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
+  const rows=[['วันที่','ชื่อ','เลขบัตร','บริษัท/สถาบัน','จุดประสงค์','ประเภท','จำนวนคน','เวลาเข้า','ประตูเข้า','เวลาออก','ประตูออก','สถานะ']];
+  _vpData.forEach(r=>{
+    rows.push([
+      r.session_date, r.name||'', r.id_card||'', r.company||'', r.visit_purpose||'',
+      r.visit_type==='appointment'?'นัดหมาย':'Walk-in',
+      r.person_count||1,
+      r.checkin_time?fmtTime(r.checkin_time):'',
+      gateName(r.gate_in||''),
+      r.checkout_time?fmtTime(r.checkout_time):'',
+      gateName(r.gate_out||''),
+      r.status==='OUT'?'ออกแล้ว':'อยู่ในโรงงาน'
+    ]);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`visitor_report_${todayStr()}.csv`;
   a.click();
 }
 
@@ -2046,9 +2260,9 @@ function printAllCards() {
 }
 
 // ============================================================
-// SECTION 8C — Camera QR Scanner (สแกนด้วยกล้อง)
+// SECTION 8C — Camera Scanner (QR Code + Barcode via ZXing)
 // ============================================================
-let _camStream = null;
+let _zxingReader = null;
 
 function _ensureCameraModal() {
   if (document.getElementById('modal-camera')) return;
@@ -2057,14 +2271,13 @@ function _ensureCameraModal() {
   div.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;align-items:center;justify-content:center;';
   div.innerHTML = `
     <div style="background:#0f172a;border-radius:16px;padding:20px;width:360px;max-width:95vw;text-align:center;">
-      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">📷 สแกน QR Code พนักงาน</div>
-      <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">📷 สแกน QR Code / Barcode</div>
+      <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;min-height:200px;">
         <video id="cam-video" style="width:100%;display:block;" playsinline muted></video>
         <div style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;">
-          <div style="width:180px;height:180px;border:3px solid #22d3ee;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.35);"></div>
+          <div style="width:220px;height:120px;border:3px solid #22d3ee;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.4);"></div>
         </div>
       </div>
-      <canvas id="cam-canvas" style="display:none;"></canvas>
       <div id="cam-msg" style="font-size:13px;color:#94a3b8;margin-top:12px;min-height:18px;">กำลังเปิดกล้อง...</div>
       <button onclick="closeCamera()" style="margin-top:14px;padding:10px 28px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:14px;font-family:inherit;cursor:pointer;">ปิด</button>
     </div>`;
@@ -2075,55 +2288,61 @@ async function openCamera() {
   _ensureCameraModal();
   const modal = document.getElementById('modal-camera');
   modal.style.display = 'flex';
-  document.getElementById('cam-msg').textContent = 'กำลังเปิดกล้อง...';
+  const msg = document.getElementById('cam-msg');
+  msg.textContent = 'กำลังเปิดกล้อง...';
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
-    });
-    _camStream = stream;
-    const video = document.getElementById('cam-video');
-    video.srcObject = stream;
-    await video.play();
-    document.getElementById('cam-msg').textContent = 'เล็งกล้องไปที่ QR Code ของพนักงาน';
-    _startQrScan();
-  } catch(e) {
-    document.getElementById('cam-msg').textContent = 'ไม่สามารถเปิดกล้องได้: ' + e.message;
-  }
-}
+    // หยุด reader เก่าก่อน
+    if (_zxingReader) { try { _zxingReader.reset(); } catch(_) {} }
 
-function _startQrScan() {
-  const video  = document.getElementById('cam-video');
-  const canvas = document.getElementById('cam-canvas');
-  const ctx    = canvas.getContext('2d');
+    const ZXing = window.ZXing;
+    if (!ZXing) { msg.textContent = 'ไม่พบ ZXing library'; return; }
 
-  function tick() {
-    if (!_camStream) return;
-    if (video.readyState >= video.HAVE_ENOUGH_DATA) {
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = (typeof jsQR === 'function') ? jsQR(img.data, img.width, img.height) : null;
-      if (code && code.data) {
+    _zxingReader = new ZXing.BrowserMultiFormatReader();
+
+    // เลือกกล้องหลัง (environment)
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
+    const deviceId = backCam?.deviceId || undefined;
+
+    msg.textContent = 'เล็งกล้องไปที่ QR Code หรือ Barcode';
+
+    await _zxingReader.decodeFromVideoDevice(deviceId, 'cam-video', (result, err) => {
+      if (result) {
+        const text = result.getText();
         closeCamera();
         const inp = document.getElementById('scan-input');
-        if (inp) { inp.value = code.data; }
-        doLookup(code.data);
-        return;
+        if (inp) { inp.value = text; _updateScanBtn(); }
+        doLookup(text);
       }
-    }
-    requestAnimationFrame(tick);
+      // err ที่เป็น NotFoundException เป็นเรื่องปกติ (ยังไม่เจอ code) ไม่ต้องแสดง
+    });
+
+  } catch(e) {
+    msg.textContent = 'ไม่สามารถเปิดกล้องได้: ' + (e.message || e);
   }
-  requestAnimationFrame(tick);
 }
 
 function closeCamera() {
-  if (_camStream) {
-    _camStream.getTracks().forEach(t => t.stop());
-    _camStream = null;
+  if (_zxingReader) {
+    try { _zxingReader.reset(); } catch(_) {}
+    _zxingReader = null;
   }
   const modal = document.getElementById('modal-camera');
   if (modal) modal.style.display = 'none';
+}
+
+function scanOrCamera() {
+  const val = (document.getElementById('scan-input')?.value || '').trim();
+  if (val) { doLookup(); } else { openCamera(); }
+}
+
+function _updateScanBtn() {
+  const btn = document.getElementById('btn-scan-main');
+  if (!btn) return;
+  const val = (document.getElementById('scan-input')?.value || '').trim();
+  btn.textContent = val ? '🔍 ค้นหา' : '📷 สแกน';
+  btn.style.background = val ? '#1a3a5c' : '#0f766e';
 }
 
 async function openEmpModal(id) {
@@ -2439,14 +2658,51 @@ async function openUserModal(id) {
       document.getElementById('musr-role').value     = u.role;
       document.getElementById('musr-status').value   = u.status;
       document.getElementById('musr-title').textContent='แก้ไขผู้ใช้';
+      // โหลด permissions — ถ้ามี override ใช้อันนั้น ไม่มี = ใช้ role default
+      const perms = (u.permissions && u.permissions.length)
+        ? u.permissions
+        : (u.role==='admin' ? CK_PERM_MENUS.map(m=>m.id) : (CK_ROLE_PERMS[u.role]||[]));
+      setTimeout(()=>renderPermGrid(perms), 30);
     }
   } else {
     ['musr-id','musr-username','musr-pw','musr-name'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('musr-role').value='guard';
     document.getElementById('musr-status').value='active';
     document.getElementById('musr-title').textContent='เพิ่มผู้ใช้';
+    setTimeout(()=>renderPermGrid(CK_ROLE_PERMS['guard']), 30);
   }
   openModal('modal-user');
+}
+
+function renderPermGrid(checkedIds) {
+  const grid = document.getElementById('musr-perm-grid');
+  if (!grid) return;
+  const groups = {};
+  CK_PERM_MENUS.forEach(m => { (groups[m.group]||(groups[m.group]=[])).push(m); });
+  grid.innerHTML = Object.entries(groups).map(([grp, menus]) => `
+    <div style="grid-column:1/-1;font-size:10px;font-weight:600;color:#94a3b8;
+      letter-spacing:.5px;text-transform:uppercase;margin-top:6px;margin-bottom:2px;">${grp}</div>
+    ${menus.map(m=>`
+      <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;
+        border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:13px;">
+        <input type="checkbox" id="perm-${m.id}" value="${m.id}"
+          ${checkedIds.includes(m.id)?'checked':''}
+          style="width:15px;height:15px;accent-color:#1a3a5c;cursor:pointer;">
+        ${m.label}
+      </label>`).join('')}
+  `).join('');
+}
+
+function resetPermToRole() {
+  const role = document.getElementById('musr-role')?.value || 'guard';
+  const defaults = role === 'admin'
+    ? CK_PERM_MENUS.map(m=>m.id)   // admin = ทั้งหมด
+    : (CK_ROLE_PERMS[role] || []);
+  renderPermGrid(defaults);
+}
+
+function getCheckedPerms() {
+  return CK_PERM_MENUS.map(m=>m.id).filter(id => document.getElementById(`perm-${id}`)?.checked);
 }
 
 async function approveUser(id) {
@@ -2467,16 +2723,43 @@ async function saveUser() {
   if (!username||!name) { err.textContent='กรุณากรอก Username และชื่อ'; return; }
   if (!id&&!pw)         { err.textContent='กรุณากรอกรหัสผ่าน'; return; }
 
-  const payload = {username,name,role,status};
+  // บันทึก permissions — ถ้าตรงกับ role default ให้ save null (สะอาด)
+  const checkedPerms = getCheckedPerms();
+  const roleDefault  = role==='admin' ? CK_PERM_MENUS.map(m=>m.id) : (CK_ROLE_PERMS[role]||[]);
+  const isDefault    = checkedPerms.length===roleDefault.length && checkedPerms.every(p=>roleDefault.includes(p));
+  const permissions  = isDefault ? null : checkedPerms;
+
+  const payload = {username, name, role, status, permissions};
   if (pw) payload.password=pw;
 
-  if (id) {
-    const { error } = await sb.from('checkin_users').update(payload).eq('id',id);
-    if (error) { err.textContent='Username ซ้ำหรือเกิดข้อผิดพลาด'; return; }
-  } else {
-    const { error } = await sb.from('checkin_users').insert({...payload,password:pw});
-    if (error) { err.textContent='Username ซ้ำหรือเกิดข้อผิดพลาด'; return; }
+  // ลอง save พร้อม permissions ก่อน
+  // ถ้า error เกิดจาก column ไม่มี → fallback บันทึกแบบไม่มี permissions
+  async function trySave(pl) {
+    if (id) return sb.from('checkin_users').update(pl).eq('id',id);
+    return sb.from('checkin_users').insert({...pl, password:pw});
   }
+
+  let { error } = await trySave(payload);
+
+  if (error) {
+    // ตรวจว่า error เกิดจาก permissions column ไม่มีหรือเปล่า
+    const isColErr = error.message && (error.message.includes('permissions') || error.code === '42703' || error.code === 'PGRST204');
+    if (isColErr) {
+      // fallback — บันทึกโดยไม่มี permissions
+      const { permissions: _p, ...payloadNoPerms } = payload;
+      const { error: err2 } = await trySave(payloadNoPerms);
+      if (err2) { err.textContent = 'เกิดข้อผิดพลาด: ' + err2.message; return; }
+      err.style.color = '#d97706';
+      err.textContent = '⚠ บันทึกสำเร็จ แต่สิทธิ์เมนูยังไม่ถูกบันทึก — กรุณารัน checkin_schema_v5_patch.sql ใน Supabase ก่อน';
+      setTimeout(()=>{ err.textContent=''; err.style.color=''; closeModal('modal-user'); loadUserTable(); }, 4000);
+      return;
+    }
+    // error อื่น
+    if (error.code === '23505') { err.textContent = 'Username นี้มีในระบบแล้ว'; }
+    else { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; }
+    return;
+  }
+
   closeModal('modal-user');
   loadUserTable();
 }
@@ -2485,8 +2768,8 @@ async function saveUser() {
 // SECTION 10 — BOOTSTRAP
 // ============================================================
 function applyPermissions(role) {
-  const showSup   = ['admin','supervisor'].includes(role);
-  const showAdmin = role==='admin';
+  const showSup   = ckCanAccess('ck-supervisor') || ckCanAccess('ck-report');
+  const showAdmin = role === 'admin';
   document.querySelectorAll('.perm-sup').forEach(el=>el.style.display=showSup?'':'none');
   document.querySelectorAll('.perm-admin').forEach(el=>el.style.display=showAdmin?'':'none');
 }
