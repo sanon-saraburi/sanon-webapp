@@ -6,6 +6,7 @@
 <title>ระบบเช็คอินพักเที่ยง v2 — สานนท์</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -339,6 +340,7 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-item" onclick="nav('ck-visitor')">🏢 <span>บุคคลภายนอก</span></div>
         <div class="sb-sec">ข้อมูล</div>
         <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
+        <div class="sb-item perm-sup" onclick="nav('ck-stats')">📊 <span>สถิติรายเดือน</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-employees')">👥 <span>จัดการพนักงาน</span></div>
         <div class="sb-item perm-admin" onclick="nav('ck-users')">🔑 <span>จัดการผู้ใช้</span></div>
       </div>
@@ -370,6 +372,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="bn-item" onclick="nav('ck-supervisor')"><div class="bn-icon">📊</div>Dashboard</div>
       <div class="bn-item" onclick="nav('ck-visitor')"><div class="bn-icon">🏢</div>ภายนอก</div>
       <div class="bn-item perm-sup" onclick="nav('ck-report')"><div class="bn-icon">📋</div>รายงาน</div>
+      <div class="bn-item perm-sup" onclick="nav('ck-stats')"><div class="bn-icon">📊</div>สถิติ</div>
       <div class="bn-item perm-sup" onclick="nav('ck-employees')"><div class="bn-icon">👥</div>พนักงาน</div>
       <div class="bn-item perm-admin" onclick="nav('ck-users')"><div class="bn-icon">🔑</div>ผู้ใช้</div>
     </div>
@@ -595,6 +598,7 @@ const PAGE_TITLES = {
   'ck-supervisor': 'Dashboard Supervisor',
   'ck-visitor':    'บุคคลภายนอก',
   'ck-report':     'รายงาน',
+  'ck-stats':      'สถิติรายเดือน / รายแผนก',
   'ck-employees':  'จัดการพนักงาน',
   'ck-users':      'จัดการผู้ใช้',
 };
@@ -602,7 +606,7 @@ const PAGE_TITLES = {
 function nav(page) {
   // Permission check
   const role = currentUser?.role;
-  if (['ck-report','ck-employees'].includes(page) && role === 'guard') return;
+  if (['ck-report','ck-stats','ck-employees'].includes(page) && role === 'guard') return;
   if (['ck-users'].includes(page) && role !== 'admin') return;
 
   document.querySelectorAll('.sb-item,.bn-item').forEach(el => el.classList.remove('active'));
@@ -619,6 +623,7 @@ function nav(page) {
   else if (page === 'ck-supervisor') renderSupervisor();
   else if (page === 'ck-visitor')    renderVisitor();
   else if (page === 'ck-report')     renderReport();
+  else if (page === 'ck-stats')      renderStats();
   else if (page === 'ck-employees')  renderEmployees();
   else if (page === 'ck-users')      renderUsers();
 }
@@ -1668,6 +1673,221 @@ function exportReport() {
   a.href=URL.createObjectURL(blob);
   a.download=`checkin_report_${todayStr()}.csv`;
   a.click();
+}
+
+// ============================================================
+// SECTION 7B — STATS รายเดือน / รายแผนก
+// ============================================================
+let _statsChart = null;
+
+function renderStats() {
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Bangkok'}));
+  const curY = now.getFullYear();
+  const curM = String(now.getMonth()+1).padStart(2,'0');
+
+  // สร้าง option ปี (ย้อนหลัง 3 ปี)
+  const yearOpts = [curY, curY-1, curY-2].map(y=>`<option value="${y}" ${y===curY?'selected':''}>${y}</option>`).join('');
+  const monthOpts = [
+    ['01','มกราคม'],['02','กุมภาพันธ์'],['03','มีนาคม'],['04','เมษายน'],
+    ['05','พฤษภาคม'],['06','มิถุนายน'],['07','กรกฎาคม'],['08','สิงหาคม'],
+    ['09','กันยายน'],['10','ตุลาคม'],['11','พฤศจิกายน'],['12','ธันวาคม']
+  ].map(([v,l])=>`<option value="${v}" ${v===curM?'selected':''}>${l}</option>`).join('');
+
+  document.getElementById('page-content').innerHTML=`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hd">
+        <div class="card-title">📊 สถิติรายเดือน / รายแผนก</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="st-year" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${yearOpts}</select>
+          <select id="st-month" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${monthOpts}</select>
+          <button onclick="loadStats()" style="padding:8px 18px;background:#1a3a5c;color:#fff;border:none;border-radius:6px;font-family:inherit;cursor:pointer;">ดูสถิติ</button>
+        </div>
+      </div>
+      <div id="st-kpi" style="margin-top:4px;"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;" id="st-charts-row">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">📅 รายวัน (จำนวนครั้งพัก)</div>
+        <canvas id="st-daily-chart" height="200"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:12px;">🏭 สัดส่วนตามแผนก</div>
+        <canvas id="st-dept-chart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title" style="margin-bottom:12px;">🏭 สรุปรายแผนก</div>
+      <div id="st-dept-table"><div class="log-empty">กดดูสถิติเพื่อโหลดข้อมูล</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">⚠️ Top 10 — เกินเวลาบ่อยที่สุด</div>
+      <div id="st-top-table"><div class="log-empty">กดดูสถิติเพื่อโหลดข้อมูล</div></div>
+    </div>`;
+
+  loadStats();
+}
+
+async function loadStats() {
+  const year  = document.getElementById('st-year')?.value;
+  const month = document.getElementById('st-month')?.value;
+  if (!year || !month) return;
+
+  const from = `${year}-${month}-01`;
+  const lastDay = new Date(year, parseInt(month), 0).getDate();
+  const to   = `${year}-${month}-${String(lastDay).padStart(2,'0')}`;
+
+  // โหลดข้อมูล
+  const { data: rows } = await sb.from('checkin_lunch_sessions')
+    .select('*, checkin_employees(name,department,employee_id)')
+    .gte('session_date', from).lte('session_date', to);
+
+  if (!rows?.length) {
+    document.getElementById('st-kpi').innerHTML = '<div class="log-empty">ไม่มีข้อมูลในเดือนนี้</div>';
+    document.getElementById('st-dept-table').innerHTML = '<div class="log-empty">ไม่มีข้อมูล</div>';
+    document.getElementById('st-top-table').innerHTML  = '<div class="log-empty">ไม่มีข้อมูล</div>';
+    return;
+  }
+
+  const total    = rows.length;
+  const returned = rows.filter(r=>r.status==='RETURNED').length;
+  const overdue  = rows.filter(r=>r.status==='OVERDUE').length;
+  const active   = rows.filter(r=>r.status==='ACTIVE').length;
+  const durations = rows.filter(r=>r.duration_min>0).map(r=>r.duration_min);
+  const avgMin   = durations.length ? Math.round(durations.reduce((s,v)=>s+v,0)/durations.length) : 0;
+  const maxMin   = durations.length ? Math.round(Math.max(...durations)) : 0;
+  const overdueRate = total>0 ? Math.round(overdue/total*100) : 0;
+
+  // KPI Cards
+  document.getElementById('st-kpi').innerHTML=`
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:4px;">
+      <div class="stat-card"><div class="stat-num" style="color:#1a3a5c;">${total}</div><div class="stat-lbl">ครั้งทั้งหมด</div></div>
+      <div class="stat-card s-ok"><div class="stat-num">${returned}</div><div class="stat-lbl">กลับตรงเวลา</div></div>
+      <div class="stat-card s-late"><div class="stat-num">${overdue}</div><div class="stat-lbl">เกินเวลา (${overdueRate}%)</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#7c3aed;">${avgMin}</div><div class="stat-lbl">เฉลี่ย (นาที/ครั้ง)</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#dc2626;">${maxMin}</div><div class="stat-lbl">นานที่สุด (นาที)</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#0f766e;">${new Set(rows.map(r=>r.employee_id)).size}</div><div class="stat-lbl">พนักงานที่บันทึก</div></div>
+    </div>`;
+
+  // ---- Daily chart ----
+  const dailyMap = {};
+  const overdueMapD = {};
+  rows.forEach(r=>{
+    const d = r.session_date;
+    dailyMap[d]    = (dailyMap[d]||0)+1;
+    if (r.status==='OVERDUE') overdueMapD[d] = (overdueMapD[d]||0)+1;
+  });
+  const days = Array.from({length:lastDay},(_,i)=>`${year}-${month}-${String(i+1).padStart(2,'0')}`);
+  const dailyVals   = days.map(d=>dailyMap[d]||0);
+  const overdueVals = days.map(d=>overdueMapD[d]||0);
+
+  if (_statsChart) { Object.values(_statsChart).forEach(c=>c?.destroy()); _statsChart={}; }
+  _statsChart = {};
+
+  const dcCtx = document.getElementById('st-daily-chart');
+  if (dcCtx) {
+    _statsChart.daily = new Chart(dcCtx, {
+      type:'bar',
+      data:{
+        labels: days.map(d=>d.slice(8)),
+        datasets:[
+          {label:'ทั้งหมด',data:dailyVals,backgroundColor:'rgba(26,58,92,.6)',borderColor:'#1a3a5c',borderWidth:1},
+          {label:'เกินเวลา',data:overdueVals,backgroundColor:'rgba(220,38,38,.55)',borderColor:'#dc2626',borderWidth:1}
+        ]
+      },
+      options:{responsive:true,plugins:{legend:{labels:{font:{family:'Kanit'}}}},
+        scales:{x:{ticks:{font:{family:'Kanit'},maxRotation:0}},y:{ticks:{stepSize:1,font:{family:'Kanit'}}}}}
+    });
+  }
+
+  // ---- Dept pie chart ----
+  const deptMap = {};
+  rows.forEach(r=>{ const dept=(r.checkin_employees?.department||'ไม่ระบุ'); deptMap[dept]=(deptMap[dept]||0)+1; });
+  const deptKeys = Object.keys(deptMap);
+  const COLORS = ['#1a3a5c','#0f766e','#7c3aed','#dc2626','#d97706','#0284c7','#16a34a','#9333ea'];
+  const dpCtx = document.getElementById('st-dept-chart');
+  if (dpCtx) {
+    _statsChart.dept = new Chart(dpCtx, {
+      type:'doughnut',
+      data:{
+        labels:deptKeys,
+        datasets:[{data:deptKeys.map(k=>deptMap[k]),backgroundColor:COLORS.slice(0,deptKeys.length)}]
+      },
+      options:{responsive:true,plugins:{legend:{position:'right',labels:{font:{family:'Kanit'},boxWidth:12}}}}
+    });
+  }
+
+  // ---- ตารางรายแผนก ----
+  const deptStats = {};
+  rows.forEach(r=>{
+    const dept = r.checkin_employees?.department||'ไม่ระบุ';
+    if (!deptStats[dept]) deptStats[dept]={total:0,overdue:0,durations:[]};
+    deptStats[dept].total++;
+    if (r.status==='OVERDUE') deptStats[dept].overdue++;
+    if (r.duration_min>0) deptStats[dept].durations.push(r.duration_min);
+  });
+  const deptRows = Object.entries(deptStats).sort((a,b)=>b[1].overdue-a[1].overdue);
+
+  document.getElementById('st-dept-table').innerHTML=`
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>แผนก</th><th>ครั้งทั้งหมด</th><th>กลับตรงเวลา</th><th>เกินเวลา</th><th>% เกินเวลา</th><th>เฉลี่ย (นาที)</th></tr></thead>
+      <tbody>${deptRows.map(([dept,s])=>{
+        const pct = Math.round(s.overdue/s.total*100);
+        const avg = s.durations.length ? Math.round(s.durations.reduce((a,v)=>a+v,0)/s.durations.length) : '-';
+        const ok  = s.total-s.overdue;
+        return `<tr>
+          <td><b>${escHtml(dept)}</b></td>
+          <td style="text-align:center;">${s.total}</td>
+          <td style="text-align:center;color:#16a34a;">${ok}</td>
+          <td style="text-align:center;color:#dc2626;">${s.overdue}</td>
+          <td style="text-align:center;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="flex:1;height:6px;background:#fee2e2;border-radius:3px;">
+                <div style="width:${pct}%;height:100%;background:#dc2626;border-radius:3px;"></div>
+              </div>
+              <span style="font-size:12px;color:#dc2626;min-width:32px;">${pct}%</span>
+            </div>
+          </td>
+          <td style="text-align:center;color:#7c3aed;">${avg}</td>
+        </tr>`;}).join('')}
+      </tbody>
+    </table></div>`;
+
+  // ---- Top 10 เกินเวลา ----
+  const empStats = {};
+  rows.forEach(r=>{
+    const id   = r.employee_id;
+    const info = r.checkin_employees||{};
+    if (!empStats[id]) empStats[id]={name:info.name||id,dept:info.department||'-',overdue:0,total:0,durations:[]};
+    empStats[id].total++;
+    if (r.status==='OVERDUE') empStats[id].overdue++;
+    if (r.duration_min>0) empStats[id].durations.push(r.duration_min);
+  });
+  const top10 = Object.values(empStats).filter(e=>e.overdue>0)
+    .sort((a,b)=>b.overdue-a.overdue).slice(0,10);
+
+  if (!top10.length) {
+    document.getElementById('st-top-table').innerHTML='<div class="log-empty" style="color:#16a34a;">✅ ไม่มีพนักงานเกินเวลาในเดือนนี้</div>';
+  } else {
+    document.getElementById('st-top-table').innerHTML=`
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>#</th><th>ชื่อพนักงาน</th><th>แผนก</th><th>พักทั้งหมด</th><th>เกินเวลา</th><th>เฉลี่ย (นาที)</th></tr></thead>
+        <tbody>${top10.map((e,i)=>{
+          const avg = e.durations.length ? Math.round(e.durations.reduce((a,v)=>a+v,0)/e.durations.length) : '-';
+          const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+          return `<tr>
+            <td style="text-align:center;font-size:16px;">${medal}</td>
+            <td><b>${escHtml(e.name)}</b></td>
+            <td><span style="font-size:12px;color:#64748b;">${escHtml(e.dept)}</span></td>
+            <td style="text-align:center;">${e.total}</td>
+            <td style="text-align:center;"><span class="badge b-late">${e.overdue} ครั้ง</span></td>
+            <td style="text-align:center;color:#7c3aed;">${avg}</td>
+          </tr>`;}).join('')}
+        </tbody>
+      </table></div>`;
+  }
 }
 
 // ============================================================
