@@ -207,6 +207,80 @@ tbody tr:hover { background:#f8fafc; }
 </head>
 <body>
 
+<!-- ===== APP LOADING SPLASH ===== -->
+<div id="app-splash" style="position:fixed;inset:0;z-index:99999;overflow:hidden;background:linear-gradient(175deg,#0f172a 0%,#0c4a3a 55%,#0f172a 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .45s ease">
+  <svg viewBox="0 0 360 200" width="300" style="margin-bottom:18px;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))">
+    <path d="M0,170 L55,85 L110,130 L175,40 L240,110 L295,65 L360,100 L360,200 L0,200 Z" fill="rgba(0,0,0,.22)"/>
+    <rect x="0" y="173" width="360" height="27" fill="rgba(0,0,0,.28)"/>
+    <path d="M20,178 Q35,175 50,178 M80,176 Q100,179 120,176 M200,177 Q225,174 250,177 M290,178 Q315,175 340,178" stroke="rgba(255,255,255,.07)" stroke-width="1.5" fill="none"/>
+    <!-- Rear wheel -->
+    <circle cx="262" cy="167" r="26" fill="#1f2937" stroke="#374151" stroke-width="3"/>
+    <circle cx="262" cy="167" r="16" fill="#111827"/>
+    <path d="M246,167 L278,167 M262,151 L262,183" stroke="#4b5563" stroke-width="2"/>
+    <path d="M250,155 L274,179 M250,179 L274,155" stroke="#4b5563" stroke-width="1.5"/>
+    <circle cx="262" cy="167" r="7" fill="#374151"/>
+    <path d="M248,158 A16,16 0 0 1 268,150" stroke="#6b7280" stroke-width="1.5" fill="none"/>
+    <!-- Front wheel -->
+    <circle cx="142" cy="167" r="26" fill="#1f2937" stroke="#374151" stroke-width="3"/>
+    <circle cx="142" cy="167" r="16" fill="#111827"/>
+    <path d="M126,167 L158,167 M142,151 L142,183" stroke="#4b5563" stroke-width="2"/>
+    <path d="M130,155 L154,179 M130,179 L154,155" stroke="#4b5563" stroke-width="1.5"/>
+    <circle cx="142" cy="167" r="7" fill="#374151"/>
+    <path d="M128,158 A16,16 0 0 1 148,150" stroke="#6b7280" stroke-width="1.5" fill="none"/>
+    <!-- Body frame -->
+    <path d="M122,148 L283,148 L283,168 L122,168 Z" fill="#1e3a8a"/>
+    <path d="M122,148 L283,148" stroke="#3b82f6" stroke-width="1.5" opacity=".6"/>
+    <!-- Engine block -->
+    <rect x="265" y="115" width="28" height="58" rx="4" fill="#1d4ed8"/>
+    <rect x="269" y="124" width="20" height="6" rx="2" fill="#1e40af"/>
+    <rect x="269" y="136" width="20" height="6" rx="2" fill="#1e40af"/>
+    <rect x="269" y="148" width="20" height="6" rx="2" fill="#1e40af"/>
+    <!-- Cab -->
+    <rect x="198" y="90" width="76" height="78" rx="8" fill="#2563eb"/>
+    <path d="M198,90 L274,90 L268,82 L204,82 Z" fill="#1d4ed8"/>
+    <rect x="198" y="90" width="7" height="78" rx="2" fill="#1d4ed8"/>
+    <rect x="208" y="97" width="38" height="52" rx="5" fill="#bfdbfe" opacity=".5"/>
+    <polygon points="210,99 228,99 218,149 210,149" fill="white" opacity=".08"/>
+    <rect x="249" y="100" width="22" height="40" rx="4" fill="#93c5fd" opacity=".4"/>
+    <rect x="204" y="83" width="60" height="5" rx="2" fill="#fbbf24" opacity=".7"/>
+    <!-- Exhaust -->
+    <rect x="253" y="58" width="9" height="32" rx="3" fill="#374151"/>
+    <circle cx="257" cy="55" r="7" fill="#4b5563" opacity=".25"/>
+    <circle cx="261" cy="45" r="5" fill="#4b5563" opacity=".18"/>
+    <circle cx="255" cy="38" r="3.5" fill="#4b5563" opacity=".12"/>
+    <!-- Boom arm -->
+    <path d="M122,158 L52,170" stroke="#334155" stroke-width="13" stroke-linecap="round"/>
+    <path d="M122,152 L52,158" stroke="#475569" stroke-width="9" stroke-linecap="round"/>
+    <path d="M122,143 L72,140" stroke="#374151" stroke-width="7" stroke-linecap="round"/>
+    <path d="M148,153 L92,146" stroke="#60a5fa" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+    <path d="M158,154 L112,150" stroke="#93c5fd" stroke-width="2.5" stroke-linecap="round" opacity=".5"/>
+    <circle cx="148" cy="153" r="4" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.5"/>
+    <!-- Bucket -->
+    <path d="M26,133 L60,142 L56,177 L20,177 Z" fill="#f59e0b"/>
+    <path d="M30,140 L56,147 L53,173 L26,168 Z" fill="#d97706" opacity=".5"/>
+    <path d="M20,177 L60,177 L56,185 L16,185 Z" fill="#b45309"/>
+    <rect x="17" y="185" width="7" height="10" rx="1.5" fill="#292524"/>
+    <rect x="29" y="185" width="7" height="10" rx="1.5" fill="#292524"/>
+    <rect x="41" y="185" width="7" height="10" rx="1.5" fill="#292524"/>
+    <rect x="53" y="185" width="7" height="10" rx="1.5" fill="#292524"/>
+    <!-- Rocks -->
+    <ellipse cx="40" cy="155" rx="13" ry="8" fill="#64748b"/>
+    <ellipse cx="40" cy="153" rx="11" ry="6" fill="#94a3b8" opacity=".9"/>
+    <ellipse cx="35" cy="150" rx="5" ry="3" fill="#cbd5e1" opacity=".5"/>
+    <ellipse cx="47" cy="151" rx="4" ry="2.5" fill="#94a3b8" opacity=".4"/>
+  </svg>
+  <div style="font-family:Kanit,sans-serif;font-size:30px;font-weight:700;color:#fff;letter-spacing:3px;text-shadow:0 2px 12px rgba(0,0,0,.4)">สานนท์</div>
+  <div style="font-family:Kanit,sans-serif;font-size:11px;color:rgba(255,255,255,.5);letter-spacing:4px;margin-top:2px;margin-bottom:26px">โรงโม่หินอุตสาหกรรม</div>
+  <div style="display:flex;gap:7px">
+    <span class="spl-dot"></span><span class="spl-dot" style="animation-delay:.18s"></span><span class="spl-dot" style="animation-delay:.36s"></span>
+  </div>
+  <style>
+    .spl-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#34d399;animation:spl-b .9s ease-in-out infinite}
+    @keyframes spl-b{0%,100%{transform:translateY(0);opacity:.3}50%{transform:translateY(-7px);opacity:1}}
+    #app-splash.spl-fade{opacity:0!important;pointer-events:none}
+  </style>
+</div>
+<!-- ===== END SPLASH ===== -->
 <!-- Toast container -->
 <div id="toast-container"></div>
 
@@ -266,6 +340,7 @@ let _invItems     = [];  // inventory_items (active)
 let _stockMap     = {};  // item_id → current_quantity
 let _lotsMap      = {};  // item_id → [{id,lot_no,received_date,remaining_qty,unit_cost}] (FIFO order)
 let _balSort      = { col:'', dir:'asc' }; // click sort state (inv-balance)
+let _woAllItems   = [];  // items visible for withdraw modal (cache for filter)
 let _qrSort       = { col:'', dir:'asc' }; // click sort state (inv-qr)
 let _dragSrcId    = null; // drag & drop
 let _suppliers    = [];  // inv_suppliers
@@ -1628,6 +1703,24 @@ function woCalc(){
       fifoEl.innerHTML=`<div class="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-2 space-y-0.5">${rows}</div>${warn}`;
     }
   }
+}
+
+function woFilterItems(){
+  const cat=(qs('#wo-cat-filter')?.value||'');
+  const search=(qs('#wo-search-filter')?.value||'').toLowerCase();
+  const sel=qs('#wo-item');
+  if(!sel)return;
+  const filtered=_woAllItems.filter(i=>{
+    if(cat&&normCat(i.category)!==normCat(cat))return false;
+    if(search&&!i.code?.toLowerCase().includes(search)&&!i.name?.toLowerCase().includes(search))return false;
+    return true;
+  });
+  sel.innerHTML='<option value="">-- เลือกวัสดุ --</option>'+
+    filtered.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  // reset
+  if(qs('#wo-bal'))qs('#wo-bal').value='';
+  if(qs('#wo-fifo'))qs('#wo-fifo').innerHTML='';
+  if(qs('#wo-total'))qs('#wo-total').value='';
 }
 
 async function saveWithdraw(e){
@@ -3318,6 +3411,9 @@ async function removeConfigItem(key,val){
   _invConfig[key]=newArr;showToast('ลบสำเร็จ','success');settingsTab('config');
 }
 
+// ─── Normalize category string (handles non-ASCII whitespace, double spaces) ───
+function normCat(s){ return (s||'').replace(/[ ​‌‍﻿\t\r\n]+/g,' ').replace(/\s+/g,' ').trim(); }
+
 // =====================================================================
 // SECTION 13B: inv-balance — วัสดุคงเหลือ
 // =====================================================================
@@ -3429,7 +3525,7 @@ function renderBalanceTable() {
     const qty = _stockMap[i.id]||0;
     const factory = _extractFactory(i);
     if(search && !i.code?.toLowerCase().includes(search) && !i.name?.toLowerCase().includes(search)) return false;
-    if(catFilter && (i.category||'').trim() !== catFilter.trim()) return false;
+    if(catFilter && normCat(i.category) !== normCat(catFilter)) return false;
     if(facFilter && factory !== facFilter) return false;
     if(stFilter === 'out' && qty > 0) return false;
     if(stFilter === 'low' && !(qty > 0 && qty <= (i.min_stock||0))) return false;
@@ -3873,11 +3969,15 @@ function openWithdrawModal(preItem=null) {
   const apv = isManager();
   const userFac = currentUser?.factory||'';
   // กรองวัสดุตามสิทธิ์โรงงาน — Admin/Manager เห็นทั้งหมด
-  const visibleItems = isManager() ? _invItems : _invItems.filter(i=>{
+  _woAllItems = isManager() ? _invItems : _invItems.filter(i=>{
     if(!i.allowed_factories||i.allowed_factories.length===0) return true; // ของส่วนกลาง
     return userFac && i.allowed_factories.includes(userFac);
   });
-  const itemOpts = visibleItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  const itemOpts = _woAllItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  // หมวดหมู่สำหรับ filter (ไม่ซ้ำ)
+  const woCats = (_invConfig.categories||[]).length>0 ? _invConfig.categories
+    : [...new Set(_woAllItems.map(i=>normCat(i.category)).filter(Boolean))].sort();
+  const catFilterOpts = woCats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const userDept = currentUser?.department||'';
   const facOpts = FACTORIES().map(f=>`<option ${f===userFac?'selected':''}>${f}</option>`).join('');
   const deptOpts = (_invConfig.departments||[]).map(d=>`<option ${d===userDept?'selected':''}>${escapeHtml(d)}</option>`).join('');
@@ -3897,6 +3997,14 @@ function openWithdrawModal(preItem=null) {
         <div><label class="text-xs text-gray-500 mb-1 block">ผู้เบิก</label>
           <input id="wo-req" value="${escapeHtml(currentUser?.full_name||currentUser?.username||'')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
         <div class="col-span-2">
+          <label class="text-xs text-gray-500 mb-1 block">กรองประเภทวัสดุ</label>
+          <div class="flex gap-2 mb-2">
+            <select id="wo-cat-filter" onchange="woFilterItems()" class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+              <option value="">-- ทุกประเภท --</option>${catFilterOpts}
+            </select>
+            <input id="wo-search-filter" type="text" placeholder="ค้นหารหัส/ชื่อ..." oninput="woFilterItems()"
+              class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+          </div>
           <label class="text-xs text-gray-500 mb-1 block">วัสดุ <span class="text-red-500">*</span></label>
           <div class="flex gap-2">
             <select id="wo-item" required onchange="woItemChange()" class="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2 text-sm">
@@ -4337,10 +4445,12 @@ function printSelectedLabels() {
       startSessionTimer();
       const lastPage = sessionStorage.getItem('_sn_inv_page') || 'inv-dashboard';
       navigateTo(lastPage);
+      hideSplash();
       return;
     }
   } catch(_) {}
   renderLanding();
+  hideSplash();
 })();
 </script>
 </body>

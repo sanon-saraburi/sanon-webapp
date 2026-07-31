@@ -11,11 +11,11 @@
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO | — |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือน, สิทธิ์ตามโรงงาน | — |
-| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items (มี filter โรงงาน/เครื่อง), pm-oee, pm-report, SSO | — |
-| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก พื้นฐาน | ยังไม่ครบ feature |
-| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icons, manifest ทั้ง 4 ระบบ, SW cache | ยังไม่ได้อัปขึ้น GitHub |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Loading Screen | — |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือน, สิทธิ์ตามโรงงาน, Loading Screen | — |
+| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items (มี filter โรงงาน/เครื่อง), pm-oee, pm-report, SSO, Loading Screen | — |
+| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก พื้นฐาน, Loading Screen | ยังไม่ครบ feature |
+| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png (square, professional), manifest ทั้ง 4 ระบบ, SW cache v2 | — |
 
 ### LINE Notification Status
 
@@ -72,20 +72,22 @@
 
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
-| `index.html` | System 1 | 2026-07-31 (PWA tags) |
-| `inventory.html` | System 2 | 2026-07-31 (PWA tags) |
-| `pm.html` | System 3 | 2026-07-31 (filter + PWA tags) |
-| `checkin.html` | System 4 | 2026-07-31 (PWA tags) |
+| `index.html` | System 1 | 2026-07-31 (Loading Screen + PWA) |
+| `inventory.html` | System 2 | 2026-07-31 (Loading Screen + PWA) |
+| `pm.html` | System 3 | 2026-07-31 (Loading Screen + filter + PWA) |
+| `checkin.html` | System 4 | 2026-07-31 (Loading Screen + PWA) |
 | `CLAUDE.md` | ทุกระบบ | 2026-07-31 |
-| `PRODUCTION.md` | System 1 | 2026-07-31 (สร้างใหม่) |
+| `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
-| `PM.md` | System 3 | 2026-07-31 (สร้างใหม่) |
-| `sw.js` | PWA | 2026-07-31 (สร้างใหม่) |
-| `manifest-production.json` | PWA | 2026-07-31 (สร้างใหม่) |
-| `manifest-inventory.json` | PWA | 2026-07-31 (สร้างใหม่) |
-| `manifest-pm.json` | PWA | 2026-07-31 (สร้างใหม่) |
-| `manifest-checkin.json` | PWA | 2026-07-31 (สร้างใหม่) |
-| `icons/` (8 ไฟล์) | PWA | 2026-07-31 (สร้างใหม่) |
+| `PM.md` | System 3 | 2026-07-31 |
+| `sw.js` | PWA | 2026-07-31 (v2 — icon paths ใหม่) |
+| `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-pm.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-checkin.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `icon-192.png` | PWA | 2026-07-31 (สร้างใหม่ — square, navy bg) |
+| `icon-512.png` | PWA | 2026-07-31 (สร้างใหม่ — square, navy bg) |
+| `logo.png` | ทุกระบบ | เดิม |
 
 ### Workflow ทุกครั้งหลังแก้ไข
 
