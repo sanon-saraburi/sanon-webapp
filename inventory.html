@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0" />
 <title>คลังวัสดุ — สานนท์ จำกัด</title>
+<!-- PWA -->
+<link rel="manifest" href="/sanon-webapp/manifest-inventory.json">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="คลัง SN">
+<link rel="apple-touch-icon" href="/sanon-webapp/icons/icon-inventory-192.png">
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sanon-webapp/sw.js',{scope:'/sanon-webapp/'}).catch(()=>{});});}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" />
 <script src="https://cdn.tailwindcss.com"></script>
@@ -1276,6 +1284,7 @@ async function loadDashboard() {
 // =====================================================================
 PAGE_RENDERERS['inv-stock'] = async function(el) {
   const {data:hist}=await db.from('inventory_transactions').select('*,inventory_items(name,unit)').eq('transaction_type','receive').order('created_at',{ascending:false}).limit(100);
+  const canEdit=isManager();
   el.innerHTML=`
   <div class="space-y-5">
     <div class="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between gap-3 flex-wrap">
@@ -1297,11 +1306,12 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
         <h3 class="text-sm font-semibold text-gray-600">ประวัติการรับเข้า</h3>
         <input placeholder="ค้นหา..." oninput="filterTbl(this,'si-body')" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-44"/>
       </div>
-      <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm">
+      <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm ${canEdit?'table-sticky-last':''}">
         <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
           <th class="text-left px-4 py-2">เลขที่</th><th class="text-left px-4 py-2">วันที่</th>
           <th class="text-left px-4 py-2">วัสดุ</th><th class="text-right px-4 py-2">จำนวน</th>
           <th class="text-left px-4 py-2">ผู้จำหน่าย</th><th class="text-right px-4 py-2">รวมเงิน</th>
+          ${canEdit?'<th class="px-4 py-2">จัดการ</th>':''}
         </tr></thead>
         <tbody id="si-body">${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50">
           <td class="px-4 py-2 font-mono text-xs text-blue-600">${escapeHtml(r.doc_no||'-')}</td>
@@ -1310,7 +1320,13 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
           <td class="px-4 py-2 text-right font-medium">${fmtNum(r.quantity)} ${escapeHtml(r.inventory_items?.unit||'')}</td>
           <td class="px-4 py-2 text-xs text-gray-500">${escapeHtml(r.inv_suppliers?.name||'-')}</td>
           <td class="px-4 py-2 text-right">${r.total_amount?fmtMoney(r.total_amount):'-'}</td>
-        </tr>`).join('')||'<tr><td colspan="6" class="text-center py-8 text-gray-400">ยังไม่มีข้อมูล</td></tr>'}</tbody>
+          ${canEdit?`<td class="px-4 py-2 sticky right-0 bg-white">
+            <div class="flex gap-1">
+              <button onclick="openEditStockInModal('${r.id}')" class="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-lg hover:bg-blue-100 border border-blue-200">✏️ แก้ไข</button>
+              <button onclick="deleteStockIn('${r.id}','stock')" class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 border border-red-200">🗑️ ลบ</button>
+            </div>
+          </td>`:''}
+        </tr>`).join('')||`<tr><td colspan="${canEdit?7:6}" class="text-center py-8 text-gray-400">ยังไม่มีข้อมูล</td></tr>`}</tbody>
       </table></div>
     </div>
   </div>`;
@@ -1403,6 +1419,129 @@ async function saveStockIn(e){
     closeModal();navigateTo('inv-stock');
   }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
   finally{btn.disabled=false;btn.textContent='บันทึกรับเข้า';}
+}
+
+/* ─── แก้ไขรายการรับเข้า ─── */
+async function openEditStockInModal(id) {
+  const {data:r,error}=await db.from('inventory_transactions').select('*,inventory_items(name,unit)').eq('id',id).single();
+  if(error||!r){showToast('ไม่พบรายการ','error');return;}
+  // หา lot ที่ผูกกับรายการนี้
+  const {data:lot}=await db.from('inventory_lots').select('*').eq('reference_no',r.doc_no).maybeSingle();
+  const lotId=lot?.id||null;
+  const withdrawn=lot?(lot.initial_qty-lot.remaining_qty):0; // จำนวนที่เบิกออกแล้ว
+
+  const itemOpts=_invItems.map(i=>`<option value="${i.id}" ${i.id===r.item_id?'selected':''} data-unit="${escapeHtml(i.unit||'')}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  const supOpts=`<option value="">-- ไม่ระบุ --</option>`+_suppliers.map(s=>`<option value="${s.id}" ${s.id===r.supplier_id?'selected':''}>${escapeHtml(s.code)} — ${escapeHtml(s.name)}</option>`).join('');
+  const facOpts=`<option value="">-- ทุกโรง --</option>`+FACTORIES().map(f=>`<option ${f===r.factory?'selected':''}>${f}</option>`).join('');
+  const dateVal=r.created_at?r.created_at.substring(0,10):'';
+
+  showModal({
+    title:`✏️ แก้ไขรายการรับเข้า — ${escapeHtml(r.doc_no||'')}`,
+    body:`
+    <form id="sei-form" onsubmit="saveEditStockIn(event,'${id}','${lotId}')" class="space-y-3">
+      ${withdrawn>0?`<div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">⚠️ วัสดุนี้มีการเบิกออกแล้ว <b>${fmtNum(withdrawn)}</b> หน่วย — จำนวนใหม่ต้องไม่น้อยกว่า ${fmtNum(withdrawn)}</div>`:''}
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-gray-500 mb-1 block">วันที่ <span class="text-red-500">*</span></label>
+          <input id="sei-date" type="date" value="${dateVal}" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน</label>
+          <select id="sei-factory" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">${facOpts}</select></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">ผู้จำหน่าย</label>
+          <select id="sei-supplier" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">${supOpts}</select></div>
+        <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">วัสดุ <span class="text-red-500">*</span></label>
+          <select id="sei-item" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">${itemOpts}</select></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">หมายเลข Lot</label>
+          <input id="sei-lot" value="${escapeHtml(r.lot_no||'')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"/></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">จำนวน <span class="text-red-500">*</span></label>
+          <input id="sei-qty" type="number" min="${withdrawn>0?withdrawn:0.01}" step="any" value="${r.quantity}" required oninput="seiCalc()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">ราคา/หน่วย (บาท) <span class="text-red-500">*</span></label>
+          <input id="sei-price" type="number" min="0" step="any" value="${r.unit_price||r.unit_cost||0}" required oninput="seiCalc()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">รวมเงิน (บาท)</label>
+          <input id="sei-total" readonly value="${fmtMoney(r.total_amount||0)}" class="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500"/></div>
+        <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">หมายเหตุ</label>
+          <input id="sei-note" value="${escapeHtml(r.note||'')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+      </div>
+    </form>`,
+    footer:`
+      <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ยกเลิก</button>
+      <button type="submit" form="sei-form" id="sei-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">บันทึกการแก้ไข</button>`
+  });
+  refreshIcons();
+}
+
+function seiCalc(){const q=parseFloat(qs('#sei-qty')?.value||0),p=parseFloat(qs('#sei-price')?.value||0);if(qs('#sei-total'))qs('#sei-total').value=fmtMoney(q*p);}
+
+async function deleteStockIn(id, fromPage='stock'){
+  // โหลดข้อมูล transaction
+  const {data:tx}=await db.from('inventory_transactions').select('*,inventory_items(name,unit)').eq('id',id).single();
+  if(!tx){showToast('ไม่พบรายการ','error');return;}
+  // หา lot ที่ผูกกับรายการนี้
+  const {data:lot}=await db.from('inventory_lots').select('*').eq('reference_no',tx.doc_no).maybeSingle();
+  // ตรวจสอบว่ามีการเบิกออกแล้วไหม
+  if(lot&&lot.remaining_qty<lot.initial_qty){
+    const withdrawn=lot.initial_qty-lot.remaining_qty;
+    showToast(`ไม่สามารถลบได้ — มีการเบิก ${fmtNum(withdrawn)} ${tx.inventory_items?.unit||'หน่วย'} ออกจาก Lot นี้แล้ว`,'error');
+    return;
+  }
+  const nm=tx.inventory_items?.name||'วัสดุ';
+  const confirmMsg=`ลบรายการรับเข้า?\n${escapeHtml(tx.doc_no||'')} — ${nm} จำนวน ${fmtNum(tx.quantity)} ${tx.inventory_items?.unit||''}\n\nการดำเนินการนี้จะลบข้อมูลถาวรและไม่สามารถกู้คืนได้`;
+  if(!confirm(confirmMsg))return;
+  try{
+    // ลบ lot ก่อน (ถ้ามี)
+    if(lot){const {error:le}=await db.from('inventory_lots').delete().eq('id',lot.id);if(le)throw le;}
+    // ลบ transaction
+    const {error}=await db.from('inventory_transactions').delete().eq('id',id);
+    if(error)throw error;
+    await Promise.all([loadStockData(),loadLots()]);
+    showToast('ลบรายการสำเร็จ','success');
+    if(fromPage==='report') loadReport();
+    else navigateTo('inv-stock');
+  }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
+}
+
+async function saveEditStockIn(e,id,lotId){
+  e.preventDefault();
+  const btn=qs('#sei-btn');btn.disabled=true;btn.textContent='กำลังบันทึก...';
+  try{
+    const qty=parseFloat(qs('#sei-qty')?.value||0);
+    const price=parseFloat(qs('#sei-price')?.value||0);
+    const factory=qs('#sei-factory')?.value||null;
+    const supplier_id=qs('#sei-supplier')?.value||null;
+    const item_id=qs('#sei-item')?.value;
+    const lot_no=(qs('#sei-lot')?.value||'').trim();
+    const note=qs('#sei-note')?.value||null;
+    const dateVal=qs('#sei-date')?.value;
+    if(!item_id||qty<=0){showToast('กรุณาเลือกวัสดุและระบุจำนวน','error');return;}
+    if(!price||price<=0){showToast('กรุณาระบุราคา/หน่วย','error');return;}
+
+    // อัปเดต transaction
+    const {error}=await db.from('inventory_transactions').update({
+      item_id,quantity:qty,unit_price:price,unit_cost:price,
+      total_amount:qty*price,factory,supplier_id:supplier_id||null,
+      lot_no:lot_no||null,note,created_at:dateVal+'T00:00:00'
+    }).eq('id',id);
+    if(error)throw error;
+
+    // อัปเดต lot (ถ้ามี)
+    if(lotId&&lotId!=='null'){
+      const {data:lot}=await db.from('inventory_lots').select('initial_qty,remaining_qty').eq('id',lotId).single();
+      if(lot){
+        const withdrawn=lot.initial_qty-lot.remaining_qty;
+        const newRemaining=qty-withdrawn;
+        if(newRemaining<0){showToast('จำนวนใหม่น้อยกว่าที่เบิกออกแล้ว กรุณาตรวจสอบ','error');return;}
+        const {error:le}=await db.from('inventory_lots').update({
+          item_id,lot_no:lot_no||lot.lot_no||null,
+          initial_qty:qty,remaining_qty:newRemaining,
+          unit_cost:price,received_date:dateVal
+        }).eq('id',lotId);
+        if(le)throw le;
+      }
+    }
+
+    await Promise.all([loadStockData(),loadLots()]);
+    showToast('แก้ไขสำเร็จ','success');
+    closeModal();navigateTo('inv-stock');
+  }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
+  finally{btn.disabled=false;btn.textContent='บันทึกการแก้ไข';}
 }
 
 // =====================================================================
@@ -2611,7 +2750,7 @@ async function loadReport(){
         <td class="px-4 py-2 text-right font-medium">${fmtNum(r.quantity)} ${escapeHtml(r.inventory_items?.unit||'')}</td>
         <td class="px-4 py-2 text-right">${r.total_amount?fmtMoney(r.total_amount):'-'}</td>
         <td class="px-4 py-2 text-xs text-gray-500">${escapeHtml([r.factory,r.department].filter(Boolean).join('/')||'-')}</td>
-        ${isManager()?`<td class="px-4 py-2 sticky right-0 bg-white">${r.transaction_type==='withdraw'?`<button onclick="cancelWithdraw('${r.id}')" class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 whitespace-nowrap">ยกเลิก</button>`:'—'}</td>`:''}
+        ${isManager()?`<td class="px-4 py-2 sticky right-0 bg-white">${r.transaction_type==='withdraw'?`<button onclick="cancelWithdraw('${r.id}')" class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 whitespace-nowrap">ยกเลิก</button>`:r.transaction_type==='receive'?`<button onclick="deleteStockIn('${r.id}','report')" class="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 whitespace-nowrap">🗑️ ลบ</button>`:'—'}</td>`:''}
       </tr>`).join('')||`<tr><td colspan="${isManager()?8:7}" class="py-8 text-center text-gray-400">ไม่มีข้อมูล</td></tr>`}</tbody>
     </table></div>`;
   } else if(type==='low-stock'){
@@ -2711,7 +2850,7 @@ async function settingsTab(tab){
       <input id="items-search" placeholder="ค้นหารหัส/ชื่อ..." oninput="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-0"/>
       <select id="items-cat" onchange="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
         <option value="">ทุกประเภท</option>
-        ${[...new Set(_invItems.map(i=>i.category||'').filter(Boolean))].sort().map(c=>`<option>${escapeHtml(c)}</option>`).join('')}
+        ${((_invConfig.categories||[]).length>0?_invConfig.categories:[...new Set(_invItems.map(i=>(i.category||'').trim()).filter(Boolean))].sort()).map(c=>`<option>${escapeHtml(c)}</option>`).join('')}
       </select>
       <select id="items-loc" onchange="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
         <option value="">ทุกที่เก็บ</option>
@@ -3046,7 +3185,12 @@ async function saveUserPermInv(userId, nonInvPerms){
 }
 
 function openItemModal(item){
-  const cats=(_invConfig.categories||[]).map(c=>`<option ${item?.category===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  const itemCat=(item?.category||'').trim();
+  // ถ้า category ของ item ไม่ตรงกับ config list (เช่น มีช่องว่างต่างกัน) → เพิ่มเป็น option พิเศษ
+  const configCatsTrimmed=(_invConfig.categories||[]).map(c=>c.trim());
+  const extraCat=itemCat&&!configCatsTrimmed.includes(itemCat)?itemCat:'';
+  const cats=[...(_invConfig.categories||[]),...(extraCat?[extraCat]:[])]
+    .map(c=>`<option value="${escapeHtml(c.trim())}" ${itemCat===c.trim()?'selected':''}>${escapeHtml(c.trim())}</option>`).join('');
   const units=(_invConfig.units||[]).map(u=>`<option ${item?.unit===u?'selected':''}>${escapeHtml(u)}</option>`).join('');
   const locs=(_invConfig.locations||[]).map(l=>`<option ${item?.location===l?'selected':''}>${escapeHtml(l)}</option>`).join('');
   showModal({title:item?'แก้ไขวัสดุ':'เพิ่มวัสดุ',body:`
@@ -3097,7 +3241,7 @@ async function saveItem(){
   let code=qs('#it-code')?.value?.trim();
   if(!code&&!id){const {data:_maxRow}=await db.from('inventory_items').select('code').order('code',{ascending:false}).limit(1);const _lastNum=_maxRow?.[0]?.code?parseInt(_maxRow[0].code.replace('ITM-',''))||0:0;code='ITM-'+pad4(_lastNum+1);}
   const checkedFacs=[...document.querySelectorAll('.it-fac:checked')].map(c=>c.value);
-  const payload={name,category:qs('#it-cat')?.value||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,weight_per_unit:parseFloat(qs('#it-weight')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null,allowed_factories:checkedFacs.length>0?checkedFacs:null};
+  const payload={name,category:(qs('#it-cat')?.value||'').trim()||null,unit:qs('#it-unit')?.value||null,unit_price:parseFloat(qs('#it-price')?.value)||null,weight_per_unit:parseFloat(qs('#it-weight')?.value)||null,min_stock:parseFloat(qs('#it-min')?.value)||0,location:qs('#it-loc')?.value||null,status:qs('#it-status')?.value||'active',description:qs('#it-desc')?.value||null,allowed_factories:checkedFacs.length>0?checkedFacs:null};
   let error;
   if(id){({error}=await db.from('inventory_items').update(payload).eq('id',id));}
   else{({error}=await db.from('inventory_items').insert({...payload,code,created_by:currentUser.id}));}
@@ -3179,7 +3323,9 @@ async function removeConfigItem(key,val){
 // =====================================================================
 PAGE_RENDERERS['inv-balance'] = async function(el) {
   const lowCount = _invItems.filter(i => (_stockMap[i.id]||0) <= (i.min_stock||0)).length;
-  const cats = [...new Set(_invItems.map(i=>i.category).filter(Boolean))].sort();
+  const cats = (_invConfig.categories||[]).length > 0
+    ? _invConfig.categories
+    : [...new Set(_invItems.map(i=>(i.category||'').trim()).filter(Boolean))].sort();
 
   el.innerHTML = `
   <div class="space-y-4">
@@ -3283,7 +3429,7 @@ function renderBalanceTable() {
     const qty = _stockMap[i.id]||0;
     const factory = _extractFactory(i);
     if(search && !i.code?.toLowerCase().includes(search) && !i.name?.toLowerCase().includes(search)) return false;
-    if(catFilter && i.category !== catFilter) return false;
+    if(catFilter && (i.category||'').trim() !== catFilter.trim()) return false;
     if(facFilter && factory !== facFilter) return false;
     if(stFilter === 'out' && qty > 0) return false;
     if(stFilter === 'low' && !(qty > 0 && qty <= (i.min_stock||0))) return false;
@@ -3856,7 +4002,9 @@ function showStockCheckModal(item) {
 // SECTION 13C: inv-qr — QR & Barcode Label
 // =====================================================================
 PAGE_RENDERERS['inv-qr'] = async function(el) {
-  const cats = [...new Set(_invItems.map(i=>i.category).filter(Boolean))].sort();
+  const cats = (_invConfig.categories||[]).length > 0
+    ? _invConfig.categories
+    : [...new Set(_invItems.map(i=>(i.category||'').trim()).filter(Boolean))].sort();
   const facOpts = FACTORIES().map(f=>`<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
   el.innerHTML = `
   <div class="space-y-4 no-print">

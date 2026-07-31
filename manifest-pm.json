@@ -1,0 +1,20 @@
+{
+  "name": "สานนท์ — PM เครื่องจักร",
+  "short_name": "PM SN",
+  "description": "ระบบ Preventive Maintenance เครื่องจักร Hour-based",
+  "start_url": "/sanon-webapp/pm.html",
+  "scope": "/sanon-webapp/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#92400e",
+  "theme_color": "#d97706",
+  "lang": "th",
+  "icons": [
+    { "src": "/sanon-webapp/icons/icon-pm-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/sanon-webapp/icons/icon-pm-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Dashboard PM",  "url": "/sanon-webapp/pm.html#pm-dashboard", "description": "ดูสถานะ PM ทุกเครื่อง" },
+    { "name": "บันทึกมิเตอร์", "url": "/sanon-webapp/pm.html#pm-meter",    "description": "บันทึกเลขมิเตอร์" }
+  ]
+}

@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0">
 <title>ระบบรายงานผลการผลิต | โรงโม่หิน-เครื่องล้างหิน</title>
+<!-- PWA -->
+<link rel="manifest" href="/sanon-webapp/manifest-production.json">
+<meta name="theme-color" content="#1e3a8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ผลิต SN">
+<link rel="apple-touch-icon" href="/sanon-webapp/icons/icon-production-192.png">
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sanon-webapp/sw.js',{scope:'/sanon-webapp/'}).catch(()=>{});});}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
