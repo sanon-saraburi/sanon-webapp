@@ -171,7 +171,7 @@ tbody tr:hover{background:#f8fafc;}
   </style>
   <script>
     (function(){var s=document.getElementById('spl-stars');if(!s)return;var h='';for(var i=0;i<55;i++){var x=Math.random()*100,y=Math.random()*58,z=Math.random()*1.6+0.4,d=Math.random()*3;h+='<div style="position:absolute;left:'+x+'%;top:'+y+'%;width:'+z+'px;height:'+z+'px;border-radius:50%;background:#fff;animation:spl-tw '+(2+d)+'s '+(d*.4)+'s ease-in-out infinite"></div>';}s.innerHTML=h;})();
-  <\/script>
+  </script>
 </div>
 <!-- ===== END SPLASH ===== -->
 <div id="toast-container"></div>
@@ -3486,7 +3486,7 @@ function printReport() {
   <div class="sub">ช่วงเวลา: ${period} &nbsp;|&nbsp; พิมพ์: ${new Date().toLocaleDateString('th-TH')}</div>
   <div class="kpi-grid">${kpi}</div>
   ${tbl}${rep}
-  <script>window.onload=function(){window.print();}<\/script>
+  <script>window.onload=function(){window.print();}</script>
   </body></html>`);
   w.document.close();
 }
@@ -4477,7 +4477,7 @@ function printMeterReport() {
       </tr>
     </tfoot>
   </table>
-  <script>window.onload=function(){window.print();}<\/script>
+  <script>window.onload=function(){window.print();}</script>
   </body></html>`);
   w.document.close();
 }

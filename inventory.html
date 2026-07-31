@@ -252,7 +252,7 @@ tbody tr:hover { background:#f8fafc; }
   </style>
   <script>
     (function(){var s=document.getElementById('spl-stars');if(!s)return;var h='';for(var i=0;i<55;i++){var x=Math.random()*100,y=Math.random()*58,z=Math.random()*1.6+0.4,d=Math.random()*3;h+='<div style="position:absolute;left:'+x+'%;top:'+y+'%;width:'+z+'px;height:'+z+'px;border-radius:50%;background:#fff;animation:spl-tw '+(2+d)+'s '+(d*.4)+'s ease-in-out infinite"></div>';}s.innerHTML=h;})();
-  <\/script>
+  </script>
 </div>
 <!-- ===== END SPLASH ===== -->
 <!-- Toast container -->
@@ -2016,7 +2016,7 @@ async function printPo(poId){
     <td>____________________<br>ผู้จัดทำ</td>
     <td>____________________<br>ผู้อนุมัติ</td>
   </tr></table>
-  <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  <script>window.onload=function(){window.print();}</script></body></html>`);
   w.document.close();
 }
 
@@ -2716,7 +2716,7 @@ function printChemReport(){
   </style></head><body>
   <h1>รายงานการใช้และค่าใช้จ่ายสารตกตะกอน ประจำปี ${year+543}</h1>
   ${body.innerHTML}
-  <script>window.onload=function(){window.print();}<\/script>
+  <script>window.onload=function(){window.print();}</script>
   </body></html>`);
   w.document.close();
 }
@@ -3813,7 +3813,7 @@ function printQRLabel(code, name) {
     <div><p class="lbl">QR Code</p>${qrHtml}</div>
     <div><p class="lbl">Barcode</p>${bcHtml}</div>
   </div>
-  <script>window.onload=function(){window.print();}<\/script>
+  <script>window.onload=function(){window.print();}</script>
   </body></html>`);
   w.document.close();
 }
@@ -4359,7 +4359,7 @@ function printSelectedLabels() {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <script>window.onload=function(){window.print();}<\/script>
+  <script>window.onload=function(){window.print();}</script>
   </body></html>`);
   w.document.close();
 }

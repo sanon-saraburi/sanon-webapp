@@ -323,7 +323,7 @@ tbody tr:last-child td{border-bottom:none;}
   </style>
   <script>
     (function(){var s=document.getElementById('spl-stars');if(!s)return;var h='';for(var i=0;i<55;i++){var x=Math.random()*100,y=Math.random()*58,z=Math.random()*1.6+0.4,d=Math.random()*3;h+='<div style="position:absolute;left:'+x+'%;top:'+y+'%;width:'+z+'px;height:'+z+'px;border-radius:50%;background:#fff;animation:spl-tw '+(2+d)+'s '+(d*.4)+'s ease-in-out infinite"></div>';}s.innerHTML=h;})();
-  <\/script>
+  </script>
 </div>
 <!-- ===== END SPLASH ===== -->
 <!-- ===== AUTH ===== -->
@@ -2256,8 +2256,8 @@ function _cardHtml(emps, autoPrint) {
 <meta charset="UTF-8">
 <title>บัตรพนักงาน</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"><\/script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;font-family:'Kanit',sans-serif;}
   body{background:#e2e8f0;padding:20px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;}
@@ -2295,7 +2295,7 @@ window.onload = function() {
   });
   ${autoPrint ? 'setTimeout(function(){window.print();},800);' : ''}
 };
-<\/script>
+</script>
 <\/body><\/html>`;
 }
 
