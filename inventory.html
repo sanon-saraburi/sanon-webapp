@@ -4393,6 +4393,13 @@ function printSelectedLabels() {
 // =====================================================================
 // SECTION 19: BOOTSTRAP
 // =====================================================================
+function hideSplash(){
+  const s=document.getElementById('app-splash');
+  if(!s)return;
+  s.classList.add('spl-fade');
+  setTimeout(()=>{if(s.parentNode)s.remove();},500);
+}
+
 (async function initApp(){
   const tryParse = key => { try { const r=sessionStorage.getItem(key); return r?JSON.parse(r):null; } catch(_){ return null; } };
 
