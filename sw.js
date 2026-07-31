@@ -2,7 +2,7 @@
 // sw.js — Sanon PWA Service Worker (GitHub Pages: /sanon-webapp/)
 // =====================================================================
 
-const CACHE_NAME   = 'sanon-pwa-v3';
+const CACHE_NAME   = 'sanon-pwa-v2';
 const BASE         = '/sanon-webapp';
 const SUPABASE_URL = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
 
@@ -18,7 +18,6 @@ const PRECACHE = [
   `${BASE}/icon-192.png`,
   `${BASE}/icon-512.png`,
   `${BASE}/logo.png`,
-  `${BASE}/excavator.png`,
 ];
 
 self.addEventListener('install', (e) => {
