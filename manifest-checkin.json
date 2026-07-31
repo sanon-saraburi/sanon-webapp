@@ -10,8 +10,8 @@
   "theme_color": "#7c3aed",
   "lang": "th",
   "icons": [
-    { "src": "/sanon-webapp/icons/icon-checkin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/sanon-webapp/icons/icon-checkin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/sanon-webapp/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/sanon-webapp/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "shortcuts": [
     { "name": "เช็คอิน", "url": "/sanon-webapp/checkin.html", "description": "บันทึกเวลาพัก" }
