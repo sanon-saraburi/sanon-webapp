@@ -167,6 +167,7 @@ let currentPage = 'landing';  // page key ปัจจุบัน
 let pendingApprovalCount = 0; // badge นับรายการ pending
 let isMobileSheetOpen = false;
 let isManageSheetOpen = false; // bottom-sheet สำหรับเมนูหมวด 2 (จัดการข้อมูล) บนมือถือ
+let isSystemSheetOpen = false; // bottom-sheet สำหรับ System Switcher บนมือถือ
 let chartRegistry = {};       // เก็บ instance Chart.js เพื่อ destroy ก่อน redraw
 let sessionTimerInterval = null; // setInterval handle สำหรับนับถอยหลัง session (non-admin)
 let sessionSecondsLeft = 0;      // วินาทีที่เหลือของ session ปัจจุบัน
@@ -655,6 +656,7 @@ function doLogout() {
   pendingApprovalCount = 0;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_inv_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_pm_sess'); } catch (_) {}
@@ -747,6 +749,7 @@ async function handleSessionExpired() {
   pendingApprovalCount = 0;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   sessionSecondsLeft = 0;
   sessionWarnShown = false;
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
@@ -928,6 +931,7 @@ function navigateTo(pageKey, forceFullRender) {
   currentPage = pageKey;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   if (pageKey !== 'landing') {
     try {
       const _ss = sessionStorage.getItem('_sn_sess');
@@ -1662,7 +1666,62 @@ function renderAppShell() {
           <i data-lucide="settings" class="w-5 h-5"></i><span>จัดการ</span>
           ${pendingApprovalCount > 0 ? `<span class="absolute top-0 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5">${pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}</span>` : ''}
         </button>` : ''}
+      <button id="mobile-system-btn" class="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[11px] text-secondary-500">
+        <i data-lucide="grid" class="w-5 h-5"></i><span>ระบบ</span>
+      </button>
     </nav>
+
+    <!-- MOBILE SYSTEM SHEET (สลับระบบ) -->
+    <div id="mobile-system-sheet" class="lg:hidden fixed inset-0 z-40 ${isSystemSheetOpen ? '' : 'hidden'}">
+      <div id="mobile-system-sheet-backdrop" class="absolute inset-0 modal-backdrop"></div>
+      <div class="absolute bottom-0 inset-x-0 bg-white rounded-t-3xl p-5 fade-in">
+        <div class="w-10 h-1.5 bg-secondary-200 rounded-full mx-auto mb-4"></div>
+        <p class="text-sm font-semibold text-secondary-700 mb-4">เปลี่ยนระบบ</p>
+        <div class="grid grid-cols-3 gap-3 mb-4">
+          <!-- System 1 — active (ระบบปัจจุบัน) -->
+          <div class="flex flex-col items-center gap-2 p-4 rounded-2xl cursor-default"
+               style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 4px 12px rgba(37,99,235,.35)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="bar-chart-2" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="text-[11px] font-bold text-white">ผลิต</span>
+            <span class="text-[9px] text-white opacity-70">ใช้งานอยู่</span>
+          </div>
+          <!-- System 2 — คลังวัสดุ -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('inventory.html')"
+             class="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 4px 12px rgba(13,148,136,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="package" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="text-[11px] font-bold text-white">คลังวัสดุ</span>
+            <span class="text-[9px] text-white opacity-70">System 2</span>
+          </a>
+          <!-- System 3 — PM เครื่องจักร -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('pm.html')"
+             class="flex flex-col items-center gap-2 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 4px 12px rgba(180,83,9,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="wrench" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="text-[11px] font-bold text-white">PM</span>
+            <span class="text-[9px] text-white opacity-70">System 3</span>
+          </a>
+        </div>
+        <!-- System 4 — Checkin -->
+        <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('checkin.html')"
+           class="flex items-center gap-3 p-3 rounded-2xl transition-all duration-150 active:scale-95"
+           style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);box-shadow:0 4px 12px rgba(124,58,237,.25)">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+            <i data-lucide="clock" class="w-5 h-5 text-white"></i>
+          </div>
+          <div>
+            <p class="text-[12px] font-bold text-white">เช็คอิน/ออก</p>
+            <p class="text-[10px] text-white opacity-70">System 4 — บันทึกเวลาพักพนักงาน</p>
+          </div>
+        </a>
+      </div>
+    </div>
 
     <!-- MOBILE MORE SHEET (สำหรับ dashboard เกิน 4 ตัว) -->
     <div id="mobile-more-sheet" class="lg:hidden fixed inset-0 z-40 ${isMobileSheetOpen ? '' : 'hidden'}">
@@ -1710,11 +1769,14 @@ function attachShellEvents() {
       const key = btn.getAttribute('data-nav');
       isMobileSheetOpen = false;
       isManageSheetOpen = false;
+      isSystemSheetOpen = false;
       // ซ่อน sheet ทันที (soft-navigate ไม่ full render จึงต้อง hide DOM โดยตรง)
       const moreSheet = document.getElementById('mobile-more-sheet');
       if (moreSheet) moreSheet.classList.add('hidden');
       const manageSheet = document.getElementById('mobile-manage-sheet');
       if (manageSheet) manageSheet.classList.add('hidden');
+      const systemSheet = document.getElementById('mobile-system-sheet');
+      if (systemSheet) systemSheet.classList.add('hidden');
       navigateTo(key);
     });
   });
@@ -1735,6 +1797,11 @@ function attachShellEvents() {
   if (manageBtn) manageBtn.addEventListener('click', () => { isManageSheetOpen = true; render(); });
   const manageSheetBackdrop = document.getElementById('mobile-manage-sheet-backdrop');
   if (manageSheetBackdrop) manageSheetBackdrop.addEventListener('click', () => { isManageSheetOpen = false; render(); });
+
+  const systemBtn = document.getElementById('mobile-system-btn');
+  if (systemBtn) systemBtn.addEventListener('click', () => { isSystemSheetOpen = true; render(); });
+  const systemSheetBackdrop = document.getElementById('mobile-system-sheet-backdrop');
+  if (systemSheetBackdrop) systemSheetBackdrop.addEventListener('click', () => { isSystemSheetOpen = false; render(); });
 
   fetchPendingApprovalCount();
 }
