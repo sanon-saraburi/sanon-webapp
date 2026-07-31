@@ -4373,6 +4373,7 @@ function hideSplash(){
   s.classList.add('spl-fade');
   setTimeout(()=>{if(s.parentNode)s.remove();},500);
 }
+setTimeout(hideSplash, 5000); // safety timeout
 
 (async function initApp(){
   const tryParse = key => { try { const r=sessionStorage.getItem(key); return r?JSON.parse(r):null; } catch(_){ return null; } };
