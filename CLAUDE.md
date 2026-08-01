@@ -7,24 +7,24 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-07-31)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-01)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Loading Screen | — |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือน, สิทธิ์ตามโรงงาน, Loading Screen | — |
-| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items (มี filter โรงงาน/เครื่อง), pm-oee, pm-report, SSO, Loading Screen | — |
-| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก พื้นฐาน, Loading Screen | ยังไม่ครบ feature |
-| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, excavator.png (cartoon backhoe), manifest ทั้ง 4 ระบบ, SW cache v3 | — |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Mobile System Switcher, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert ทุกระบบ) |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS (item_name จาก dropdown), สิทธิ์ตามโรงงาน, normCat filter fix | ไม่มี Loading Screen (ถูก revert) — withdraw modal ยังไม่มี filter |
+| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert) |
+| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ (พนักงาน+บุคคลภายนอก), สถิติรายเดือน, จัดการพนักงาน, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก | ไม่มี Loading Screen (ถูก revert) — ยังไม่ได้รัน v4/v5 SQL patch — ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
+| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 4 ระบบ, SW cache v2 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
 
-| Trigger | Edge Function | สถานะ | หมายเหตุ |
-|---------|--------------|--------|---------|
-| บันทึกยอดผลิต (production_*) | `line-notify` | ✅ ทำงาน | Authorization header ✅ (แก้แล้ว 2026-07-21) |
-| เบิกวัสดุ (inventory_transactions) | `line-notify` | ✅ ทำงาน | Authorization header ✅ |
-| บันทึกซ่อม (pm_repair_logs) | `line-notify` | ✅ ทำงาน | Authorization header ✅ |
-| สต็อกต่ำกว่า min_stock | `inventory-alert` | ✅ ทำงาน | Trigger + Weekly cron (ทุกวันจันทร์) |
+| Trigger | วิธีส่ง | สถานะ | หมายเหตุ |
+|---------|--------|--------|---------|
+| บันทึกยอดผลิต (production_*) | JS fetch() ใน index.html | ✅ พร้อมใช้ | ส่ง recorder_name ตรงจาก currentUser — ต้อง Deploy Edge Function ล่าสุด |
+| เบิกวัสดุ (inventory_transactions) | JS fetch() ใน inventory.html | ✅ พร้อมใช้ | ส่ง item_name จาก dropdown ตรง — ต้อง Deploy Edge Function ล่าสุด |
+| บันทึกซ่อม (pm_repair_logs) | JS fetch() ใน pm.html | ✅ พร้อมใช้ | ส่งทันทีหลัง INSERT — ต้อง Deploy Edge Function ล่าสุด |
+| สต็อกต่ำกว่า min_stock | `inventory-alert` Edge Function | ✅ ทำงาน | Trigger + Weekly cron (ทุกวันจันทร์) |
 
 ---
 
@@ -68,26 +68,26 @@
 > **กฎ:** ทุกครั้งที่มีการแก้ไขหรือทำระบบเพิ่ม ให้ copy ไฟล์ที่แก้ไปไว้ใน `GitHub/` ก่อนเสมอ
 > แล้วค่อย upload ทุกอย่างใน `GitHub/` ขึ้น GitHub — ป้องกันอัปไฟล์ไม่ครบ
 
-### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-07-31)
+### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-08-01)
 
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
-| `index.html` | System 1 | 2026-07-31 (excavator loading screen) |
-| `inventory.html` | System 2 | 2026-07-31 (excavator loading screen) |
-| `pm.html` | System 3 | 2026-07-31 (excavator loading screen) |
-| `checkin.html` | System 4 | 2026-07-31 (excavator loading screen) |
-| `CLAUDE.md` | ทุกระบบ | 2026-07-31 |
+| `index.html` | System 1 | 2026-08-01 (Mobile System Switcher bottom nav) |
+| `inventory.html` | System 2 | 2026-08-01 (revert loading screen + normCat filter fix) |
+| `pm.html` | System 3 | 2026-08-01 (restore จาก commit 30 ก.ค. — ไม่มี loading screen) |
+| `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-01 |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
 | `PM.md` | System 3 | 2026-07-31 |
-| `sw.js` | PWA | 2026-07-31 (v3 — เพิ่ม excavator.png) |
+| `sw.js` | PWA | 2026-08-01 (v2 — ลบ excavator.png ออก) |
 | `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-pm.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-checkin.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `icon-192.png` | PWA | 2026-07-31 (square, navy bg) |
 | `icon-512.png` | PWA | 2026-07-31 (square, navy bg) |
-| `excavator.png` | ทุกระบบ | 2026-07-31 (cartoon backhoe 573×600) |
+| `excavator.png` | — | ⚠️ ไม่ใช้แล้ว (อยู่ใน GitHub/ แต่ไม่ได้ reference ใน sw.js หรือ HTML) |
 | `logo.png` | ทุกระบบ | เดิม |
 
 ### Workflow ทุกครั้งหลังแก้ไข
@@ -284,6 +284,122 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-01 (ดึกมาก) — LINE Notification จาก JavaScript Frontend (ทั้ง 3 ระบบ)
+
+**แนวทางใหม่:** เปลี่ยนจาก pg_net trigger → เรียก Edge Function โดยตรงจาก JavaScript หลัง INSERT สำเร็จ (fire-and-forget, ไม่ block UI)
+
+**`index.html` — production INSERT:**
+- เพิ่ม `fetch()` ไป `line-notify` หลัง `db.from(cfg2.table).insert([payload])` สำเร็จ
+- เงื่อนไข: `payload.status === 'pending'` เท่านั้น
+- ส่ง `recorder_name: currentUser.full_name` ตรงในทุก record (ไม่ต้อง DB lookup)
+
+**`inventory.html` — saveWithdraw():**
+- เพิ่ม `fetch()` ไป `line-notify` หลัง INSERT สำเร็จ
+- เงื่อนไข: `!apv` (status=pending) เท่านั้น
+- ส่ง `item_name` จาก dropdown option text, `item_unit` จาก `data-unit` attribute
+
+**`pm.html` — saveRepair():**
+- เพิ่ม `fetch()` ไป `line-notify` หลัง INSERT pm_repair_logs สำเร็จ
+- ส่งทุก INSERT (ไม่มีเงื่อนไข status)
+
+**`line-notify_index.txt` + `supabase/functions/line-notify/index.ts`:**
+- Production handler: ใช้ `record.recorder_name` ก่อนถ้ามี แล้วค่อย lookup DB
+- Inventory handler: ใช้ `record.item_name` + `record.item_unit` ก่อนถ้ามี แล้วค่อย lookup DB
+- รองรับทั้ง frontend call (enriched) และ trigger call (UUID เท่านั้น)
+
+**⚠️ ต้อง Deploy Edge Function ล่าสุดใน Supabase ก่อนใช้งาน:**
+- ใช้ไฟล์ `line-notify_index.txt` → วางใน Supabase Dashboard → Edge Functions → line-notify → Deploy
+
+**ไฟล์ที่แก้ไข:** `index.html`, `inventory.html`, `pm.html`, `line-notify_index.txt`, `supabase/functions/line-notify/index.ts`
+**Copy ไป GitHub/:** `index.html`, `inventory.html`, `pm.html` ✅
+
+---
+
+### 2026-08-01 (ช่วงดึก) — Revert Loading Screen ทุกระบบ + อัปเดต CLAUDE.md
+
+**ปัญหาที่เกิดขึ้น:**
+- พยายามใส่ excavator loading screen (PNG + synthwave bg) ใน HTML ทั้ง 4 ระบบ
+- Splash ค้างเพราะ `<script>` inline ใน splash div ต้องปิดด้วย `</script>` (ไม่มี backslash) แต่โค้ดที่ generate มาใช้ `<\/script>` ซึ่ง parser ไม่รู้จัก
+- การแก้ไขซ้ำ ๆ ทำให้ไฟล์เสียหายหลายรอบ — print dialog popup เองเมื่อ F5, JS syntax error, blank page
+
+**การแก้ไข:**
+- Restore ทุกไฟล์จาก GitHub commit `754ed54` (30 ก.ค. 2569) ที่ YAi download มาด้วยตัวเอง
+- ลบ stray `<\/script>` ที่เหลืออยู่หลัง restore ออกจาก index.html และ checkin.html
+- อัปเดต `sw.js` → v2 (ลบ excavator.png ออกจาก PRECACHE list)
+- **ผล:** ทุกระบบกลับมาทำงานปกติ ไม่มี loading screen
+
+**สรุปสถานะหลัง Revert:**
+- `index.html` — restore commit 754ed54, JS clean ✅
+- `inventory.html` — restore commit 754ed54 + normCat fix ✅
+- `pm.html` — restore commit 754ed54, JS clean ✅
+- `checkin.html` — restore commit 754ed54, JS clean ✅
+- `sw.js` — v2 (ไม่มี excavator.png) ✅
+- `excavator.png` — ยังอยู่ใน GitHub/ แต่ไม่ได้ reference แล้ว (ลบด้วยมือได้)
+- **ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ session ถัดไป
+
+---
+
+### 2026-08-01 (ช่วงเย็น) — checkin.html: รายงานบุคคลภายนอก + Sync GitHub→Main
+
+**`checkin.html` — เพิ่ม:**
+- **รายงาน 2 แท็บ**: `ck-report` แยกแท็บ "👥 พนักงาน" / "🏢 บุคคลภายนอก"
+- แท็บบุคคลภายนอก: query `checkin_visitors`, กรองได้ตามวันที่/ชื่อ/บริษัท/ประเภท/ประตู/สถานะ
+- Summary card: รายการทั้งหมด, จำนวนคนรวม, ยังอยู่ในโรงงาน, ออกแล้ว
+- Export CSV บุคคลภายนอก (`exportVisitorReport()`)
+- แก้ bug `}` เกินใน `switchRpTab()` ทำให้ JS syntax error (login ไม่ได้)
+
+**Sync ไฟล์:**
+- Copy GitHub/ → Main/ ครบทั้ง 4 ไฟล์ (GitHub เป็น version ล่าสุดที่ deploy อยู่)
+- อัปเดต CLAUDE.md Section 0 + 0E ให้ตรงกับสถานะจริง
+
+**SQL ที่ยังต้องรัน (ยังไม่ได้ทำ):**
+- `checkin_schema_v4_patch.sql` — เพิ่ม `person_count` ใน `checkin_visitors`
+- `checkin_schema_v5_patch.sql` — เพิ่ม `permissions text[]` ใน `checkin_users`
+
+---
+
+### 2026-08-01 (ช่วงบ่าย) — inventory.html: Revert Loading Screen + normCat Filter Fix
+
+**`GitHub/inventory.html` — แก้ไข:**
+- **Revert loading screen**: ย้อนกลับ version ก่อนมี excavator loading screen (ทำให้ระบบพัง เพราะ `hideSplash()` ไม่ได้ define)
+- **normCat() function** (บรรทัด 3422): เพิ่มฟังก์ชัน normalize whitespace — `/\s+/g` แก้ทั้ง double space, non-breaking space, ฯลฯ
+- **renderBalanceTable() filter** (บรรทัด 3434): เปลี่ยนจาก `.trim()` → `normCat()` ทั้งสองฝั่ง — แก้ปัญหา filter "Filter Press CDE", "ปั้มน้ำ 6/4 CDE RYLF6SKP" ไม่เจอ
+- **withdraw modal filter** (บรรทัด 3925–3929): เพิ่ม dropdown ประเภท + search box ก่อน dropdown วัสดุ — แก้ปัญหา 74 รายการไม่มี filter
+- **`_woAllItems`** (บรรทัด 269): เพิ่ม global state สำหรับ cache วัสดุใน modal
+- **`woFilterItems()`** (บรรทัด 3874): เพิ่มฟังก์ชัน filter dropdown วัสดุตามประเภท/ค้นหา
+
+**`CLAUDE.md`:** อัปเดต status board + changelog
+
+---
+
+### 2026-08-01 — LINE Notification Fix + Mobile System Switcher
+
+**`line_webhook.sql` — trigger enrichment:**
+- เพิ่ม lookup `item_name` + `unit` จาก `inventory_items` แนบใน payload ก่อนส่ง LINE (แก้ UUID แสดงชื่อวัสดุ)
+- เพิ่ม lookup `recorder_name` จาก `app_users.full_name` สำหรับ production tables (แก้ UUID แสดงชื่อผู้บันทึก)
+- รันใน Supabase SQL Editor แล้ว ✅
+
+**`line-notify/index.ts` (Edge Function) — อัปเดตโค้ด:**
+- `buildInventoryCard`: ใช้ `r.item_name`, `r.requested_by`, `r.doc_no`, `r.unit` แทน UUID
+- `buildProductionCard`: เปลี่ยน `r.recorded_by` → `r.recorder_name`
+- ไฟล์อัปเดตแล้ว — **ต้อง Deploy ใน Supabase Edge Functions** ⏳
+
+**`index.html` — Mobile System Switcher:**
+- เพิ่มปุ่ม "ระบบ" (icon: grid) ใน Bottom Nav มือถือ
+- เพิ่ม bottom sheet `mobile-system-sheet` — แสดง System 1 (active), 2 คลัง, 3 PM, 4 Checkin
+- เพิ่ม global state `isSystemSheetOpen`
+- copy ไป `GitHub/` แล้ว ✅
+
+**Global State Variables (index.html) อัปเดต:**
+```js
+currentUser, currentPage, pendingApprovalCount,
+isMobileSheetOpen, isManageSheetOpen, isSystemSheetOpen,
+chartRegistry, sessionTimerInterval, sessionSecondsLeft,
+sessionWarnShown, approvalCountInterval
+```
+
+---
 
 ### 2026-07-21 (ช่วงบ่าย) — pm-meter Redesign + pm-report + pm-oee + Executive Dashboard
 

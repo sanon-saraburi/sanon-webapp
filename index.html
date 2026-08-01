@@ -5627,6 +5627,15 @@ function openProductionForm(plantKey, editingRow) {
         payload.created_by = currentUser ? currentUser.id : null;
         const { error } = await db.from(cfg2.table).insert([payload]);
         if (error) throw error;
+        // LINE แจ้งเตือน — fire-and-forget เฉพาะ pending
+        if (payload.status === 'pending') {
+          fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'INSERT', table: cfg2.table, record: Object.assign({}, payload, {
+              recorder_name: currentUser?.full_name || currentUser?.username || '-'
+            }) })
+          }).catch(() => {});
+        }
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
         loadProductionDistinctRawMaterialsAndLatest(plantKey); // refresh latestRow หลัง insert
       }

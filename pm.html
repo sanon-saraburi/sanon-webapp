@@ -2268,6 +2268,11 @@ async function saveRepair(id) {
     const { data: inserted, error } = await db.from('pm_repair_logs').insert(data).select('id').single();
     if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
     repairId = inserted.id;
+    // LINE แจ้งเตือน — fire-and-forget
+    fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'INSERT', table: 'pm_repair_logs', record: Object.assign({}, data, { id: repairId }) })
+    }).catch(() => {});
   } else {
     const { error } = await db.from('pm_repair_logs').update(data).eq('id', id);
     if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }

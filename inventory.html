@@ -1659,6 +1659,18 @@ async function saveWithdraw(e){
       created_at:qs('#wo-date').value+'T00:00:00'
     });
     if(error)throw error;
+    // LINE แจ้งเตือน — fire-and-forget เฉพาะ pending
+    if(!apv){
+      const _nm=(o?.text||'').split(' — ').slice(1).join(' — ').trim()||'-';
+      const _unit=o?.dataset?.unit||'';
+      fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'INSERT',table:'inventory_transactions',record:{
+          item_id,item_name:_nm,item_unit:_unit,transaction_type:'withdraw',quantity:qty,
+          factory,department:dept,requested_by:requester,doc_no,status:'pending'
+        }})
+      }).catch(()=>{});
+    }
     // ถ้า approved → หัก Lot ทันที
     if(apv&&breakdown.length){
       for(const b of breakdown){
