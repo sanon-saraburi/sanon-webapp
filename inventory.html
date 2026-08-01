@@ -1697,8 +1697,9 @@ async function saveWithdraw(e){
         }).catch(()=>{});
       }
     }
+    closeModal();
     showToast(apv?'เบิกสำเร็จ — '+doc_no:'ส่งคำขอแล้ว — '+doc_no+' (รออนุมัติ)','success');
-    qs('#wo-form')?.reset();qs('#wo-date').value=todayISO();navigateTo('inv-withdraw');
+    navigateTo('inv-withdraw');
   }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
   finally{btn.disabled=false;btn.textContent=isManager()?'เบิกวัสดุ':'ส่งคำขอเบิก';}
 }

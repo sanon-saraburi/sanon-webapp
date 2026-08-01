@@ -11,11 +11,12 @@
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
+| Portal — Smart Launcher | `portal.html` | ✅ ใหม่ | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User | — |
 | System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Mobile System Switcher, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert ทุกระบบ) |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS (item_name จาก dropdown), สิทธิ์ตามโรงงาน, normCat filter fix | ไม่มี Loading Screen (ถูก revert) — withdraw modal ยังไม่มี filter |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ (พนักงาน+บุคคลภายนอก), สถิติรายเดือน, จัดการพนักงาน, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก | ไม่มี Loading Screen (ถูก revert) — ยังไม่ได้รัน v4/v5 SQL patch — ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
-| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 4 ระบบ, SW cache v2 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
+| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
 
@@ -72,6 +73,7 @@
 
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
+| `portal.html` | Portal | 2026-08-01 (Smart Launcher ตามสิทธิ์ — ใหม่) |
 | `index.html` | System 1 | 2026-08-01 (Mobile System Switcher bottom nav) |
 | `inventory.html` | System 2 | 2026-08-01 (revert loading screen + normCat filter fix) |
 | `pm.html` | System 3 | 2026-08-01 (restore จาก commit 30 ก.ค. — ไม่มี loading screen) |
@@ -80,7 +82,15 @@
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
 | `PM.md` | System 3 | 2026-07-31 |
-| `sw.js` | PWA | 2026-08-01 (v2 — ลบ excavator.png ออก) |
+| `sw.js` | PWA | 2026-08-01 (v3 — เพิ่ม portal.html + manifest-portal.json) |
+| `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-pm.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `manifest-checkin.json` | PWA | 2026-07-31 (icon-192/512.png) |
+| `icon-192.png` | PWA | 2026-07-31 (square, navy bg) |
+| `icon-512.png` | PWA | 2026-07-31 (square, navy bg) |
+| `excavator.png` | — | ⚠️ ไม่ใช้แล้ว (อยู่ใน GitHub/ แต่ไม่ได้ reference ใน sw.js หรือ HTML) |
+| `manifest-portal.json` | Portal | 2026-08-01 (PWA manifest สำหรับ portal.html — ใหม่) |
 | `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-pm.json` | PWA | 2026-07-31 (icon-192/512.png) |

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0">
+  <title>สานนท์ — เลือกระบบ</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/sanon-webapp/manifest-portal.json">
+  <link rel="apple-touch-icon" href="/sanon-webapp/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="สานนท์">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { font-family: 'Kanit', sans-serif; box-sizing: border-box; }
+    body { background: #0f172a; color: #e2e8f0; margin: 0; min-height: 100vh; }
+    .card-sys {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+      display: block;
+    }
+    .card-sys:hover { transform: translateY(-4px); box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
+    .card-sys:active { transform: translateY(-1px); }
+    input { font-size: 16px !important; }
+    #login-page { display: flex; }
+    #portal-page { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- ─── LOGIN PAGE ─────────────────────────────────────────────── -->
+<div id="login-page" style="min-height:100vh;align-items:center;justify-content:center;padding:16px;">
+  <div style="width:100%;max-width:360px;">
+
+    <!-- Logo + Title -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <img src="/sanon-webapp/logo.png" alt="Sanon" style="height:64px;margin:0 auto 12px;display:block;"
+           onerror="this.style.display='none'">
+      <div style="font-size:22px;font-weight:700;color:#fff;">สานนท์ จำกัด</div>
+      <div style="font-size:13px;color:#94a3b8;margin-top:4px;">ระบบบริหารการผลิต</div>
+    </div>
+
+    <!-- Card -->
+    <div style="background:#1e293b;border-radius:20px;padding:28px;border:1px solid #334155;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <div style="font-size:17px;font-weight:600;color:#fff;margin-bottom:20px;text-align:center;">เข้าสู่ระบบ</div>
+
+      <div id="login-error" style="display:none;background:rgba(239,68,68,0.15);color:#fca5a5;font-size:13px;border-radius:10px;padding:12px;margin-bottom:16px;border:1px solid rgba(239,68,68,0.3);"></div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;">ชื่อผู้ใช้</label>
+        <input id="inp-user" type="text" placeholder="username" autocomplete="username"
+          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;color:#fff;outline:none;transition:border-color .2s;"
+          onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#334155'">
+      </div>
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;">รหัสผ่าน</label>
+        <input id="inp-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 14px;color:#fff;outline:none;transition:border-color .2s;"
+          onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#334155'">
+      </div>
+      <button id="btn-login" onclick="doLogin()"
+        style="width:100%;background:#2563eb;color:#fff;font-weight:600;font-size:15px;padding:13px;border:none;border-radius:10px;cursor:pointer;transition:background .2s;font-family:'Kanit',sans-serif;"
+        onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+        เข้าสู่ระบบ
+      </button>
+    </div>
+
+    <div style="text-align:center;margin-top:16px;font-size:12px;color:#475569;">
+      Sanon Co., Ltd. &copy; 2026
+    </div>
+  </div>
+</div>
+
+<!-- ─── PORTAL PAGE ────────────────────────────────────────────── -->
+<div id="portal-page" style="min-height:100vh;flex-direction:column;">
+
+  <!-- Header -->
+  <div style="background:#1e293b;border-bottom:1px solid #334155;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img src="/sanon-webapp/logo.png" alt="Sanon" style="height:32px;" onerror="this.style.display='none'">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#fff;">สานนท์ จำกัด</div>
+        <div id="portal-username" style="font-size:12px;color:#94a3b8;"></div>
+      </div>
+    </div>
+    <button onclick="doLogout()"
+      style="display:flex;align-items:center;gap:6px;color:#94a3b8;background:none;border:none;cursor:pointer;font-size:13px;font-family:'Kanit',sans-serif;padding:6px 10px;border-radius:8px;transition:background .2s;"
+      onmouseover="this.style.background='rgba(239,68,68,0.1);color:#f87171'" onmouseout="this.style.background='none'">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      ออกจากระบบ
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div style="flex:1;padding:24px 16px 40px;max-width:600px;margin:0 auto;width:100%;">
+
+    <!-- Loading -->
+    <div id="portal-loading" style="text-align:center;padding:60px 0;color:#64748b;">
+      <svg style="width:40px;height:40px;margin:0 auto 12px;animation:spin 1s linear infinite;" fill="none" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" stroke="#334155" stroke-width="3"/>
+        <path d="M12 2a10 10 0 0110 10" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div style="font-size:14px;">กำลังโหลดสิทธิ์การใช้งาน...</div>
+    </div>
+
+    <!-- No Access -->
+    <div id="portal-no-access" style="display:none;text-align:center;padding:60px 0;color:#64748b;">
+      <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin:0 auto 16px;opacity:.4;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+      </svg>
+      <div style="font-size:16px;font-weight:600;color:#94a3b8;margin-bottom:8px;">ยังไม่มีสิทธิ์เข้าระบบใด</div>
+      <div style="font-size:13px;">กรุณาติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์การใช้งาน</div>
+    </div>
+
+    <!-- System Cards -->
+    <div id="portal-cards" style="display:none;">
+      <div style="font-size:12px;color:#64748b;font-weight:500;letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px;">ระบบที่เข้าใช้งานได้</div>
+      <div id="cards-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;"></div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 400px) {
+  #cards-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+
+<script>
+// ─── SECTION 0: Config ─────────────────────────────────────────
+const SUPA_URL    = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
+const SUPA_KEY    = 'sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq';
+const db          = supabase.createClient(SUPA_URL, SUPA_KEY);
+const SESSION_KEY = '_sn_shared_sess';
+const SESSION_TTL = 2 * 60 * 60 * 1000; // 2 hours
+
+// ─── SECTION 1: System Definitions ────────────────────────────
+const SYSTEMS = [
+  {
+    id: 1,
+    name: 'ระบบผลิต',
+    sub: 'บันทึกและติดตามผลผลิต',
+    url: '/sanon-webapp/index.html',
+    prefixes: ['dash-', 'manage-'],
+    grad: 'linear-gradient(135deg,#1d4ed8,#1e40af)',
+    glow: 'rgba(59,130,246,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+    </svg>`,
+  },
+  {
+    id: 2,
+    name: 'คลังวัสดุ',
+    sub: 'จัดการวัสดุและอะไหล่',
+    url: '/sanon-webapp/inventory.html',
+    prefixes: ['inv-'],
+    grad: 'linear-gradient(135deg,#047857,#065f46)',
+    glow: 'rgba(16,185,129,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+    </svg>`,
+  },
+  {
+    id: 3,
+    name: 'PM เครื่องจักร',
+    sub: 'แผนบำรุงรักษาเชิงป้องกัน',
+    url: '/sanon-webapp/pm.html',
+    prefixes: ['pm-'],
+    grad: 'linear-gradient(135deg,#d97706,#b45309)',
+    glow: 'rgba(245,158,11,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>`,
+  },
+  {
+    id: 4,
+    name: 'บันทึกเวลาพัก',
+    sub: 'เช็คอิน-ออกพักเที่ยง',
+    url: '/sanon-webapp/checkin.html',
+    prefixes: ['ck-'],
+    grad: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
+    glow: 'rgba(139,92,246,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>`,
+  },
+];
+
+// ─── SECTION 2: State ──────────────────────────────────────────
+let currentUser = null;
+
+// ─── SECTION 3: Auth ───────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('inp-user').value.trim();
+  const password = document.getElementById('inp-pass').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('btn-login');
+
+  errEl.style.display = 'none';
+
+  if (!username || !password) {
+    showLoginError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'กำลังเข้าสู่ระบบ...';
+
+  try {
+    const { data, error } = await db
+      .from('app_users')
+      .select('id,username,full_name,role,factory,department,status')
+      .eq('username', username)
+      .eq('password', password)
+      .single();
+
+    if (error || !data) {
+      showLoginError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+      return;
+    }
+    if (data.status === 'pending') {
+      showLoginError('บัญชีของคุณอยู่ระหว่างรอการอนุมัติ');
+      return;
+    }
+    if (data.status === 'rejected') {
+      showLoginError('บัญชีของคุณถูกระงับการใช้งาน');
+      return;
+    }
+
+    currentUser = data;
+    // Write SSO session (share กับทุกระบบ)
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data, ts: Date.now() }));
+    showPortal();
+
+  } catch (e) {
+    showLoginError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+function doLogout() {
+  currentUser = null;
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById('portal-page').style.display  = 'none';
+  document.getElementById('login-page').style.display   = 'flex';
+  document.getElementById('inp-user').value = '';
+  document.getElementById('inp-pass').value = '';
+  document.getElementById('login-error').style.display  = 'none';
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent  = msg;
+  el.style.display = 'block';
+}
+
+// Enter to login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-page').style.display !== 'none') {
+    doLogin();
+  }
+});
+
+// ─── SECTION 4: Permission Check ───────────────────────────────
+async function getAllowedMenus(user) {
+  if (user.role === 'admin') return 'all';
+
+  try {
+    // Role-based permissions
+    const [{ data: rp }, { data: up }] = await Promise.all([
+      db.from('role_permissions').select('menu_id,is_allowed').eq('role', user.role),
+      db.from('user_permissions').select('menu_id,is_allowed').eq('user_id', user.id),
+    ]);
+
+    const perms = {};
+    (rp || []).forEach(r => { perms[r.menu_id] = r.is_allowed; });
+    (up || []).forEach(r => { perms[r.menu_id] = r.is_allowed; }); // user override
+
+    return Object.keys(perms).filter(k => perms[k] === true);
+  } catch (e) {
+    return [];
+  }
+}
+
+function hasSystemAccess(menus, sys) {
+  if (menus === 'all') return true;
+  return menus.some(m => sys.prefixes.some(p => m.startsWith(p)));
+}
+
+// ─── SECTION 5: Render Portal ──────────────────────────────────
+async function showPortal() {
+  // Switch page
+  document.getElementById('login-page').style.display  = 'none';
+  document.getElementById('portal-page').style.display = 'flex';
+
+  // Show username
+  document.getElementById('portal-username').textContent =
+    currentUser.full_name || currentUser.username;
+
+  // Show loading
+  document.getElementById('portal-loading').style.display   = 'block';
+  document.getElementById('portal-cards').style.display     = 'none';
+  document.getElementById('portal-no-access').style.display = 'none';
+
+  // Get permissions
+  const menus      = await getAllowedMenus(currentUser);
+  const accessible = SYSTEMS.filter(s => hasSystemAccess(menus, s));
+
+  // Hide loading
+  document.getElementById('portal-loading').style.display = 'none';
+
+  if (accessible.length === 0) {
+    document.getElementById('portal-no-access').style.display = 'block';
+    return;
+  }
+
+  // Render cards
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
+
+  accessible.forEach(sys => {
+    const a = document.createElement('a');
+    a.href      = sys.url;
+    a.className = 'card-sys';
+    a.style.cssText = `
+      background: ${sys.grad};
+      border-radius: 18px;
+      padding: 22px 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 8px 24px ${sys.glow};
+      color: #fff;
+    `;
+    a.innerHTML = `
+      <div style="margin-bottom:14px;opacity:.95;">${sys.icon}</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;">${sys.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:16px;line-height:1.4;">${sys.sub}</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;">
+        <span>เปิดระบบ</span>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    `;
+    grid.appendChild(a);
+  });
+
+  document.getElementById('portal-cards').style.display = 'block';
+
+  // 1 column if only 1 card
+  if (accessible.length === 1) {
+    grid.style.gridTemplateColumns = '1fr';
+  }
+}
+
+// ─── SECTION 6: Bootstrap ──────────────────────────────────────
+(function bootstrap() {
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sanon-webapp/sw.js').catch(() => {});
+  }
+
+  // Restore SSO session
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      const sess = JSON.parse(raw);
+      if (sess && sess.id && (Date.now() - sess.ts) < SESSION_TTL) {
+        currentUser = sess;
+        showPortal();
+        return;
+      }
+    }
+  } catch (e) { /* ignore */ }
+
+  // Show login page
+  document.getElementById('login-page').style.display = 'flex';
+})();
+</script>
+</body>
+</html>

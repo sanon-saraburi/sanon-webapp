@@ -167,6 +167,7 @@ let currentPage = 'landing';  // page key ปัจจุบัน
 let pendingApprovalCount = 0; // badge นับรายการ pending
 let isMobileSheetOpen = false;
 let isManageSheetOpen = false; // bottom-sheet สำหรับเมนูหมวด 2 (จัดการข้อมูล) บนมือถือ
+let isSystemSheetOpen = false; // bottom-sheet สำหรับ System Switcher บนมือถือ
 let chartRegistry = {};       // เก็บ instance Chart.js เพื่อ destroy ก่อน redraw
 let sessionTimerInterval = null; // setInterval handle สำหรับนับถอยหลัง session (non-admin)
 let sessionSecondsLeft = 0;      // วินาทีที่เหลือของ session ปัจจุบัน
@@ -655,6 +656,7 @@ function doLogout() {
   pendingApprovalCount = 0;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_inv_sess'); } catch (_) {}
   try { sessionStorage.removeItem('_sn_pm_sess'); } catch (_) {}
@@ -747,6 +749,7 @@ async function handleSessionExpired() {
   pendingApprovalCount = 0;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   sessionSecondsLeft = 0;
   sessionWarnShown = false;
   try { sessionStorage.removeItem('_sn_sess'); } catch (_) {}
@@ -928,6 +931,7 @@ function navigateTo(pageKey, forceFullRender) {
   currentPage = pageKey;
   isMobileSheetOpen = false;
   isManageSheetOpen = false;
+  isSystemSheetOpen = false;
   if (pageKey !== 'landing') {
     try {
       const _ss = sessionStorage.getItem('_sn_sess');
@@ -1562,17 +1566,17 @@ function renderAppShell() {
       <!-- System Switcher -->
       <div class="px-3 pt-3 pb-3 border-b border-secondary-100 flex-shrink-0">
         <p class="px-0.5 text-[10px] font-semibold text-secondary-400 uppercase tracking-widest mb-2">เปลี่ยนระบบ</p>
-        <div class="flex gap-1.5">
+        <div class="grid grid-cols-2 gap-1.5">
           <!-- System 1 — active -->
-          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
+          <div class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
                style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.35)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">ผลิต</span>
           </div>
-          <!-- System 2 — link -->
-          <a href="#" onclick="event.preventDefault();gotoSystem('inventory.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <!-- System 2 — คลัง -->
+          <a href="#" onclick="event.preventDefault();gotoSystem('inventory.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 2px 8px rgba(13,148,136,.30)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="package" class="w-3.5 h-3.5 text-white"></i>
@@ -1580,12 +1584,20 @@ function renderAppShell() {
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </a>
           <!-- System 3 — PM -->
-          <a href="#" onclick="event.preventDefault();gotoSystem('pm.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="event.preventDefault();gotoSystem('pm.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 2px 8px rgba(180,83,9,.30)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">PM</span>
+          </a>
+          <!-- System 4 — Checkin -->
+          <a href="#" onclick="event.preventDefault();gotoSystem('checkin.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#065f46,#059669);box-shadow:0 2px 8px rgba(5,150,105,.30)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">เช็คอิน</span>
           </a>
         </div>
       </div>
@@ -1662,6 +1674,9 @@ function renderAppShell() {
           <i data-lucide="settings" class="w-5 h-5"></i><span>จัดการ</span>
           ${pendingApprovalCount > 0 ? `<span class="absolute top-0 right-1 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5">${pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}</span>` : ''}
         </button>` : ''}
+      <button id="mobile-system-btn" class="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[11px] text-secondary-500">
+        <i data-lucide="grid" class="w-5 h-5"></i><span>ระบบ</span>
+      </button>
     </nav>
 
     <!-- MOBILE MORE SHEET (สำหรับ dashboard เกิน 4 ตัว) -->
@@ -1696,6 +1711,64 @@ function renderAppShell() {
         </div>
       </div>
     </div>
+
+    <!-- MOBILE SYSTEM SHEET (เปลี่ยนระบบ) -->
+    <div id="mobile-system-sheet" class="lg:hidden fixed inset-0 z-40 ${isSystemSheetOpen ? '' : 'hidden'}">
+      <div id="mobile-system-sheet-backdrop" class="absolute inset-0 modal-backdrop"></div>
+      <div class="absolute bottom-0 inset-x-0 bg-white rounded-t-3xl p-5 fade-in">
+        <div class="w-10 h-1.5 bg-secondary-200 rounded-full mx-auto mb-4"></div>
+        <p class="text-sm font-semibold text-secondary-700 mb-4">เปลี่ยนระบบ</p>
+        <div class="grid grid-cols-2 gap-3 pb-2">
+          <!-- System 1 — active -->
+          <div class="flex items-center gap-3 p-4 rounded-2xl cursor-default"
+               style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 4px 12px rgba(37,99,235,.35)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="bar-chart-2" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">ระบบผลิต</p>
+              <p class="text-[10px] text-white/70 leading-tight">ใช้งานอยู่</p>
+            </div>
+          </div>
+          <!-- System 2 — คลัง -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('inventory.html')"
+             class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 4px 12px rgba(13,148,136,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="package" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">ระบบคลัง</p>
+              <p class="text-[10px] text-white/70 leading-tight">วัสดุ / อะไหล่</p>
+            </div>
+          </a>
+          <!-- System 3 — PM -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('pm.html')"
+             class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 4px 12px rgba(180,83,9,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="wrench" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">ระบบ PM</p>
+              <p class="text-[10px] text-white/70 leading-tight">ซ่อมบำรุงเครื่องจักร</p>
+            </div>
+          </a>
+          <!-- System 4 — Checkin -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('checkin.html')"
+             class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#065f46,#059669);box-shadow:0 4px 12px rgba(5,150,105,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clock" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">ระบบเช็คอิน</p>
+              <p class="text-[10px] text-white/70 leading-tight">บันทึกเวลาพัก</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -1710,11 +1783,14 @@ function attachShellEvents() {
       const key = btn.getAttribute('data-nav');
       isMobileSheetOpen = false;
       isManageSheetOpen = false;
+      isSystemSheetOpen = false;
       // ซ่อน sheet ทันที (soft-navigate ไม่ full render จึงต้อง hide DOM โดยตรง)
       const moreSheet = document.getElementById('mobile-more-sheet');
       if (moreSheet) moreSheet.classList.add('hidden');
       const manageSheet = document.getElementById('mobile-manage-sheet');
       if (manageSheet) manageSheet.classList.add('hidden');
+      const sysSheet = document.getElementById('mobile-system-sheet');
+      if (sysSheet) sysSheet.classList.add('hidden');
       navigateTo(key);
     });
   });
@@ -1735,6 +1811,11 @@ function attachShellEvents() {
   if (manageBtn) manageBtn.addEventListener('click', () => { isManageSheetOpen = true; render(); });
   const manageSheetBackdrop = document.getElementById('mobile-manage-sheet-backdrop');
   if (manageSheetBackdrop) manageSheetBackdrop.addEventListener('click', () => { isManageSheetOpen = false; render(); });
+
+  const systemBtn = document.getElementById('mobile-system-btn');
+  if (systemBtn) systemBtn.addEventListener('click', () => { isSystemSheetOpen = true; render(); });
+  const sysSheetBackdrop = document.getElementById('mobile-system-sheet-backdrop');
+  if (sysSheetBackdrop) sysSheetBackdrop.addEventListener('click', () => { isSystemSheetOpen = false; render(); });
 
   fetchPendingApprovalCount();
 }

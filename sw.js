@@ -2,15 +2,17 @@
 // sw.js — Sanon PWA Service Worker (GitHub Pages: /sanon-webapp/)
 // =====================================================================
 
-const CACHE_NAME   = 'sanon-pwa-v2';
+const CACHE_NAME   = 'sanon-pwa-v3';
 const BASE         = '/sanon-webapp';
 const SUPABASE_URL = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
 
 const PRECACHE = [
+  `${BASE}/portal.html`,
   `${BASE}/index.html`,
   `${BASE}/inventory.html`,
   `${BASE}/pm.html`,
   `${BASE}/checkin.html`,
+  `${BASE}/manifest-portal.json`,
   `${BASE}/manifest-production.json`,
   `${BASE}/manifest-inventory.json`,
   `${BASE}/manifest-pm.json`,
