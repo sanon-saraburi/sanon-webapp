@@ -2268,11 +2268,6 @@ async function saveRepair(id) {
     const { data: inserted, error } = await db.from('pm_repair_logs').insert(data).select('id').single();
     if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
     repairId = inserted.id;
-    // LINE แจ้งเตือน — fire-and-forget
-    fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'INSERT', table: 'pm_repair_logs', record: Object.assign({}, data, { id: repairId }) })
-    }).catch(() => {});
   } else {
     const { error } = await db.from('pm_repair_logs').update(data).eq('id', id);
     if (error) { showToast('บันทึกไม่สำเร็จ: '+error.message,'error'); return; }
@@ -4639,6 +4634,50 @@ async function saveMeterLog() {
     await db.from('pm_machines').update(updates).eq('id', machine_id);
   }
 
+  // ─── LINE: บันทึกมิเตอร์ (fire-and-forget เฉพาะ non-manager) ───────
+  if (!isManager()) {
+    fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'INSERT', table: 'pm_meter_logs', record: {
+        machine_name:    selMachine.name,
+        factory:         selMachine.factory || '-',
+        log_date,
+        engine_start,    engine_stop,    engine_hours,
+        hydraulic_start: selMachine.has_meter_2 ? hydraulic_start  : null,
+        hydraulic_stop:  selMachine.has_meter_2 ? hydraulic_stop   : null,
+        hydraulic_hours: selMachine.has_meter_2 ? hydraulic_hours  : null,
+        has_meter_2:     selMachine.has_meter_2  || false,
+        meter_1_label:   selMachine.meter_1_label || 'ชม.เครื่องยนต์',
+        meter_2_label:   selMachine.meter_2_label || 'ชม.ไฮโดรลิค',
+        recorded_by: currentUser?.full_name || currentUser?.username || '-'
+      }})
+    }).catch(() => {});
+  }
+  // ─── LINE: ตรวจรอบ PM หลังอัปเดตมิเตอร์ ─────────────────────────
+  const _pmAlerts = _pmItems
+    .filter(i => i.pm_machine_id === machine_id && i.is_active)
+    .reduce((acc, item) => {
+      const rem = calcRemaining(item, selMachine);
+      const st  = pmStatus(rem, selMachine.alert_threshold || 100);
+      if (st !== 'ok') acc.push({
+        name:      item.pm_type || item.pm_name || '-',
+        status:    st,
+        remaining: Math.round(rem),
+        interval:  item.interval_value || 0
+      });
+      return acc;
+    }, []);
+  if (_pmAlerts.length > 0) {
+    fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'INSERT', table: 'pm_alert', record: {
+        machine_name:   selMachine.name,
+        factory:        selMachine.factory || '-',
+        current_meter:  selMachine.current_meter || 0,
+        alerts:         _pmAlerts
+      }})
+    }).catch(() => {});
+  }
   closeModal();
   showToast('บันทึกเลขมิเตอร์สำเร็จ','success');
   renderMeterTable();

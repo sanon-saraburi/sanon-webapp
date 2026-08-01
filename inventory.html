@@ -1683,6 +1683,20 @@ async function saveWithdraw(e){
       }
     }
     await Promise.all([loadStockData(),loadLots()]);if(!apv)await loadPendingCount();
+    // LINE แจ้งเตือนสต็อกต่ำ — เฉพาะ manager ที่เบิกเองและสต็อกต่ำกว่าเกณฑ์
+    if(apv){
+      const _itm=_invItems.find(i=>i.id===item_id);
+      if(_itm&&(_itm.min_stock||0)>0&&(_stockMap[item_id]||0)<_itm.min_stock){
+        fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({type:'INSERT',table:'low_stock_alert',record:{
+            item_name:_itm.name||'-',item_code:_itm.code||'',
+            unit:_itm.unit||'',stock_qty:_stockMap[item_id]||0,
+            min_stock:_itm.min_stock,location:_itm.location||'-'
+          }})
+        }).catch(()=>{});
+      }
+    }
     showToast(apv?'เบิกสำเร็จ — '+doc_no:'ส่งคำขอแล้ว — '+doc_no+' (รออนุมัติ)','success');
     qs('#wo-form')?.reset();qs('#wo-date').value=todayISO();navigateTo('inv-withdraw');
   }catch(err){showToast('เกิดข้อผิดพลาด: '+err.message,'error');}
@@ -1739,7 +1753,22 @@ async function doApprove(id){
   }
   const {error}=await db.from('inventory_transactions').update({status:'approved',approved_by:currentUser.id,approved_at:new Date().toISOString()}).eq('id',id);
   if(error){showToast('เกิดข้อผิดพลาด','error');return;}
-  qs('#ar-'+id)?.remove();await loadStockData();_pendingCount=Math.max(0,_pendingCount-1);updatePendingBadge();showToast('อนุมัติเรียบร้อย','success');
+  qs('#ar-'+id)?.remove();await loadStockData();
+  // LINE แจ้งเตือนสต็อกต่ำ — fire-and-forget ทันทีหลังอนุมัติ
+  if(tx?.item_id){
+    const _itm=_invItems.find(i=>i.id===tx.item_id);
+    if(_itm&&(_itm.min_stock||0)>0&&(_stockMap[tx.item_id]||0)<_itm.min_stock){
+      fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'INSERT',table:'low_stock_alert',record:{
+          item_name:_itm.name||'-',item_code:_itm.code||'',
+          unit:_itm.unit||'',stock_qty:_stockMap[tx.item_id]||0,
+          min_stock:_itm.min_stock,location:_itm.location||'-'
+        }})
+      }).catch(()=>{});
+    }
+  }
+  _pendingCount=Math.max(0,_pendingCount-1);updatePendingBadge();showToast('อนุมัติเรียบร้อย','success');
 }
 async function doReject(id){
   const reason=prompt('เหตุผลที่ปฏิเสธ (ถ้ามี):')||'';
