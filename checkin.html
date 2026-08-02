@@ -18,6 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 /* ===== BASE ===== */
@@ -356,6 +357,8 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-stats')">📊 <span>สถิติรายเดือน</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-employees')">👥 <span>จัดการพนักงาน</span></div>
+        <div class="sb-item perm-sup" onclick="nav('ck-timecard')">🕐 <span>บัตรตอก</span></div>
+        <div class="sb-item perm-admin" onclick="nav('ck-tc-settings')">⚙️ <span>ตั้งค่า OT</span></div>
         <div class="sb-item perm-admin" onclick="nav('ck-users')">🔑 <span>จัดการผู้ใช้</span></div>
       </div>
       <div class="sb-footer">
@@ -388,6 +391,7 @@ tbody tr:last-child td{border-bottom:none;}
       <div class="bn-item perm-sup" onclick="nav('ck-report')"><div class="bn-icon">📋</div>รายงาน</div>
       <div class="bn-item perm-sup" onclick="nav('ck-stats')"><div class="bn-icon">📊</div>สถิติ</div>
       <div class="bn-item perm-sup" onclick="nav('ck-employees')"><div class="bn-icon">👥</div>พนักงาน</div>
+      <div class="bn-item perm-sup" onclick="nav('ck-timecard')"><div class="bn-icon">🕐</div>บัตรตอก</div>
       <div class="bn-item perm-admin" onclick="nav('ck-users')"><div class="bn-icon">🔑</div>ผู้ใช้</div>
     </div>
   </div>
@@ -624,12 +628,14 @@ const CK_PERM_MENUS = [
   { id:'ck-report',    label:'📋 รายงาน',          group:'ข้อมูล' },
   { id:'ck-stats',     label:'📈 สถิติรายเดือน',   group:'ข้อมูล' },
   { id:'ck-employees', label:'👥 จัดการพนักงาน',   group:'ข้อมูล' },
-  { id:'ck-users',     label:'🔑 จัดการผู้ใช้',    group:'Admin' },
+  { id:'ck-timecard',    label:'🕐 บัตรตอก',        group:'ข้อมูล' },
+  { id:'ck-tc-settings', label:'⚙️ ตั้งค่า OT',     group:'Admin'  },
+  { id:'ck-users',       label:'🔑 จัดการผู้ใช้',  group:'Admin'  },
 ];
 const CK_ROLE_PERMS = {
   guard:      ['ck-guard','ck-visitor'],
-  supervisor: ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees'],
-  admin:      ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees','ck-users'],
+  supervisor: ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard'],
+  admin:      ['ck-guard','ck-visitor','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users'],
 };
 
 function ckCanAccess(page) {
@@ -652,7 +658,9 @@ const PAGE_TITLES = {
   'ck-report':     'รายงาน',
   'ck-stats':      'สถิติรายเดือน / รายแผนก',
   'ck-employees':  'จัดการพนักงาน',
-  'ck-users':      'จัดการผู้ใช้',
+  'ck-timecard':     'บัตรตอก',
+  'ck-tc-settings':  'ตั้งค่า OT',
+  'ck-users':        'จัดการผู้ใช้',
 };
 
 function nav(page) {
@@ -674,6 +682,8 @@ function nav(page) {
   else if (page === 'ck-report')     renderReport();
   else if (page === 'ck-stats')      renderStats();
   else if (page === 'ck-employees')  renderEmployees();
+  else if (page === 'ck-timecard')      renderTimecard();
+  else if (page === 'ck-tc-settings')  renderTcSettings();
   else if (page === 'ck-users')      renderUsers();
 }
 
@@ -1797,6 +1807,731 @@ function exportReport() {
   a.href=URL.createObjectURL(blob);
   a.download=`checkin_report_${todayStr()}.csv`;
   a.click();
+}
+
+// ============================================================
+// SECTION 7C — TIMECARD (บัตรตอก)
+// ============================================================
+
+// --- State ---
+let _tcRules = null; // โหลดจาก checkin_config key='timecard_rules'
+let _tcEmpList = []; // cache พนักงานสำหรับ dropdown
+let _tcRows = [];    // แถวที่กำลังแก้ไข (Array of day objects)
+let _tcHeaderId = null; // timecard id ที่กำลังทำงาน
+
+// default rules (fallback ถ้า DB ยังไม่มี)
+const TC_RULES_DEFAULT = {
+  work_start: '08:00', work_end: '17:00', late_threshold: '08:15',
+  ot_morning_blocks: [
+    { start: '06:00', end: '07:00', cutoff: '06:15' },
+    { start: '07:00', end: '08:00', cutoff: '07:15' }
+  ],
+  ot_lunch: { enabled: true, start: '12:00', end: '13:00', max_break_min: 30 },
+  ot_afternoon_start: '17:00',
+  ot_rates: { weekday: 1.5, sunday: 3.0, holiday: 3.0 },
+  work_days: [1,2,3,4,5,6],
+  // ลาครึ่งวัน
+  half_am_leave: { ot_lunch_cutoff: '12:15' },   // เข้าหลัง 12:15 ไม่ได้ OT กลางวัน
+  half_pm_leave: { ot_lunch_checkout_min: '12:30' } // ออกก่อน 12:30 ไม่ได้ OT กลางวัน
+};
+
+// --- OT Calculation ---
+function tcTimeToMin(t) {
+  if (!t) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+function tcMinToHHMM(min) {
+  if (min == null || min <= 0) return '0:00';
+  return `${Math.floor(min/60)}:${String(min%60).padStart(2,'0')}`;
+}
+
+function tcCalcDay(row) {
+  const rules = _tcRules || TC_RULES_DEFAULT;
+  const d = { ...row };
+  const dow = new Date(d.work_date).getDay(); // 0=Sun,6=Sat
+
+  // วันหยุด / อาทิตย์
+  if (dow === 0 && !['half_am','half_pm','leave','holiday'].includes(d.day_type)) {
+    d.day_type = 'sunday';
+  }
+  if (!rules.work_days.includes(dow) && dow !== 0 && d.day_type === 'normal') {
+    d.day_type = 'absent';
+  }
+
+  d.is_late = false; d.late_min = 0;
+  d.ot_morning_min = 0; d.ot_lunch_min = 0; d.ot_afternoon_min = 0;
+
+  // ======================================================
+  // ลาครึ่งวันเช้า (half_am): มาทำงานช่วงบ่าย เข้าผ่าน checkin_pm
+  // ======================================================
+  if (d.day_type === 'half_am') {
+    const cinPm = tcTimeToMin(d.checkin_pm); // เวลาที่มาเข้างานตอนบ่าย
+    // OT เช้า: ไม่ได้ (ลาอยู่ช่วง 8-12)
+    d.ot_morning_min = 0;
+    // OT กลางวัน: ได้ถ้า checkin_pm ≤ cutoff (default 12:15)
+    if (cinPm != null && rules.ot_lunch?.enabled) {
+      const cutoff = tcTimeToMin(rules.half_am_leave?.ot_lunch_cutoff || '12:15');
+      d.ot_lunch_min = cinPm <= cutoff ? 60 : 0;
+    }
+    // OT บ่าย: ได้ตามปกติ
+    const otStart = tcTimeToMin(rules.ot_afternoon_start || rules.work_end);
+    const cout = tcTimeToMin(d.checkout_ot || d.checkout_pm);
+    if (cout && cout > otStart) d.ot_afternoon_min = cout - otStart;
+    d.total_ot_min = d.ot_lunch_min + d.ot_afternoon_min;
+    return d;
+  }
+
+  // ======================================================
+  // ลาครึ่งวันบ่าย (half_pm): ทำงานเช้า ลาหลัง 13:00
+  // ======================================================
+  if (d.day_type === 'half_pm') {
+    // ถ้าไม่มีเวลาเข้าเช้า ไม่คำนวณ
+    if (!d.checkin_am) { d.total_ot_min = 0; return d; }
+    const cin = tcTimeToMin(d.checkin_am);
+    // สาย: นับตามปกติ
+    const lateThresh = tcTimeToMin(rules.late_threshold);
+    const workStart  = tcTimeToMin(rules.work_start);
+    if (cin > lateThresh) {
+      d.is_late = true;
+      d.late_min = cin - workStart;
+    }
+    // OT เช้า (block-based): ได้ตามปกติ
+    let morningOt = 0;
+    for (const blk of rules.ot_morning_blocks) {
+      if (cin <= tcTimeToMin(blk.cutoff)) morningOt += tcTimeToMin(blk.end) - tcTimeToMin(blk.start);
+    }
+    d.ot_morning_min = morningOt;
+    // OT กลางวัน: ได้ถ้า checkout_am ≥ min_checkout (default 12:30)
+    if (rules.ot_lunch?.enabled) {
+      const minOut = tcTimeToMin(rules.half_pm_leave?.ot_lunch_checkout_min || '12:30');
+      const coAm   = tcTimeToMin(d.checkout_am);
+      // ถ้าไม่มี checkout_am ให้ถือว่าทำงานถึง 12:30 (ใช้ checkin_pm แทน)
+      const effectiveOut = coAm || tcTimeToMin(d.checkin_pm);
+      d.ot_lunch_min = (effectiveOut != null && effectiveOut >= minOut) ? 60 : 0;
+    }
+    // OT บ่าย: ไม่ได้ (ลาอยู่)
+    d.ot_afternoon_min = 0;
+    d.total_ot_min = d.ot_morning_min + d.ot_lunch_min;
+    return d;
+  }
+
+  // ======================================================
+  // วันปกติ / sunday / holiday / absent
+  // ======================================================
+
+  // ถ้าไม่มีเวลาเข้า → absent
+  if (!d.checkin_am && d.day_type === 'normal') {
+    d.day_type = 'absent';
+    d.total_ot_min = 0;
+    return d;
+  }
+
+  if (!d.checkin_am) { d.total_ot_min = 0; return d; }
+
+  const cin = tcTimeToMin(d.checkin_am);
+
+  // สาย
+  const lateThresh = tcTimeToMin(rules.late_threshold);
+  const workStart  = tcTimeToMin(rules.work_start);
+  if (cin > lateThresh && ['normal','sunday','holiday'].includes(d.day_type)) {
+    d.is_late = true;
+    d.late_min = cin - workStart;
+  }
+
+  // OT เช้า (block-based)
+  let morningOt = 0;
+  for (const blk of rules.ot_morning_blocks) {
+    const blkStart  = tcTimeToMin(blk.start);
+    const blkEnd    = tcTimeToMin(blk.end);
+    const blkCutoff = tcTimeToMin(blk.cutoff);
+    if (cin <= blkCutoff) morningOt += (blkEnd - blkStart);
+  }
+  d.ot_morning_min = morningOt;
+
+  // OT กลางวัน (พักน้อยกว่า max_break_min → ได้ 60 นาที)
+  if (rules.ot_lunch?.enabled) {
+    let breakMin = 60;
+    if (d.checkout_am && d.checkin_pm) {
+      breakMin = tcTimeToMin(d.checkin_pm) - tcTimeToMin(d.checkout_am);
+    }
+    d.ot_lunch_min = breakMin <= rules.ot_lunch.max_break_min ? 60 : 0;
+  }
+
+  // OT บ่าย
+  const otStart = tcTimeToMin(rules.ot_afternoon_start || rules.work_end);
+  const cout    = tcTimeToMin(d.checkout_ot || d.checkout_pm);
+  if (cout && cout > otStart) d.ot_afternoon_min = cout - otStart;
+
+  d.total_ot_min = d.ot_morning_min + d.ot_lunch_min + d.ot_afternoon_min;
+  return d;
+}
+
+// --- Settings UI ---
+async function renderTcSettings() {
+  await loadTcRules();
+  const r = _tcRules || TC_RULES_DEFAULT;
+  const DOW = [
+    { v:1, l:'จันทร์' }, { v:2, l:'อังคาร' }, { v:3, l:'พุธ' },
+    { v:4, l:'พฤหัส' }, { v:5, l:'ศุกร์' }, { v:6, l:'เสาร์' }, { v:0, l:'อาทิตย์' }
+  ];
+  const dowChecks = DOW.map(d=>`
+    <label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:13px;">
+      <input type="checkbox" name="work_day" value="${d.v}" ${(r.work_days||[]).includes(d.v)?'checked':''}>
+      ${d.l}
+    </label>`).join('');
+
+  const blk = r.ot_morning_blocks || [];
+  const blkRows = [0,1].map(i => {
+    const b = blk[i] || { start:'', end:'', cutoff:'' };
+    return `<tr>
+      <td style="font-size:12px;color:#64748b;padding:4px 8px;">Block ${i+1}</td>
+      <td><input type="time" id="blk${i}_start" value="${b.start}" style="width:110px;font-size:13px;padding:5px;border:1px solid #e2e8f0;border-radius:6px;"></td>
+      <td><input type="time" id="blk${i}_end"   value="${b.end}"   style="width:110px;font-size:13px;padding:5px;border:1px solid #e2e8f0;border-radius:6px;"></td>
+      <td><input type="time" id="blk${i}_cut"   value="${b.cutoff}" style="width:110px;font-size:13px;padding:5px;border:1px solid #e2e8f0;border-radius:6px;">
+        <span style="font-size:11px;color:#94a3b8;">เข้าหลังเวลานี้ไม่ได้ OT block นี้</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">⚙️ ตั้งค่ากฎ OT บัตรตอก</div>
+      <button onclick="saveTcSettings()" style="padding:8px 20px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">💾 บันทึก</button>
+    </div>
+    <div id="tc-settings-msg" style="margin-bottom:12px;"></div>
+
+    <!-- กลุ่ม 1: เวลางาน -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">⏰ เวลางานปกติ</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div><label class="lbl">เวลาเริ่มงาน</label>
+          <input type="time" id="ts-work-start" value="${r.work_start||'08:00'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">เวลาเลิกงาน</label>
+          <input type="time" id="ts-work-end" value="${r.work_end||'17:00'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">นับสายหลังเวลา</label>
+          <input type="time" id="ts-late" value="${r.late_threshold||'08:15'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">OT บ่ายเริ่มนับหลังเวลา</label>
+          <input type="time" id="ts-ot-start" value="${r.ot_afternoon_start||r.work_end||'17:00'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+      </div>
+    </div>
+
+    <!-- กลุ่ม 2: วันทำงาน -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">📅 วันทำงานปกติ</div>
+      <div>${dowChecks}</div>
+    </div>
+
+    <!-- กลุ่ม 3: OT เช้า (Block) -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">🌅 OT เช้า (Block-based)</div>
+      <table style="border-collapse:collapse;width:100%;">
+        <thead><tr>
+          <th style="text-align:left;font-size:12px;color:#64748b;padding:4px 8px;"></th>
+          <th style="text-align:left;font-size:12px;color:#64748b;padding:4px 8px;">เริ่ม</th>
+          <th style="text-align:left;font-size:12px;color:#64748b;padding:4px 8px;">สิ้นสุด</th>
+          <th style="text-align:left;font-size:12px;color:#64748b;padding:4px 8px;">Cutoff (เข้าช้ากว่านี้ = ไม่ได้ OT block นี้)</th>
+        </tr></thead>
+        <tbody>${blkRows}</tbody>
+      </table>
+    </div>
+
+    <!-- กลุ่ม 4: OT กลางวัน -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">🍱 OT กลางวัน (12:00–13:00)</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="checkbox" id="ts-lunch-en" ${r.ot_lunch?.enabled?'checked':''}>
+          เปิดใช้ OT กลางวัน
+        </label>
+        <div><label class="lbl">พักเกินกี่นาที = ไม่ได้ OT</label>
+          <input type="number" id="ts-lunch-max" value="${r.ot_lunch?.max_break_min??30}" min="0" max="60" style="width:90px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+          <span style="font-size:12px;color:#64748b;"> นาที</span></div>
+      </div>
+    </div>
+
+    <!-- กลุ่ม 5: ลาครึ่งวัน -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">½ เงื่อนไขลาครึ่งวัน</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div><label class="lbl">ลา½เช้า — เข้าหลังเวลานี้ไม่ได้ OT กลางวัน</label>
+          <input type="time" id="ts-halfam-cut" value="${r.half_am_leave?.ot_lunch_cutoff||'12:15'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">ลา½บ่าย — ออกก่อนเวลานี้ไม่ได้ OT กลางวัน</label>
+          <input type="time" id="ts-halfpm-min" value="${r.half_pm_leave?.ot_lunch_checkout_min||'12:30'}" style="width:130px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+      </div>
+    </div>
+
+    <!-- กลุ่ม 6: อัตรา OT -->
+    <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#1a3a5c;margin-bottom:12px;font-size:14px;">💰 อัตรา OT</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div><label class="lbl">วันทำงานปกติ (×)</label>
+          <input type="number" id="ts-rate-wd" value="${r.ot_rates?.weekday??1.5}" min="1" max="5" step="0.5" style="width:90px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">วันอาทิตย์ (×)</label>
+          <input type="number" id="ts-rate-sun" value="${r.ot_rates?.sunday??3.0}" min="1" max="5" step="0.5" style="width:90px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+        <div><label class="lbl">วันหยุดนักขัตฤกษ์ (×)</label>
+          <input type="number" id="ts-rate-hol" value="${r.ot_rates?.holiday??3.0}" min="1" max="5" step="0.5" style="width:90px;padding:7px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;"></div>
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <button onclick="saveTcSettings()" style="padding:10px 28px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">💾 บันทึกการตั้งค่า</button>
+    </div>
+  </div>`;
+}
+
+async function saveTcSettings() {
+  const msg = document.getElementById('tc-settings-msg');
+  const workDays = [...document.querySelectorAll('input[name=work_day]:checked')].map(c=>parseInt(c.value));
+  const newRules = {
+    work_start:          document.getElementById('ts-work-start').value,
+    work_end:            document.getElementById('ts-work-end').value,
+    late_threshold:      document.getElementById('ts-late').value,
+    ot_afternoon_start:  document.getElementById('ts-ot-start').value,
+    work_days:           workDays,
+    ot_morning_blocks: [0,1].map(i=>({
+      start:  document.getElementById(`blk${i}_start`).value,
+      end:    document.getElementById(`blk${i}_end`).value,
+      cutoff: document.getElementById(`blk${i}_cut`).value,
+    })).filter(b=>b.start && b.end && b.cutoff),
+    ot_lunch: {
+      enabled:       document.getElementById('ts-lunch-en').checked,
+      start:         '12:00',
+      end:           '13:00',
+      max_break_min: parseInt(document.getElementById('ts-lunch-max').value)||30,
+    },
+    half_am_leave:  { ot_lunch_cutoff:        document.getElementById('ts-halfam-cut').value },
+    half_pm_leave:  { ot_lunch_checkout_min:  document.getElementById('ts-halfpm-min').value },
+    ot_rates: {
+      weekday:  parseFloat(document.getElementById('ts-rate-wd').value)||1.5,
+      sunday:   parseFloat(document.getElementById('ts-rate-sun').value)||3.0,
+      holiday:  parseFloat(document.getElementById('ts-rate-hol').value)||3.0,
+    },
+  };
+  const { error } = await sb.from('checkin_config')
+    .upsert({ key:'timecard_rules', value: newRules }, { onConflict:'key' });
+  if (error) {
+    msg.innerHTML = `<div style="background:#fff1f2;color:#dc2626;padding:8px 14px;border-radius:8px;font-size:13px;">❌ บันทึกไม่สำเร็จ: ${error.message}</div>`;
+    return;
+  }
+  _tcRules = newRules; // อัปเดต cache ทันที
+  _tcEmpList = [];     // reset employee cache ให้โหลดใหม่
+  msg.innerHTML = `<div style="background:#dcfce7;color:#166534;padding:8px 14px;border-radius:8px;font-size:13px;">✅ บันทึกสำเร็จ</div>`;
+  setTimeout(()=>{ if(msg) msg.innerHTML=''; }, 3000);
+}
+
+// --- โหลด OT Rules ---
+async function loadTcRules() {
+  if (_tcRules) return;
+  try {
+    const { data } = await sb.from('checkin_config').select('value').eq('key','timecard_rules').limit(1);
+    _tcRules = data?.[0]?.value || TC_RULES_DEFAULT;
+  } catch(e) { _tcRules = TC_RULES_DEFAULT; }
+}
+
+// --- Render หน้าหลัก บัตรตอก ---
+async function renderTimecard() {
+  await loadTcRules();
+  if (!_tcEmpList.length) {
+    const { data } = await sb.from('checkin_employees').select('employee_id,name,department').order('employee_id');
+    _tcEmpList = data || [];
+  }
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const empOpts = _tcEmpList.map(e=>`<option value="${escHtml(e.employee_id)}">${escHtml(e.name)} (${escHtml(e.department||'')})</option>`).join('');
+  const yearOpts = [curY,curY-1].map(y=>`<option value="${y}" ${y===curY?'selected':''}>${y}</option>`).join('');
+  const monthOpts = ['01','02','03','04','05','06','07','08','09','10','11','12'].map((m,i)=>`<option value="${i+1}" ${i+1===curM?'selected':''}>${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][i]}</option>`).join('');
+
+  document.getElementById('page-content').innerHTML=`
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-hd">
+      <div class="card-title">🕐 นำเข้าบัตรตอก</div>
+      <button onclick="renderTcHistory()" style="padding:7px 14px;background:#e0f2fe;color:#0369a1;border:none;border-radius:8px;font-size:13px;cursor:pointer;">📋 ประวัติบัตรตอก</button>
+    </div>
+
+    <!-- Step 1: เลือกพนักงาน + งวด -->
+    <div class="filter-row" style="flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      <div class="fg" style="min-width:220px;">
+        <label class="lbl">พนักงาน</label>
+        <select id="tc-emp" style="width:100%;">
+          <option value="">-- เลือกพนักงาน --</option>
+          ${empOpts}
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">ปี</label>
+        <select id="tc-year" style="min-width:90px;">${yearOpts}</select>
+      </div>
+      <div class="fg">
+        <label class="lbl">เดือน</label>
+        <select id="tc-month" style="min-width:100px;">${monthOpts}</select>
+      </div>
+      <div class="fg">
+        <label class="lbl">รอบ</label>
+        <select id="tc-period" style="min-width:120px;">
+          <option value="1">รอบ 1 (1–15)</option>
+          <option value="2">รอบ 2 (16–31)</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <button class="btn-filter" onclick="tcOpenCard()">📋 เปิดบัตร</button>
+      </div>
+    </div>
+
+    <!-- Step 2: ตารางกรอกข้อมูล -->
+    <div id="tc-card-area"></div>
+  </div>`;
+
+  _tcRows = [];
+  _tcHeaderId = null;
+}
+
+async function tcOpenCard() {
+  const empId  = document.getElementById('tc-emp')?.value;
+  const year   = parseInt(document.getElementById('tc-year')?.value);
+  const month  = parseInt(document.getElementById('tc-month')?.value);
+  const period = parseInt(document.getElementById('tc-period')?.value);
+  const area   = document.getElementById('tc-card-area');
+  if (!empId) { area.innerHTML='<div class="log-empty" style="color:#dc2626;">⚠ กรุณาเลือกพนักงาน</div>'; return; }
+
+  area.innerHTML='<div class="log-empty">กำลังโหลด...</div>';
+
+  // หาบัตรเดิม (ถ้ามี)
+  const { data: existing } = await sb.from('checkin_timecards')
+    .select('id,status').eq('employee_id',empId).eq('year',year).eq('month',month).eq('period',period).limit(1);
+  const hdr = existing?.[0];
+  _tcHeaderId = hdr?.id || null;
+
+  // สร้างวันที่ในรอบ
+  const startDay = period===1 ? 1 : 16;
+  const endDay   = period===1 ? 15 : new Date(year, month, 0).getDate();
+  const days = [];
+  for (let d=startDay; d<=endDay; d++) {
+    const dt = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    days.push({ work_date: dt, checkin_am:'', checkout_am:'', checkin_pm:'', checkout_pm:'', checkout_ot:'', day_type:'normal', note:'' });
+  }
+
+  // ถ้ามีบัตรเดิม โหลดข้อมูลเดิมมาใส่
+  if (_tcHeaderId) {
+    const { data: logs } = await sb.from('checkin_timecard_logs').select('*').eq('timecard_id',_tcHeaderId);
+    (logs||[]).forEach(l => {
+      const idx = days.findIndex(d=>d.work_date===l.work_date);
+      if (idx>=0) days[idx] = { ...days[idx],
+        checkin_am: l.checkin_am?.slice(0,5)||'', checkout_am: l.checkout_am?.slice(0,5)||'',
+        checkin_pm: l.checkin_pm?.slice(0,5)||'', checkout_pm: l.checkout_pm?.slice(0,5)||'',
+        checkout_ot: l.checkout_ot?.slice(0,5)||'', day_type: l.day_type||'normal', note: l.note||'' };
+    });
+  }
+  _tcRows = days;
+  tcRenderTable(area);
+}
+
+function tcRenderTable(area) {
+  const rules = _tcRules || TC_RULES_DEFAULT;
+  const DOW_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const DAY_COLORS = {
+    normal:'', absent:'background:#fff1f2;', sunday:'background:#eff6ff;',
+    holiday:'background:#fef9c3;', leave:'background:#f0fdf4;',
+    half_am:'background:#fdf4ff;', half_pm:'background:#fff7ed;'
+  };
+  const DAY_LABELS = {
+    normal:'', absent:'<span style="font-size:10px;color:#dc2626;">ขาด</span>',
+    sunday:'<span style="font-size:10px;color:#3b82f6;">อา.</span>',
+    holiday:'<span style="font-size:10px;color:#d97706;">หยุด</span>',
+    leave:'<span style="font-size:10px;color:#16a34a;">ลา</span>',
+    half_am:'<span style="font-size:10px;color:#9333ea;">ลา½เช้า</span>',
+    half_pm:'<span style="font-size:10px;color:#ea580c;">ลา½บ่าย</span>'
+  };
+
+  // คำนวณ OT ทุกแถว
+  const calc = _tcRows.map(r => tcCalcDay(r));
+
+  const rows = calc.map((r,i) => {
+    const dow = new Date(r.work_date).getDay();
+    const dayNum = parseInt(r.work_date.slice(8));
+    const bg = DAY_COLORS[r.day_type] || '';
+    const lbl = DAY_LABELS[r.day_type] || '';
+    const late = r.is_late ? `<span style="font-size:10px;color:#dc2626;">สาย ${r.late_min}น.</span>` : '';
+    const otTotal = r.total_ot_min > 0 ? `<span style="font-size:10px;color:#7c3aed;">${tcMinToHHMM(r.total_ot_min)}</span>` : '';
+    return `<tr style="${bg}">
+      <td style="text-align:center;font-weight:600;">${dayNum}<br><span style="font-size:10px;color:#94a3b8;">${DOW_TH[dow]}</span></td>
+      <td style="text-align:center;">${lbl}</td>
+      <td><input type="time" class="tc-time" data-row="${i}" data-col="checkin_am" value="${r.checkin_am}" style="width:100%;font-size:13px;padding:4px;border:1px solid #e2e8f0;border-radius:6px;" oninput="tcUpdateRow(${i},'checkin_am',this.value)"></td>
+      <td><input type="time" class="tc-time" data-row="${i}" data-col="checkout_am" value="${r.checkout_am}" style="width:100%;font-size:13px;padding:4px;border:1px solid #e2e8f0;border-radius:6px;" oninput="tcUpdateRow(${i},'checkout_am',this.value)"></td>
+      <td><input type="time" class="tc-time" data-row="${i}" data-col="checkin_pm" value="${r.checkin_pm}" style="width:100%;font-size:13px;padding:4px;border:1px solid #e2e8f0;border-radius:6px;" oninput="tcUpdateRow(${i},'checkin_pm',this.value)"></td>
+      <td><input type="time" class="tc-time" data-row="${i}" data-col="checkout_ot" value="${r.checkout_ot}" style="width:100%;font-size:13px;padding:4px;border:1px solid #e2e8f0;border-radius:6px;" oninput="tcUpdateRow(${i},'checkout_ot',this.value)"></td>
+      <td style="text-align:center;">${late}${otTotal}</td>
+      <td>
+        <select onchange="tcUpdateRow(${i},'day_type',this.value)" style="font-size:12px;padding:3px;border:1px solid #e2e8f0;border-radius:6px;width:100%;">
+          <option value="normal"  ${r.day_type==='normal'  ?'selected':''}>ปกติ</option>
+          <option value="absent"  ${r.day_type==='absent'  ?'selected':''}>ขาด</option>
+          <option value="half_am" ${r.day_type==='half_am' ?'selected':''}>ลา½เช้า</option>
+          <option value="half_pm" ${r.day_type==='half_pm' ?'selected':''}>ลา½บ่าย</option>
+          <option value="leave"   ${r.day_type==='leave'   ?'selected':''}>ลาทั้งวัน</option>
+          <option value="holiday" ${r.day_type==='holiday' ?'selected':''}>หยุด</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Summary
+  const confirmed = _tcHeaderId ? `<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:8px;font-size:12px;">บันทึกแล้ว</span>` : '';
+  const totalOtMin = calc.reduce((s,r)=>s+r.total_ot_min,0);
+  const workDays = calc.filter(r=>r.day_type==='normal').length;
+  const lateDays = calc.filter(r=>r.is_late).length;
+  const absentDays = calc.filter(r=>r.day_type==='absent').length;
+
+  area.innerHTML=`
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+    <button onclick="tcScanOCR()" style="padding:8px 16px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">📷 สแกนบัตร (OCR)</button>
+    <button onclick="tcSaveAll()" style="padding:8px 16px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">💾 บันทึก</button>
+    ${confirmed}
+  </div>
+
+  <!-- Summary strip -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+    <div class="stat-card" style="flex:1;min-width:80px;padding:8px 12px;"><div style="font-size:20px;font-weight:700;color:#1a3a5c;">${workDays}</div><div style="font-size:11px;color:#64748b;">วันทำงาน</div></div>
+    <div class="stat-card s-late" style="flex:1;min-width:80px;padding:8px 12px;"><div style="font-size:20px;font-weight:700;">${lateDays}</div><div style="font-size:11px;">สาย</div></div>
+    <div class="stat-card" style="flex:1;min-width:80px;padding:8px 12px;background:#fff1f2;"><div style="font-size:20px;font-weight:700;color:#dc2626;">${absentDays}</div><div style="font-size:11px;color:#dc2626;">ขาด</div></div>
+    <div class="stat-card" style="flex:1;min-width:80px;padding:8px 12px;background:#faf5ff;"><div style="font-size:20px;font-weight:700;color:#7c3aed;">${tcMinToHHMM(totalOtMin)}</div><div style="font-size:11px;color:#7c3aed;">OT รวม</div></div>
+  </div>
+
+  <div class="tbl-wrap" style="max-height:55vh;">
+  <table>
+    <thead><tr>
+      <th style="min-width:44px;">วัน</th>
+      <th style="min-width:40px;">สถานะ</th>
+      <th>เข้าเช้า</th>
+      <th>พักเที่ยง</th>
+      <th>กลับเที่ยง</th>
+      <th>ออก/OT</th>
+      <th style="min-width:70px;">OT / สาย</th>
+      <th style="min-width:70px;">ประเภท</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </div>`;
+}
+
+function tcUpdateRow(i, col, val) {
+  _tcRows[i][col] = val;
+  // recalc summary strip (เบา)
+  const calc = _tcRows.map(r=>tcCalcDay(r));
+  const totalOtMin = calc.reduce((s,r)=>s+r.total_ot_min,0);
+  const workDays   = calc.filter(r=>r.day_type==='normal').length;
+  const lateDays   = calc.filter(r=>r.is_late).length;
+  const absentDays = calc.filter(r=>r.day_type==='absent').length;
+  // อัปเดต stat cards
+  const cards = document.querySelectorAll('#tc-card-area .stat-card');
+  if (cards[0]) cards[0].querySelector('div').textContent = workDays;
+  if (cards[1]) cards[1].querySelector('div').textContent = lateDays;
+  if (cards[2]) cards[2].querySelector('div').textContent = absentDays;
+  if (cards[3]) cards[3].querySelector('div').textContent = tcMinToHHMM(totalOtMin);
+  // อัปเดต OT/สาย column ของแถวนั้น
+  const allRows = document.querySelectorAll('#tc-card-area tbody tr');
+  if (allRows[i]) {
+    const r = calc[i];
+    const late = r.is_late ? `<span style="font-size:10px;color:#dc2626;">สาย ${r.late_min}น.</span>` : '';
+    const otTotal = r.total_ot_min > 0 ? `<span style="font-size:10px;color:#7c3aed;">${tcMinToHHMM(r.total_ot_min)}</span>` : '';
+    allRows[i].cells[6].innerHTML = late + otTotal;
+  }
+}
+
+async function tcSaveAll() {
+  const empId  = document.getElementById('tc-emp')?.value;
+  const year   = parseInt(document.getElementById('tc-year')?.value);
+  const month  = parseInt(document.getElementById('tc-month')?.value);
+  const period = parseInt(document.getElementById('tc-period')?.value);
+  if (!empId) { alert('กรุณาเลือกพนักงาน'); return; }
+
+  // upsert header
+  if (_tcHeaderId) {
+    await sb.from('checkin_timecards').update({ status:'confirmed', scanned_by: currentUser.name }).eq('id',_tcHeaderId);
+  } else {
+    const { data, error } = await sb.from('checkin_timecards').insert({
+      employee_id: empId, year, month, period, status:'confirmed', scanned_by: currentUser.name
+    }).select('id').single();
+    if (error) { alert('บันทึก header ไม่สำเร็จ: '+error.message); return; }
+    _tcHeaderId = data.id;
+  }
+
+  // upsert logs ทีละแถว
+  const calc = _tcRows.map(r=>tcCalcDay(r));
+  const logs = calc.map(r=>({
+    timecard_id: _tcHeaderId,
+    work_date: r.work_date,
+    checkin_am: r.checkin_am||null, checkout_am: r.checkout_am||null,
+    checkin_pm: r.checkin_pm||null, checkout_pm: r.checkout_pm||null,
+    checkout_ot: r.checkout_ot||null,
+    day_type: r.day_type, is_late: r.is_late, late_min: r.late_min,
+    ot_morning_min: r.ot_morning_min, ot_lunch_min: r.ot_lunch_min,
+    ot_afternoon_min: r.ot_afternoon_min, total_ot_min: r.total_ot_min,
+    note: r.note||null
+  }));
+
+  const { error: logErr } = await sb.from('checkin_timecard_logs')
+    .upsert(logs, { onConflict: 'timecard_id,work_date' });
+
+  if (logErr) { alert('บันทึกรายวันไม่สำเร็จ: '+logErr.message); return; }
+  // แสดง badge confirmed
+  const area = document.getElementById('tc-card-area');
+  const badge = area?.querySelector('span[style*="dcfce7"]');
+  if (!badge) {
+    const btnRow = area?.querySelector('div');
+    if (btnRow) btnRow.insertAdjacentHTML('beforeend','<span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:8px;font-size:12px;">บันทึกแล้ว ✅</span>');
+  }
+  alert('บันทึกสำเร็จ');
+}
+
+// --- OCR (Tesseract.js) ---
+async function tcScanOCR() {
+  _tcEnsureCamModal();
+  document.getElementById('tc-ocr-hint').style.display='block';
+  document.getElementById('modal-tc-ocr').style.display='flex';
+  if (!_zxingReader) {
+    _zxingReader = new ZXing.BrowserMultiFormatReader();
+  }
+  // ใช้กล้องเพื่อถ่ายภาพ (capture ไม่ใช่สแกน barcode)
+  try {
+    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    const backCam = devices.find(d=>/back|rear|environment/i.test(d.label)) || devices[devices.length-1];
+    const stream  = await navigator.mediaDevices.getUserMedia({ video: { deviceId: backCam?.deviceId } });
+    const video   = document.getElementById('tc-cam-video');
+    if (video) { video.srcObject = stream; video.play(); }
+    document.getElementById('btn-tc-capture').onclick = () => tcCapture(stream);
+  } catch(e) { alert('ไม่สามารถเปิดกล้องได้: '+e.message); }
+}
+
+function _tcEnsureCamModal() {
+  if (document.getElementById('modal-tc-ocr')) return;
+  const d = document.createElement('div');
+  d.id = 'modal-tc-ocr';
+  d.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;align-items:center;justify-content:center;';
+  d.innerHTML=`
+    <div style="background:#fff;border-radius:16px;padding:20px;width:min(420px,95vw);max-height:90vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <strong>📷 ถ่ายภาพบัตรตอก</strong>
+        <button onclick="tcCloseCam()" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+      </div>
+      <div id="tc-ocr-hint" style="background:#fef9c3;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;display:none;">
+        ถ่ายให้ชัด ตรง แสงพอเพียง — หลังถ่ายระบบจะ OCR อัตโนมัติ (ต้องตรวจสอบก่อนบันทึก)
+      </div>
+      <video id="tc-cam-video" autoplay playsinline style="width:100%;border-radius:8px;background:#000;"></video>
+      <button id="btn-tc-capture" style="width:100%;margin-top:12px;padding:12px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">📸 ถ่ายภาพ</button>
+      <div id="tc-ocr-status" style="margin-top:10px;font-size:13px;color:#64748b;text-align:center;"></div>
+    </div>`;
+  document.body.appendChild(d);
+}
+
+function tcCloseCam() {
+  const video = document.getElementById('tc-cam-video');
+  if (video?.srcObject) { video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
+  const m = document.getElementById('modal-tc-ocr');
+  if (m) m.style.display='none';
+}
+
+async function tcCapture(stream) {
+  const video  = document.getElementById('tc-cam-video');
+  const status = document.getElementById('tc-ocr-status');
+  const canvas = document.createElement('canvas');
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  stream.getTracks().forEach(t=>t.stop());
+  document.getElementById('modal-tc-ocr').style.display='none';
+
+  if (status) status.textContent = 'กำลัง OCR...';
+
+  // ส่งไป Tesseract
+  try {
+    const result = await Tesseract.recognize(canvas, 'tha+eng', {
+      logger: m => { if (status && m.status==='recognizing text') status.textContent = `OCR ${Math.round(m.progress*100)}%`; }
+    });
+    const text = result.data.text;
+    tcParseOCRText(text);
+  } catch(e) {
+    alert('OCR ล้มเหลว: '+e.message+'\nกรุณากรอกด้วยมือแทน');
+  }
+}
+
+function tcParseOCRText(text) {
+  // Parse เวลา HH:MM จากข้อความ OCR
+  // บัตรแบบ 1: แต่ละบรรทัดขึ้นต้นด้วยเลขวันที่ ตามด้วยเวลาหลายช่อง
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  let matched = 0;
+  const timeRe = /\b([01]?\d|2[0-3])[:.：]([0-5]\d)\b/g;
+
+  lines.forEach(line => {
+    // หาเลขวันที่ต้นบรรทัด
+    const dayMatch = line.match(/^(\d{1,2})\s/);
+    if (!dayMatch) return;
+    const dayNum = parseInt(dayMatch[1]);
+    const rowIdx = _tcRows.findIndex(r => parseInt(r.work_date.slice(8)) === dayNum);
+    if (rowIdx < 0) return;
+
+    // ดึงเวลาทั้งหมดในบรรทัด
+    const times = [];
+    let m;
+    const re = /([01]?\d|2[0-3])[:.：]([0-5]\d)/g;
+    while ((m=re.exec(line)) !== null) {
+      times.push(`${String(m[1]).padStart(2,'0')}:${m[2]}`);
+    }
+    if (!times.length) return;
+
+    // map เวลาเข้า columns ตามลำดับที่อ่านได้
+    if (times[0]) _tcRows[rowIdx].checkin_am  = times[0];
+    if (times[1]) _tcRows[rowIdx].checkout_am = times[1];
+    if (times[2]) _tcRows[rowIdx].checkin_pm  = times[2];
+    if (times[3]) _tcRows[rowIdx].checkout_pm = times[3];
+    if (times[4]) _tcRows[rowIdx].checkout_ot = times[4];
+    matched++;
+  });
+
+  const area = document.getElementById('tc-card-area');
+  if (area) {
+    tcRenderTable(area);
+    const hint = document.createElement('div');
+    hint.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:10px;';
+    hint.textContent = `⚠ OCR อ่านได้ ${matched} วัน — กรุณาตรวจสอบและแก้ไขก่อนบันทึก`;
+    area.insertBefore(hint, area.firstChild);
+  }
+}
+
+// --- ประวัติบัตรตอก ---
+async function renderTcHistory() {
+  const area = document.getElementById('tc-card-area');
+  if (!area) return;
+  area.innerHTML='<div class="log-empty">กำลังโหลดประวัติ...</div>';
+  const { data } = await sb.from('checkin_timecards')
+    .select('*, checkin_employees(name,department)')
+    .order('year',{ascending:false}).order('month',{ascending:false})
+    .order('period',{ascending:false}).limit(50);
+  if (!data?.length) { area.innerHTML='<div class="log-empty">ยังไม่มีบัตรตอกในระบบ</div>'; return; }
+  const MONTH_TH=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  area.innerHTML=`
+  <div class="tbl-wrap" style="max-height:50vh;">
+  <table>
+    <thead><tr><th>พนักงาน</th><th>แผนก</th><th>งวด</th><th>สถานะ</th><th>บันทึกโดย</th><th>จัดการ</th></tr></thead>
+    <tbody>${data.map(r=>`<tr>
+      <td>${escHtml(r.checkin_employees?.name||r.employee_id)}</td>
+      <td style="font-size:12px;">${escHtml(r.checkin_employees?.department||'')}</td>
+      <td>${MONTH_TH[r.month]} ${r.year} รอบ ${r.period}</td>
+      <td><span style="background:${r.status==='confirmed'?'#dcfce7':'#fef9c3'};color:${r.status==='confirmed'?'#166534':'#854d0e'};padding:2px 8px;border-radius:8px;font-size:11px;">${r.status==='confirmed'?'ยืนยันแล้ว':'ร่าง'}</span></td>
+      <td style="font-size:12px;">${escHtml(r.scanned_by||'-')}</td>
+      <td><button onclick="tcLoadExisting(${r.id},'${r.employee_id}',${r.year},${r.month},${r.period})" style="padding:4px 10px;background:#1a3a5c;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">เปิด</button></td>
+    </tr>`).join('')}
+    </tbody>
+  </table>
+  </div>`;
+}
+
+async function tcLoadExisting(id, empId, year, month, period) {
+  document.getElementById('tc-emp').value    = empId;
+  document.getElementById('tc-year').value   = year;
+  document.getElementById('tc-month').value  = month;
+  document.getElementById('tc-period').value = period;
+  await tcOpenCard();
 }
 
 // ============================================================
