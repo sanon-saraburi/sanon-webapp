@@ -2389,18 +2389,19 @@ async function tcScanOCR() {
   _tcEnsureCamModal();
   document.getElementById('tc-ocr-hint').style.display='block';
   document.getElementById('modal-tc-ocr').style.display='flex';
-  if (!_zxingReader) {
-    _zxingReader = new ZXing.BrowserMultiFormatReader();
-  }
-  // ใช้กล้องเพื่อถ่ายภาพ (capture ไม่ใช่สแกน barcode)
   try {
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-    const backCam = devices.find(d=>/back|rear|environment/i.test(d.label)) || devices[devices.length-1];
-    const stream  = await navigator.mediaDevices.getUserMedia({ video: { deviceId: backCam?.deviceId } });
-    const video   = document.getElementById('tc-cam-video');
+    // ใช้ native API แทน ZXing.BrowserCodeReader.listVideoInputDevices (ถูกเอาออกใน v0.19)
+    const allDevices  = await navigator.mediaDevices.enumerateDevices();
+    const videoDevs   = allDevices.filter(d => d.kind === 'videoinput');
+    const backCam     = videoDevs.find(d => /back|rear|environment/i.test(d.label)) || videoDevs[videoDevs.length - 1];
+    const constraints = backCam?.deviceId
+      ? { video: { deviceId: { exact: backCam.deviceId } } }
+      : { video: { facingMode: { ideal: 'environment' } } };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const video  = document.getElementById('tc-cam-video');
     if (video) { video.srcObject = stream; video.play(); }
     document.getElementById('btn-tc-capture').onclick = () => tcCapture(stream);
-  } catch(e) { alert('ไม่สามารถเปิดกล้องได้: '+e.message); }
+  } catch(e) { alert('ไม่สามารถเปิดกล้องได้: ' + e.message); }
 }
 
 function _tcEnsureCamModal() {
