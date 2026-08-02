@@ -2438,28 +2438,69 @@ function tcCloseCam() {
   if (m) m.style.display='none';
 }
 
-async function tcCapture(stream) {
-  const video  = document.getElementById('tc-cam-video');
-  const status = document.getElementById('tc-ocr-status');
-  const canvas = document.createElement('canvas');
-  canvas.width  = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  stream.getTracks().forEach(t=>t.stop());
-  document.getElementById('modal-tc-ocr').style.display='none';
+function tcPreprocessImage(source) {
+  // แปลง image source เป็น canvas grayscale + threshold
+  // เพื่อตัดเส้นตารางสีแดงออก และเพิ่ม contrast ตัวเลข
+  const c = document.createElement('canvas');
+  const isVideo = source instanceof HTMLVideoElement;
+  c.width  = isVideo ? source.videoWidth  : source.width  || source.naturalWidth;
+  c.height = isVideo ? source.videoHeight : source.height || source.naturalHeight;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(source, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    // ถ้า pixel เป็นสีแดง (เส้นตาราง) → ให้เป็นขาว
+    if (r > 150 && g < 100 && b < 100) {
+      d[i] = d[i+1] = d[i+2] = 255;
+    } else {
+      // grayscale + threshold: เข้ม→ดำ, อื่นๆ→ขาว
+      const gray = 0.299*r + 0.587*g + 0.114*b;
+      const val  = gray < 140 ? 0 : 255;
+      d[i] = d[i+1] = d[i+2] = val;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
 
-  if (status) status.textContent = 'กำลัง OCR...';
+async function tcRunOCR(imageSource, statusEl) {
+  const processed = tcPreprocessImage(imageSource);
 
-  // ส่งไป Tesseract
+  // แสดง preview ภาพที่ผ่าน preprocessing เพื่อตรวจสอบ
+  let previewEl = document.getElementById('tc-preprocess-preview');
+  if (!previewEl) {
+    previewEl = document.createElement('div');
+    previewEl.id = 'tc-preprocess-preview';
+    previewEl.style.cssText = 'margin:8px 0;text-align:center;font-size:12px;color:#64748b;';
+  }
+  previewEl.innerHTML = `ภาพที่ OCR ใช้ (preprocessed):<br>
+    <img src="${processed.toDataURL()}" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;margin-top:4px;">`;
+  const tcOcrStatus = statusEl?.parentNode;
+  if (tcOcrStatus) tcOcrStatus.appendChild(previewEl);
+
+  if (statusEl) statusEl.textContent = 'กำลัง OCR ด้วย eng...';
   try {
-    const result = await Tesseract.recognize(canvas, 'tha+eng', {
-      logger: m => { if (status && m.status==='recognizing text') status.textContent = `OCR ${Math.round(m.progress*100)}%`; }
+    const result = await Tesseract.recognize(processed, 'eng', {
+      logger: m => {
+        if (statusEl && m.status==='recognizing text')
+          statusEl.textContent = `OCR ${Math.round(m.progress*100)}%`;
+      }
     });
-    const text = result.data.text;
-    tcParseOCRText(text);
+    tcParseOCRText(result.data.text);
   } catch(e) {
     alert('OCR ล้มเหลว: '+e.message+'\nกรุณากรอกด้วยมือแทน');
   }
+}
+
+async function tcCapture(stream) {
+  const video  = document.getElementById('tc-cam-video');
+  const status = document.getElementById('tc-ocr-status');
+  stream.getTracks().forEach(t=>t.stop());
+  document.getElementById('modal-tc-ocr').style.display='none';
+  if (status) status.textContent = 'กำลัง OCR...';
+  await tcRunOCR(video, status);
 }
 
 async function tcUploadImage(input) {
@@ -2468,14 +2509,13 @@ async function tcUploadImage(input) {
   tcCloseCam();
   const status = document.getElementById('tc-ocr-status') || document.createElement('div');
   status.textContent = 'กำลัง OCR...';
-  try {
-    const result = await Tesseract.recognize(file, 'tha+eng', {
-      logger: m => { if (m.status==='recognizing text') status.textContent = `OCR ${Math.round(m.progress*100)}%`; }
-    });
-    tcParseOCRText(result.data.text);
-  } catch(e) {
-    alert('OCR ล้มเหลว: '+e.message);
-  }
+  // โหลดรูปใน Image element เพื่อ preprocessing
+  const img = new Image();
+  img.onload = async () => {
+    URL.revokeObjectURL(img.src);
+    await tcRunOCR(img, status);
+  };
+  img.src = URL.createObjectURL(file);
 }
 
 function tcParseOCRText(text) {
