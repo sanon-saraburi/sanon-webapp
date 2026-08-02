@@ -2419,7 +2419,13 @@ function _tcEnsureCamModal() {
         ถ่ายให้ชัด ตรง แสงพอเพียง — หลังถ่ายระบบจะ OCR อัตโนมัติ (ต้องตรวจสอบก่อนบันทึก)
       </div>
       <video id="tc-cam-video" autoplay playsinline style="width:100%;border-radius:8px;background:#000;"></video>
-      <button id="btn-tc-capture" style="width:100%;margin-top:12px;padding:12px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">📸 ถ่ายภาพ</button>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="btn-tc-capture" style="flex:1;padding:12px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;">📸 ถ่ายภาพ</button>
+        <label style="flex:1;padding:12px;background:#0f766e;color:#fff;border-radius:8px;font-size:14px;cursor:pointer;text-align:center;">
+          🖼 เลือกรูป
+          <input type="file" accept="image/*" style="display:none;" onchange="tcUploadImage(this)">
+        </label>
+      </div>
       <div id="tc-ocr-status" style="margin-top:10px;font-size:13px;color:#64748b;text-align:center;"></div>
     </div>`;
   document.body.appendChild(d);
@@ -2456,36 +2462,80 @@ async function tcCapture(stream) {
   }
 }
 
+async function tcUploadImage(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  tcCloseCam();
+  const status = document.getElementById('tc-ocr-status') || document.createElement('div');
+  status.textContent = 'กำลัง OCR...';
+  try {
+    const result = await Tesseract.recognize(file, 'tha+eng', {
+      logger: m => { if (m.status==='recognizing text') status.textContent = `OCR ${Math.round(m.progress*100)}%`; }
+    });
+    tcParseOCRText(result.data.text);
+  } catch(e) {
+    alert('OCR ล้มเหลว: '+e.message);
+  }
+}
+
 function tcParseOCRText(text) {
-  // Parse เวลา HH:MM จากข้อความ OCR
-  // บัตรแบบ 1: แต่ละบรรทัดขึ้นต้นด้วยเลขวันที่ ตามด้วยเวลาหลายช่อง
-  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  // หลักการ: โฟกัสแค่ วันที่ + เวลา
+  // เวลาแรกในบรรทัด → checkin_am
+  // เวลาสุดท้าย (ถ้ามีมากกว่า 1) → checkout_ot
+  // เวลากลาง (ถ้ามี) → checkout_am / checkin_pm
+  // OT คำนวณจาก rules อัตโนมัติ — User ตรวจสอบ/แก้ไขเองได้
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   let matched = 0;
-  const timeRe = /\b([01]?\d|2[0-3])[:.：]([0-5]\d)\b/g;
+
+  function extractTimes(str) {
+    // normalize OCR errors: O→0, I/l→1
+    const s = str.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');
+    const times = [];
+    let m;
+    // HH:MM หรือ HH.MM (รองรับทั้ง : และ .)
+    const re = /\b([01]?\d|2[0-3])[:.．]([0-5]\d)\b/g;
+    while ((m = re.exec(s)) !== null) {
+      const hh = parseInt(m[1]);
+      const mm = parseInt(m[2]);
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+        times.push(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
+      }
+    }
+    // fallback: HHMM 4 หลักติดกัน (ไม่ต้องการ . หรือ :)
+    if (!times.length) {
+      const re2 = /\b([01]\d|2[0-3])([0-5]\d)\b/g;
+      while ((m = re2.exec(s)) !== null) {
+        times.push(`${m[1]}:${m[2]}`);
+      }
+    }
+    return [...new Set(times)]; // ไม่ซ้ำ
+  }
 
   lines.forEach(line => {
-    // หาเลขวันที่ต้นบรรทัด
-    const dayMatch = line.match(/^(\d{1,2})\s/);
+    // หาวันที่ในบรรทัด: ตัวเลข 1-31 ที่อยู่ต้นบรรทัดหรือใกล้ต้น
+    const dayMatch = line.match(/^[^\d]*(\d{1,2})\b/);
     if (!dayMatch) return;
     const dayNum = parseInt(dayMatch[1]);
+    if (dayNum < 1 || dayNum > 31) return;
     const rowIdx = _tcRows.findIndex(r => parseInt(r.work_date.slice(8)) === dayNum);
     if (rowIdx < 0) return;
 
-    // ดึงเวลาทั้งหมดในบรรทัด
-    const times = [];
-    let m;
-    const re = /([01]?\d|2[0-3])[:.：]([0-5]\d)/g;
-    while ((m=re.exec(line)) !== null) {
-      times.push(`${String(m[1]).padStart(2,'0')}:${m[2]}`);
-    }
+    const times = extractTimes(line);
     if (!times.length) return;
 
-    // map เวลาเข้า columns ตามลำดับที่อ่านได้
-    if (times[0]) _tcRows[rowIdx].checkin_am  = times[0];
-    if (times[1]) _tcRows[rowIdx].checkout_am = times[1];
-    if (times[2]) _tcRows[rowIdx].checkin_pm  = times[2];
-    if (times[3]) _tcRows[rowIdx].checkout_pm = times[3];
-    if (times[4]) _tcRows[rowIdx].checkout_ot = times[4];
+    // map: เวลาแรก → เข้าเช้า, เวลาสุดท้าย → ออก/OT
+    _tcRows[rowIdx].checkin_am  = times[0];
+    if (times.length >= 2) {
+      _tcRows[rowIdx].checkout_ot = times[times.length - 1];
+    }
+    if (times.length === 3) {
+      _tcRows[rowIdx].checkout_am = times[1]; // เวลากลาง = พักเที่ยง
+    }
+    if (times.length >= 4) {
+      _tcRows[rowIdx].checkout_am = times[1];
+      _tcRows[rowIdx].checkin_pm  = times[2];
+    }
     matched++;
   });
 
@@ -2493,8 +2543,12 @@ function tcParseOCRText(text) {
   if (area) {
     tcRenderTable(area);
     const hint = document.createElement('div');
-    hint.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;padding:8px 14px;border-radius:8px;font-size:13px;margin-bottom:10px;';
-    hint.textContent = `⚠ OCR อ่านได้ ${matched} วัน — กรุณาตรวจสอบและแก้ไขก่อนบันทึก`;
+    hint.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px;';
+    hint.innerHTML = `<div style="margin-bottom:6px;">⚠ OCR อ่านได้ <strong>${matched} วัน</strong> — ตรวจสอบและแก้ไขก่อนบันทึก</div>
+      <details style="margin-top:4px;">
+        <summary style="cursor:pointer;font-size:12px;color:#92400e;">📄 ดูข้อความ OCR ดิบ (debug)</summary>
+        <pre style="font-size:10px;background:#fffbeb;padding:8px;border-radius:6px;margin-top:6px;white-space:pre-wrap;max-height:160px;overflow:auto;">${text.replace(/</g,'&lt;')}</pre>
+      </details>`;
     area.insertBefore(hint, area.firstChild);
   }
 }
