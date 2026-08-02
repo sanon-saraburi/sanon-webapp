@@ -2439,25 +2439,33 @@ function tcCloseCam() {
 }
 
 function tcPreprocessImage(source) {
-  // แปลง image source เป็น canvas grayscale + threshold
-  // เพื่อตัดเส้นตารางสีแดงออก และเพิ่ม contrast ตัวเลข
-  const c = document.createElement('canvas');
+  // ขั้น 1: วาดลง canvas ขนาด 2x เพื่อให้ตัวเลขใหญ่ขึ้น
   const isVideo = source instanceof HTMLVideoElement;
-  c.width  = isVideo ? source.videoWidth  : source.width  || source.naturalWidth;
-  c.height = isVideo ? source.videoHeight : source.height || source.naturalHeight;
+  const sw = isVideo ? source.videoWidth  : (source.naturalWidth  || source.width  || 800);
+  const sh = isVideo ? source.videoHeight : (source.naturalHeight || source.height || 600);
+  const SCALE = 2;
+  const c = document.createElement('canvas');
+  c.width  = sw * SCALE;
+  c.height = sh * SCALE;
   const ctx = c.getContext('2d');
-  ctx.drawImage(source, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(source, 0, 0, c.width, c.height);
+
+  // ขั้น 2: ประมวลผลพิกเซล — ตัดแดง + threshold B&W
   const img = ctx.getImageData(0, 0, c.width, c.height);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
     const r = d[i], g = d[i+1], b = d[i+2];
-    // ถ้า pixel เป็นสีแดง (เส้นตาราง) → ให้เป็นขาว
-    if (r > 150 && g < 100 && b < 100) {
+    // เส้นตารางสีแดง → ขาว
+    if (r > 140 && g < 110 && b < 110) {
       d[i] = d[i+1] = d[i+2] = 255;
     } else {
-      // grayscale + threshold: เข้ม→ดำ, อื่นๆ→ขาว
+      // grayscale + threshold
       const gray = 0.299*r + 0.587*g + 0.114*b;
-      const val  = gray < 140 ? 0 : 255;
+      const val  = gray < 160 ? 0 : 255;
       d[i] = d[i+1] = d[i+2] = val;
     }
   }
@@ -2468,29 +2476,39 @@ function tcPreprocessImage(source) {
 async function tcRunOCR(imageSource, statusEl) {
   const processed = tcPreprocessImage(imageSource);
 
-  // แสดง preview ภาพที่ผ่าน preprocessing เพื่อตรวจสอบ
+  // แสดง preview ภาพที่ OCR ใช้
   let previewEl = document.getElementById('tc-preprocess-preview');
   if (!previewEl) {
     previewEl = document.createElement('div');
     previewEl.id = 'tc-preprocess-preview';
     previewEl.style.cssText = 'margin:8px 0;text-align:center;font-size:12px;color:#64748b;';
   }
-  previewEl.innerHTML = `ภาพที่ OCR ใช้ (preprocessed):<br>
-    <img src="${processed.toDataURL()}" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;margin-top:4px;">`;
-  const tcOcrStatus = statusEl?.parentNode;
-  if (tcOcrStatus) tcOcrStatus.appendChild(previewEl);
+  previewEl.innerHTML = `<div style="font-weight:600;margin-bottom:4px;">ภาพที่ OCR ใช้ (B&W):</div>
+    <img src="${processed.toDataURL()}" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;">`;
+  const statusParent = statusEl?.parentNode;
+  if (statusParent) statusParent.appendChild(previewEl);
 
-  if (statusEl) statusEl.textContent = 'กำลัง OCR ด้วย eng...';
+  if (statusEl) statusEl.textContent = 'เริ่ม OCR...';
+  let worker;
   try {
-    const result = await Tesseract.recognize(processed, 'eng', {
+    worker = await Tesseract.createWorker('eng', 1, {
       logger: m => {
-        if (statusEl && m.status==='recognizing text')
+        if (statusEl && m.status === 'recognizing text')
           statusEl.textContent = `OCR ${Math.round(m.progress*100)}%`;
       }
     });
-    tcParseOCRText(result.data.text);
+    // PSM 6 = uniform block — ให้ word bounding boxes ที่แม่นที่สุด
+    // whitelist เฉพาะตัวเลขและ separator เวลา
+    await worker.setParameters({
+      tessedit_pageseg_mode: '6',
+      tessedit_char_whitelist: '0123456789:.',
+    });
+    const { data } = await worker.recognize(processed);
+    tcParseByBBox(data.words, processed.height);
   } catch(e) {
     alert('OCR ล้มเหลว: '+e.message+'\nกรุณากรอกด้วยมือแทน');
+  } finally {
+    if (worker) worker.terminate();
   }
 }
 
@@ -2518,79 +2536,96 @@ async function tcUploadImage(input) {
   img.src = URL.createObjectURL(file);
 }
 
-function tcParseOCRText(text) {
-  // หลักการ: โฟกัสแค่ วันที่ + เวลา
-  // เวลาแรกในบรรทัด → checkin_am
-  // เวลาสุดท้าย (ถ้ามีมากกว่า 1) → checkout_ot
-  // เวลากลาง (ถ้ามี) → checkout_am / checkin_pm
-  // OT คำนวณจาก rules อัตโนมัติ — User ตรวจสอบ/แก้ไขเองได้
+function tcParseByBBox(words, imgHeight) {
+  // แนวคิดใหม่: โฟกัสเฉพาะ pattern เวลา (H:MM / HH:MM / H.MM)
+  // ใช้ bounding box Y-coordinate จัดกลุ่มแต่ละแถว
+  // gap detection → รู้ว่าแถวไหนว่าง (ไม่มีเวลา) เพื่อให้ตรงกับวันที่ใน _tcRows
+  // วันที่ (ที่ stamp นำหน้า) ไม่สนใจ — ใช้ลำดับแถวและ period ที่ User เลือกแทน
 
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  let matched = 0;
+  const TIME_RE = /^(\d{1,2})[:.](\d{2})$/;
+  const timeWords = [];
 
-  function extractTimes(str) {
-    // normalize OCR errors: O→0, I/l→1
-    const s = str.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');
-    const times = [];
-    let m;
-    // HH:MM หรือ HH.MM (รองรับทั้ง : และ .)
-    const re = /\b([01]?\d|2[0-3])[:.．]([0-5]\d)\b/g;
-    while ((m = re.exec(s)) !== null) {
-      const hh = parseInt(m[1]);
-      const mm = parseInt(m[2]);
-      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
-        times.push(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
-      }
-    }
-    // fallback: HHMM 4 หลักติดกัน (ไม่ต้องการ . หรือ :)
-    if (!times.length) {
-      const re2 = /\b([01]\d|2[0-3])([0-5]\d)\b/g;
-      while ((m = re2.exec(s)) !== null) {
-        times.push(`${m[1]}:${m[2]}`);
-      }
-    }
-    return [...new Set(times)]; // ไม่ซ้ำ
+  for (const w of (words || [])) {
+    const cleaned = (w.text || '')
+      .replace(/[oO]/g, '0').replace(/[iIlL|]/g, '1')
+      .replace(/，/g, '.').trim();
+    const m = TIME_RE.exec(cleaned);
+    if (!m) continue;
+    const h = parseInt(m[1]), mn = parseInt(m[2]);
+    // เวลาที่สมเหตุสมผล: เข้า 05:00–10:00, OT 17:00–23:00
+    if (h < 5 || h > 23 || mn > 59) continue;
+    timeWords.push({ time: `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`, h, mn, y: w.bbox.y0, x: w.bbox.x0 });
   }
 
-  lines.forEach(line => {
-    // หาวันที่ในบรรทัด: ตัวเลข 1-31 ที่อยู่ต้นบรรทัดหรือใกล้ต้น
-    const dayMatch = line.match(/^[^\d]*(\d{1,2})\b/);
-    if (!dayMatch) return;
-    const dayNum = parseInt(dayMatch[1]);
-    if (dayNum < 1 || dayNum > 31) return;
-    const rowIdx = _tcRows.findIndex(r => parseInt(r.work_date.slice(8)) === dayNum);
-    if (rowIdx < 0) return;
+  const statusEl = document.getElementById('tc-ocr-status');
 
-    const times = extractTimes(line);
-    if (!times.length) return;
+  if (!timeWords.length) {
+    if (statusEl) statusEl.textContent = '⚠ ไม่พบเวลาในภาพ — กรุณากรอกด้วยมือ';
+    return;
+  }
 
-    // map: เวลาแรก → เข้าเช้า, เวลาสุดท้าย → ออก/OT
-    _tcRows[rowIdx].checkin_am  = times[0];
-    if (times.length >= 2) {
-      _tcRows[rowIdx].checkout_ot = times[times.length - 1];
-    }
-    if (times.length === 3) {
-      _tcRows[rowIdx].checkout_am = times[1]; // เวลากลาง = พักเที่ยง
-    }
-    if (times.length >= 4) {
-      _tcRows[rowIdx].checkout_am = times[1];
-      _tcRows[rowIdx].checkin_pm  = times[2];
-    }
-    matched++;
-  });
+  // เรียงตาม Y (บนลงล่าง)
+  timeWords.sort((a, b) => a.y - b.y);
 
+  // จัดกลุ่มตาม Y: gap > 3% ของความสูงภาพ = แถวใหม่
+  const ROW_GAP = imgHeight * 0.03;
+  const rowGroups = [];
+  for (const tw of timeWords) {
+    const last = rowGroups[rowGroups.length - 1];
+    if (!last || tw.y - last[0].y > ROW_GAP) {
+      rowGroups.push([tw]);
+    } else {
+      last.push(tw);
+    }
+  }
+
+  // คำนวณ avgStep ระหว่างแถวที่พบ → ใช้ detect แถวว่าง
+  let avgStep = ROW_GAP * 2;
+  if (rowGroups.length >= 2) {
+    const steps = [];
+    for (let i = 1; i < rowGroups.length; i++) {
+      steps.push(rowGroups[i][0].y - rowGroups[i-1][0].y);
+    }
+    // ใช้ median (ทนทานต่อ outlier กว่า mean)
+    const sorted = [...steps].sort((a,b)=>a-b);
+    avgStep = sorted[Math.floor(sorted.length/2)];
+  }
+
+  // เติมข้อมูลใน _tcRows พร้อม gap detection
+  let filled = 0, dayIdx = 0;
+  for (let i = 0; i < rowGroups.length; i++) {
+    if (i > 0 && avgStep > 0) {
+      const gap = rowGroups[i][0].y - rowGroups[i-1][0].y;
+      // ถ้า gap > 1.6× avgStep → มีแถวว่างระหว่างกัน
+      const skipped = Math.max(0, Math.round(gap / avgStep) - 1);
+      dayIdx += skipped;
+    }
+    if (dayIdx >= _tcRows.length) break;
+
+    // เรียงตาม X (ซ้ายไปขวา) แล้วแบ่งเช้า/บ่าย-OT
+    const row = rowGroups[i].sort((a, b) => a.x - b.x);
+    const am  = row.filter(t => t.h < 12);   // 05:00–11:59 → เช้า
+    const pm  = row.filter(t => t.h >= 12);  // 12:00–23:59 → บ่าย/OT
+
+    if (am.length)     _tcRows[dayIdx].checkin_am  = am[0].time;
+    if (am.length > 1) _tcRows[dayIdx].checkout_am = am[am.length-1].time;
+    if (pm.length > 1) _tcRows[dayIdx].checkin_pm  = pm[0].time;
+    if (pm.length)     _tcRows[dayIdx].checkout_ot = pm[pm.length-1].time;
+
+    if (am.length || pm.length) filled++;
+    dayIdx++;
+  }
+
+  // Re-render ตาราง + แสดงผล
   const area = document.getElementById('tc-card-area');
   if (area) {
     tcRenderTable(area);
     const hint = document.createElement('div');
     hint.style.cssText = 'background:#fef9c3;border:1px solid #fcd34d;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px;';
-    hint.innerHTML = `<div style="margin-bottom:6px;">⚠ OCR อ่านได้ <strong>${matched} วัน</strong> — ตรวจสอบและแก้ไขก่อนบันทึก</div>
-      <details style="margin-top:4px;">
-        <summary style="cursor:pointer;font-size:12px;color:#92400e;">📄 ดูข้อความ OCR ดิบ (debug)</summary>
-        <pre style="font-size:10px;background:#fffbeb;padding:8px;border-radius:6px;margin-top:6px;white-space:pre-wrap;max-height:160px;overflow:auto;">${text.replace(/</g,'&lt;')}</pre>
-      </details>`;
+    hint.innerHTML = `⚠ OCR อ่านได้ <strong>${filled} วัน</strong> — ตรวจสอบและแก้ไขก่อนบันทึก`;
     area.insertBefore(hint, area.firstChild);
   }
+  if (statusEl) statusEl.textContent = `✓ อ่านได้ ${filled} วัน`;
 }
 
 // --- ประวัติบัตรตอก ---
