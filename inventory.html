@@ -2135,10 +2135,9 @@ async function loadChemDash(){
       if(!m[r.item_id])m[r.item_id]={qty:0,cost:0};
       const qty=Number(r.quantity)||0;
       const wpkg=itemLookup[r.item_id]?.wpkg||0;
-      // ราคา/ถุง: ใช้จาก transaction ก่อน → fallback ราคา item
-      const lotCostPerBag=avgCost[r.item_id]?wpkg*(avgCost[r.item_id]||0):0;
+      // ราคา/ถุง: ใช้ unit_cost จาก FIFO lot ที่บันทึกตอนเบิก → fallback ราคา item master
       const itemPrice=Number(_invItems.find(i=>i.id===r.item_id)?.unit_price)||0;
-      const pricePerBag=Number(r.unit_cost)||Number(r.unit_price)||lotCostPerBag||itemPrice;
+      const pricePerBag=Number(r.unit_cost)||Number(r.unit_price)||itemPrice;
       m[r.item_id].qty+=qty;
       m[r.item_id].cost+=qty*pricePerBag;
     });
@@ -2348,9 +2347,8 @@ async function loadChemDash(){
     const wdRows=(wdRes.data||[]).map(r=>{
       const info=itemLookup[r.item_id]||{};
       const qty=Number(r.quantity)||0;const wpkg=info.wpkg||0;const kg=qty*wpkg;
-      const lotCostPerBag2=avgCost[r.item_id]?wpkg*(avgCost[r.item_id]||0):0;
       const itemPrice2=Number(_invItems.find(i=>i.id===r.item_id)?.unit_price)||0;
-      const pricePerBag2=Number(r.unit_cost)||Number(r.unit_price)||lotCostPerBag2||itemPrice2;
+      const pricePerBag2=Number(r.unit_cost)||Number(r.unit_price)||itemPrice2;
       const cost=qty*pricePerBag2;
       const d=new Date(r.created_at);
       const dt=`${d.getDate()} ${MN[d.getMonth()]} ${d.getFullYear()+543}`;
@@ -2717,21 +2715,20 @@ PAGE_RENDERERS['inv-report'] = async function(el) {
             <option value="po">สรุป PO</option>
           </select></div>
         <div><label class="text-xs text-gray-500 mb-1 block">วันที่เริ่ม</label>
-          <input id="rpt-start" type="date" value="${new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10)}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+          <input id="rpt-start" type="date" value="${new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10)}" onchange="loadReport()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
         <div><label class="text-xs text-gray-500 mb-1 block">วันที่สิ้นสุด</label>
-          <input id="rpt-end" type="date" value="${todayISO()}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+          <input id="rpt-end" type="date" value="${todayISO()}" onchange="loadReport()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
         <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน</label>
-          <select id="rpt-factory" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+          <select id="rpt-factory" onchange="loadReport()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             <option value="">ทุกโรงงาน</option>${FACTORIES().map(f=>`<option>${f}</option>`).join('')}</select></div>
       </div>
       <div class="flex gap-2">
-        <button onclick="loadReport()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">แสดงผล</button>
         <button onclick="exportReport()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Export Excel</button>
         <button onclick="window.print()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">พิมพ์</button>
       </div>
     </div>
     <div id="rpt-result" class="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-5 py-4 text-gray-400 text-sm">เลือกรายงานแล้วกด "แสดงผล"</div>
+      <div class="px-5 py-4 text-gray-400 text-sm">กำลังโหลดรายงาน...</div>
     </div>
   </div>`;
   refreshIcons();
