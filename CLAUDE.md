@@ -7,15 +7,15 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-01)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-05)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
-| Portal — Smart Launcher | `portal.html` | ✅ ใหม่ | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User | — |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Mobile System Switcher, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert ทุกระบบ) |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS (item_name จาก dropdown), สิทธิ์ตามโรงงาน, normCat filter fix | ไม่มี Loading Screen (ถูก revert) — withdraw modal ยังไม่มี filter |
-| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert) |
-| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ (พนักงาน+บุคคลภายนอก), สถิติรายเดือน, จัดการพนักงาน, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก | ไม่มี Loading Screen (ถูก revert) — ยังไม่ได้รัน v4/v5 SQL patch — ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
+| Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User | — |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Mobile System Switcher (4 ระบบ + bottom sheet), LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert) |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price** | ไม่มี Loading Screen (ถูก revert) |
+| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
+| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -56,10 +56,12 @@
 
 ## ⚠️ 0D. กฎการแก้ไขข้ามแชต
 
-1. **ก่อนแก้ไข** — อ่าน Section 0 นี้ก่อนเสมอ
+1. **ก่อนแก้ไข** — อ่าน Section 0 นี้ก่อนเสมอ และอ่าน **`TECHSTACK.md`** ถ้าเปิดแชตใหม่
 2. **หลังแก้ไขสำเร็จ** — อัปเดต System Status Board (Section 0) ทันที
 3. **ถ้าพบว่าระบบอื่นพัง** — บันทึกใน "ปัญหาที่รู้อยู่" ก่อน แล้วค่อยแก้ทีละอย่าง
 4. **ไฟล์ที่อัปขึ้น GitHub แล้ว** — ต้องเป็น version ล่าสุดจาก `G:\เขียนเว็บ+Ai\เขียนเว็บสานนท์` เท่านั้น ห้ามอัปไฟล์เก่า
+
+> **📖 Tech Stack ทั้งหมด อ่านได้ที่ `TECHSTACK.md`** — Library, Backend, DB schema, กฎสำคัญ, LINE Notification
 
 ---
 
@@ -74,11 +76,12 @@
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
 | `portal.html` | Portal | 2026-08-01 (Smart Launcher ตามสิทธิ์ — ใหม่) |
-| `index.html` | System 1 | 2026-08-01 (Mobile System Switcher bottom nav) |
+| `index.html` | System 1 | 2026-08-01 ดึก (Mobile System Sheet 4 ระบบ + Desktop sidebar 2×2 grid + เช็คอิน) |
 | `inventory.html` | System 2 | 2026-08-01 (revert loading screen + normCat filter fix) |
 | `pm.html` | System 3 | 2026-08-01 (restore จาก commit 30 ก.ค. — ไม่มี loading screen) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
-| `CLAUDE.md` | ทุกระบบ | 2026-08-01 |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-02 |
+| `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
 | `PM.md` | System 3 | 2026-07-31 |
@@ -294,6 +297,117 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-05 — inventory.html: Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน
+
+**`GitHub/inventory.html` — การเปลี่ยนแปลงหลัก:**
+
+**1. แก้ราคาสารตกตะกอน (สารตกตะกอน cost bug):**
+- Root cause: `priceShow = wpkg*ac` ใน stock card และ `valTotal = kgTotal*ac` ใน annual report — คูณ wpkg ซ้อน เพราะ `ac` เป็น ฿/ถุงอยู่แล้ว
+- แก้ stock card (บรรทัด ~2291): `wpkg>0&&ac>0?fmtNum(wpkg*ac,0)` → `ac>0?fmtNum(ac,0)` (แสดงราคา/ถุงตรงๆ)
+- แก้ annual report (บรรทัด ~2703): `valTotal = kgTotal*ac` → `valTotal = stock*ac` (bags × ฿/bag = ฿ ถูกต้อง)
+- แก้ label (บรรทัด ~2709): `บ./กก.` → `บ./ถุง` ให้ตรงกับหน่วยจริง
+- ราคาใน `aggRows()` ใช้ FIFO lot price จริง (`r.unit_cost || r.unit_price || itemPrice`) ไม่เฉลี่ยถ่วงน้ำหนักผิด
+
+**2. Dashboard redesign (inv-dashboard):**
+- Filter bar: เปลี่ยนจากช่วง 30 วัน → dropdown เดือน/ปี (พุทธศักราช)
+- แทนที่ canvas chart-movement → ตาราง movement 25 รายการล่าสุด (id=dash-mvmt-body)
+- KPI cards ใหม่: icon + colored bg + left border (enterprise style)
+- Top 10 เบิกสูงสุด: medals 🥇🥈🥉 + progress bar
+- ลบ `destroyChart('mvmt')` เพราะไม่มี canvas แล้ว
+
+**3. เพิ่มวันที่เบิกใน LINE Notification:**
+- `saveWithdraw()`: เพิ่ม `withdraw_date: qs('#wo-date')?.value || todayISO()` ใน fetch payload
+- `line-notify_index.txt` → `buildInventoryCard()`: เพิ่ม `row("📅", \`วันที่เบิก: ...\`)` อ่านจาก `r.withdraw_date` ก่อน fallback `r.created_at`
+
+**4. Withdraw modal — filter + search (Bug #2 re-applied):**
+- `_woAllItems` global state, `woFilterItems()` function
+- Filter bar: dropdown ประเภท + input ค้นหาชื่อ/รหัส (substring match)
+- Scanner: clear filter ก่อน select item ที่สแกนได้
+
+**5. Report page — auto-load:**
+- ลบปุ่ม "แสดงผล" — filter inputs ทุกตัวมี `onchange="loadReport()"`
+
+**6. ประวัติการเบิก — month filter:**
+- `_woMonthFilter`, `woFilterMonth()`, `_woApplyFilters()`
+- Dropdown เดือนใน filter bar (auto-populate จากข้อมูล), `data-month` ใน `<tr>`
+
+**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `line-notify_index.txt`
+**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅ | `line-notify_index.txt` ⏳ (ต้อง deploy ใน Supabase)
+**ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ upload
+
+---
+
+### 2026-08-05 — pm.html: เรียงรายการ PM ตามสถานะ + เพิ่มคอลัมน์วันที่ PM ล่าสุด
+
+**`pm.html` — `fillItemOpts()` แก้ใหม่:**
+- Dropdown "ประเภท PM" ใน modal บันทึก PM เรียงลำดับตามสถานะ:
+  - 🔴 เกินกำหนด (remaining ≤ 0) → แสดงก่อน
+  - 🟡 ใกล้ถึงกำหนด (0 < remaining ≤ alert_threshold) → แสดงกลาง
+  - 🟢 ปกติ → แสดงท้าย
+- ใช้ `<optgroup>` แบ่งหมวดให้เห็นชัด
+- แสดงจำนวน ชม./กม. คงเหลือในชื่อ option เช่น `Apex Hydrocyclone ทรายหยาบ (-229 ชม.)`
+- คำนวณจาก `last_pm_meter + interval_value - current_meter`
+
+**`pm.html` — `renderLogPage()` แก้ใหม่:**
+- Query เพิ่ม `pm_items(last_pm_date, interval_value)` ผ่าน foreign key join
+- เพิ่มคอลัมน์ **"วันที่ PM ล่าสุด"** ระหว่าง "ประเภท PM" กับ "Meter ที่ทำ"
+- แสดง `pm_items.last_pm_date` ของรายการ PM นั้น (วันที่ทำ PM ครั้งล่าสุดตาม record)
+- เพิ่ม colspan จาก 8 → 9 (รวมคอลัมน์ใหม่)
+- เปลี่ยนหัวคอลัมน์แรกจาก "วันที่" → "วันที่บันทึก" ให้ชัดเจนขึ้น
+
+**ไฟล์ที่แก้ไข:** `pm.html`
+**Copy ไป GitHub/:** `pm.html` ✅
+
+---
+
+### 2026-08-01 (กลางคืน) — Portal Smart Launcher + อัปเดต CLAUDE.md
+
+**`portal.html` — สร้างใหม่:**
+- หน้า Login กลาง → query สิทธิ์จาก `role_permissions` + `user_permissions` ใน Supabase
+- แสดงการ์ดเฉพาะระบบที่ User มีสิทธิ์ (admin = 4 การ์ด, User ทั่วไป = ตามสิทธิ์)
+- SSO: อ่าน/เขียน `localStorage._sn_shared_sess` ร่วมกับทุกระบบ — login ครั้งเดียวใช้ได้ทุกที่
+- Responsive: 2 คอลัมน์บน tablet+, 1 คอลัมน์บน mobile เล็ก
+- เมื่อ admin เพิ่มสิทธิ์ให้ User → User เปิด portal ใหม่ → เห็นการ์ดเพิ่มทันที (real-time จาก DB)
+
+**`manifest-portal.json` — สร้างใหม่:**
+- PWA manifest สำหรับ portal.html, start_url = `/sanon-webapp/portal.html`
+- ใช้ icon-192/512.png เดิม
+
+**`sw.js` → v3:**
+- เพิ่ม `portal.html` + `manifest-portal.json` ใน PRECACHE list
+
+**`CLAUDE.md` — อัปเดต Section 0:**
+- แก้ข้อมูลเก่าที่ยังระบุ "Loading Screen" ซึ่ง revert ไปแล้ว
+- sw.js v2 → v3, เพิ่ม Portal ใน status board + Section 0E
+
+**ไฟล์ที่แก้ไข:** `portal.html` (ใหม่), `manifest-portal.json` (ใหม่), `sw.js`, `CLAUDE.md`
+**Copy ไป GitHub/:** `portal.html`, `manifest-portal.json`, `sw.js`, `CLAUDE.md` ✅
+**ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ session ถัดไป
+
+---
+
+### 2026-08-01 (ดึกสุด) — Mobile System Switcher ครบ 4 ระบบ + Desktop Sidebar 2×2
+
+**`index.html` — Mobile System Switcher ปรับใหม่:**
+
+**Desktop Sidebar:**
+- เปลี่ยน layout "เปลี่ยนระบบ" จาก `flex` 3 การ์ด → `grid grid-cols-2` 4 การ์ด (2×2)
+- เพิ่ม System 4 (เช็คอิน) — gradient emerald (`#065f46→#059669`), icon `clock`
+
+**Mobile — ปุ่ม "ระบบ" + Bottom Sheet:**
+- เพิ่มปุ่ม "ระบบ" (icon: grid) ท้ายสุดของ Bottom Nav มือถือ
+- เพิ่ม `mobile-system-sheet` — bottom sheet แสดง 4 ระบบ แบบ 2 คอลัมน์ การ์ดใหญ่ (มีชื่อ + คำอธิบาย)
+- กด backdrop → ปิด sheet อัตโนมัติ
+- กดการ์ดระบบอื่น → `gotoSystem()` เปลี่ยนหน้าทันที
+
+**Global State เพิ่ม:**
+- `isSystemSheetOpen` — reset ใน navigateTo(), doLogout(), session timeout
+
+**ไฟล์ที่แก้ไข:** `index.html`
+**Copy ไป GitHub/:** `index.html` ✅
+
+---
 
 ### 2026-08-01 (ดึกมาก) — LINE Notification จาก JavaScript Frontend (ทั้ง 3 ระบบ)
 

@@ -1100,19 +1100,23 @@ async function saveUpdateMeter(machineId) {
 async function renderLogPage() {
   const content = qs('#page-content');
   const { data: logs, error } = await db.from('pm_logs')
-    .select('*').order('done_date', {ascending:false}).limit(200);
+    .select('*, pm_items(last_pm_date, interval_value)')
+    .order('done_date', {ascending:false}).limit(200);
   if (error) { content.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`; return; }
   _pmLogs = logs || [];
 
   const rows = _pmLogs.length === 0
-    ? `<tr><td colspan="8" class="text-center py-10 text-gray-400">ยังไม่มีบันทึก PM</td></tr>`
+    ? `<tr><td colspan="9" class="text-center py-10 text-gray-400">ยังไม่มีบันทึก PM</td></tr>`
     : _pmLogs.map(log => {
-        const parts = (log.parts_used||[]).map(p=>`${p.name} ${p.qty}${p.unit||''}`).join(', ');
+        const parts       = (log.parts_used||[]).map(p=>`${p.name} ${p.qty}${p.unit||''}`).join(', ');
+        const lastPmDate  = log.pm_items?.last_pm_date;
+        const lastPmCell  = lastPmDate ? fmtDate(lastPmDate) : '<span class="text-gray-300">—</span>';
         return `<tr class="border-b hover:bg-gray-50">
           <td class="px-3 py-2 text-sm">${fmtDate(log.done_date)}</td>
           <td class="px-3 py-2 text-sm font-medium">${escapeHtml(log.machine_name||'')}</td>
           <td class="px-3 py-2 text-xs text-slate-500">${escapeHtml(log.factory||'')}</td>
           <td class="px-3 py-2 text-sm">${escapeHtml(log.pm_type||'')}</td>
+          <td class="px-3 py-2 text-sm text-center text-slate-600">${lastPmCell}</td>
           <td class="px-3 py-2 text-sm text-center">${fmtNum(log.done_meter)}</td>
           <td class="px-3 py-2 text-xs text-slate-500 max-w-xs truncate">${escapeHtml(parts)}</td>
           <td class="px-3 py-2 text-sm text-center">${log.total_cost?fmtNum(log.total_cost,2)+' ฿':'-'}</td>
@@ -1135,10 +1139,11 @@ async function renderLogPage() {
     <div class="tbl-wrap">
       <table class="text-sm">
         <thead><tr class="text-xs text-gray-500 bg-gray-50">
-          <th class="px-3 py-2 text-left">วันที่</th>
+          <th class="px-3 py-2 text-left">วันที่บันทึก</th>
           <th class="px-3 py-2 text-left">เครื่องจักร</th>
           <th class="px-3 py-2 text-left">โรงงาน</th>
           <th class="px-3 py-2 text-left">ประเภท PM</th>
+          <th class="px-3 py-2 text-center">วันที่ PM ล่าสุด</th>
           <th class="px-3 py-2 text-center">Meter ที่ทำ</th>
           <th class="px-3 py-2 text-left">อะไหล่ที่ใช้</th>
           <th class="px-3 py-2 text-center">ค่าใช้จ่าย</th>
@@ -1232,7 +1237,6 @@ function fillItemOpts(machineId) {
   const items = _pmItems.filter(i=>i.pm_machine_id===machineId && i.is_active);
   if (items.length === 0) {
     sel.innerHTML = `<option value="">-- ยังไม่มีรายการ PM สำหรับเครื่องนี้ --</option>`;
-    // แสดง hint ใต้ dropdown
     let hint = qs('#log-item-hint');
     if (!hint) {
       hint = document.createElement('p');
@@ -1240,15 +1244,46 @@ function fillItemOpts(machineId) {
       hint.className = 'text-xs text-amber-600 mt-1';
       sel.parentNode.appendChild(hint);
     }
-    const machine = _pmMachines.find(m=>m.id===machineId);
     hint.innerHTML = `⚠️ ต้องเพิ่มรายการ PM ให้เครื่องนี้ก่อน →
       <a href="#" onclick="event.preventDefault();closeModal();navigateTo('pm-machines')"
          class="underline font-medium">ไปหน้าเครื่องจักร</a>`;
   } else {
     const hint = qs('#log-item-hint');
     if (hint) hint.remove();
-    sel.innerHTML = `<option value="">-- เลือกประเภท PM --</option>`
-      + items.map(i=>`<option value="${i.id}">${escapeHtml(i.pm_type)}</option>`).join('');
+
+    // คำนวณสถานะและเรียงลำดับ: เกินกำหนด🔴 → ใกล้ถึง🟡 → ปกติ🟢
+    const curMeter   = parseFloat(machine?.current_meter || 0);
+    const alertThres = parseFloat(machine?.alert_threshold || 50);
+
+    const itemsWithStatus = items.map(i => {
+      const nextDue   = parseFloat(i.last_pm_meter || 0) + parseFloat(i.interval_value || 0);
+      const remaining = nextDue - curMeter;
+      let status, priority;
+      if (remaining <= 0)            { status = 'overdue'; priority = 0; }
+      else if (remaining <= alertThres) { status = 'alert';   priority = 1; }
+      else                           { status = 'normal';  priority = 2; }
+      return { ...i, remaining: Math.round(remaining), status, priority };
+    });
+
+    itemsWithStatus.sort((a, b) => a.priority - b.priority || a.remaining - b.remaining);
+
+    const overdue = itemsWithStatus.filter(i=>i.status==='overdue');
+    const alert   = itemsWithStatus.filter(i=>i.status==='alert');
+    const normal  = itemsWithStatus.filter(i=>i.status==='normal');
+
+    const buildOpts = (arr) => arr.map(i => {
+      const remText = i.remaining <= 0
+        ? ` (${i.remaining} ${unit})`
+        : ` (เหลือ ${i.remaining} ${unit})`;
+      return `<option value="${i.id}">${escapeHtml(i.pm_type)}${remText}</option>`;
+    }).join('');
+
+    let html = `<option value="">-- เลือกประเภท PM --</option>`;
+    if (overdue.length) html += `<optgroup label="🔴 เกินกำหนด">${buildOpts(overdue)}</optgroup>`;
+    if (alert.length)   html += `<optgroup label="🟡 ใกล้ถึงกำหนด">${buildOpts(alert)}</optgroup>`;
+    if (normal.length)  html += `<optgroup label="🟢 ปกติ">${buildOpts(normal)}</optgroup>`;
+
+    sel.innerHTML = html;
   }
 }
 
