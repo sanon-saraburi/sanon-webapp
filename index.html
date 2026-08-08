@@ -5280,7 +5280,7 @@ function renderManageProduction(container, plantKey) {
             <i data-lucide="check-circle" class="w-4 h-4"></i>นำเข้า ยอดจริงสิ้นเดือน
             <input id="mp-${plantKey}-import-final-input" type="file" accept=".xlsx,.xls,.csv" class="hidden">
           </label>
-          <button id="mp-${plantKey}-export-btn" class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="download" class="w-4 h-4"></i>Export Excel</button>
+          <button id="mp-${plantKey}-export-btn" class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="download" class="w-4 h-4"></i>Export CSV</button>
           <button id="mp-${plantKey}-refresh-btn" class="flex items-center gap-1.5 bg-white border border-secondary-200 hover:bg-secondary-50 text-secondary-600 text-sm font-medium px-3 py-2 rounded-xl transition"><i data-lucide="refresh-cw" class="w-4 h-4"></i>Refresh</button>
           <button id="mp-${plantKey}-add-btn" class="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition"><i data-lucide="plus" class="w-4 h-4"></i>เพิ่มข้อมูล</button>
         </div>
@@ -5783,25 +5783,48 @@ function confirmDeleteProductionRow(plantKey, id) {
 
 function exportProductionExcel(plantKey) {
   const cfg = PRODUCTION_PLANT_CONFIG[plantKey];
-  const rows = getFilteredProductionRows(plantKey);
+  const rows = getFilteredProductionRows(plantKey)
+    .slice()
+    .sort((a, b) => (a.production_date || '') < (b.production_date || '') ? -1 : (a.production_date || '') > (b.production_date || '') ? 1 : 0);
   if (!rows.length) { showToast('ไม่มีข้อมูลให้ export', 'warning'); return; }
-  const exportRows = rows.map(r => {
-    const obj = {
-      'วันเดือนปี': r.production_date,
-      'รวมเวลาเดินเครื่อง': `${Number(r.runtime_hour)||0} ชม. ${Number(r.runtime_minute)||0} นาที`,
-      'เฉลี่ย(ตัน/ชม)': r.avg_ton_per_hour || 0,
-      'หินป้อน(ตัน)': r.feed_ton || 0,
-    };
-    cfg.productColumns.forEach(c => { obj[c.label] = r[c.key] || 0; });
-    obj['สถานะ'] = r.status;
-    obj['วัตถุดิบ'] = r.raw_material || '';
-    obj['Breakdown'] = r.breakdown_detail || '';
-    return obj;
-  });
-  const ws = XLSX.utils.json_to_sheet(exportRows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, cfg.title);
-  XLSX.writeFile(wb, `${cfg.table}_export.xlsx`);
+
+  // สร้าง column list ตรงกับ import template (DB column names)
+  // ลำดับ: production_date, start_hour, start_minute, stop_hour, stop_minute,
+  //        breakdown_detail, raw_material, feed_ton, [product cols], [meter cols], note
+  const cols = [
+    { key: 'production_date',  label: 'production_date' },
+    { key: 'start_hour',       label: 'start_hour' },
+    { key: 'start_minute',     label: 'start_minute' },
+    { key: 'stop_hour',        label: 'stop_hour' },
+    { key: 'stop_minute',      label: 'stop_minute' },
+    { key: 'breakdown_detail', label: 'breakdown_detail' },
+    { key: 'raw_material',     label: 'raw_material' },
+    { key: 'feed_ton',         label: 'feed_ton' },
+    ...cfg.productColumns.map(c => ({ key: c.key, label: c.key })),
+    ...(cfg.hasFlowmeter ? [
+      { key: 'meter_start', label: 'meter_start' },
+      { key: 'meter_stop',  label: 'meter_stop'  },
+    ] : []),
+    { key: 'note', label: 'note' },
+  ];
+
+  const header = cols.map(c => c.label).join(',');
+  const lines = rows.map(r =>
+    cols.map(c => {
+      const v = (r[c.key] !== null && r[c.key] !== undefined) ? String(r[c.key]) : '';
+      return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    }).join(',')
+  );
+  const csvContent = '﻿' + [header, ...lines].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${cfg.table}_export.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // =====================================================================
