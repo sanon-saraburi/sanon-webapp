@@ -935,7 +935,16 @@ function navigateTo(pageKey, forceFullRender) {
   if (pageKey !== 'landing') {
     try {
       const _ss = sessionStorage.getItem('_sn_sess');
-      if (_ss) { const _sd = JSON.parse(_ss); _sd.page = pageKey; sessionStorage.setItem('_sn_sess', JSON.stringify(_sd)); }
+      if (_ss) {
+        const _sd = JSON.parse(_ss); _sd.page = pageKey;
+        sessionStorage.setItem('_sn_sess', JSON.stringify(_sd));
+      } else if (currentUser) {
+        // สร้าง _sn_sess ใหม่ถ้ายังไม่มี (เช่น มาจาก SSO shared session หรือ PWA restart)
+        sessionStorage.setItem('_sn_sess', JSON.stringify({ user: currentUser, page: pageKey, loginAt: Date.now() }));
+      }
+      // บันทึก lastPage ใน shared session ด้วย — สำหรับ PWA restart / เปิด tab ใหม่
+      const _sh = JSON.parse(localStorage.getItem('_sn_shared_sess') || 'null');
+      if (_sh) { _sh.lastPage = pageKey; localStorage.setItem('_sn_shared_sess', JSON.stringify(_sh)); }
     } catch (_) {}
   }
 
@@ -1601,18 +1610,24 @@ function renderAppShell() {
           </a>
         </div>
       </div>
-      <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1 scroll-thin">
-        <p class="px-3 text-xs font-semibold text-secondary-400 uppercase mb-2">แดชบอร์ด</p>
-        ${dashItems.map(m => `
-          <button data-nav="${m.key}" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-secondary-600 hover:bg-secondary-50 transition ${currentPage === m.key ? 'nav-active' : ''}">
-            <i data-lucide="${m.icon}" class="w-4 h-4"></i><span>${m.label}</span>
-          </button>`).join('')}
+      <nav class="flex-1 overflow-y-auto py-3 px-2 space-y-2 scroll-thin">
+        <!-- หมวด Dashboard — พื้นหลังฟ้าอ่อน -->
+        <div class="rounded-2xl p-2" style="background:#eff6ff;">
+          <p class="px-2 text-[10px] font-bold uppercase tracking-wider mb-1.5" style="color:#2563eb;">แดชบอร์ด</p>
+          ${dashItems.map(m => `
+            <button data-nav="${m.key}" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-secondary-600 transition ${currentPage === m.key ? 'nav-active' : 'hover:bg-blue-100'}">
+              <i data-lucide="${m.icon}" class="w-4 h-4"></i><span>${m.label}</span>
+            </button>`).join('')}
+        </div>
         ${manageItems.length ? `
-        <p class="px-3 text-xs font-semibold text-secondary-400 uppercase mb-2 mt-4">จัดการข้อมูล</p>
-        ${manageItems.map(m => `
-          <button data-nav="${m.key}" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-secondary-600 hover:bg-secondary-50 transition ${currentPage === m.key ? 'nav-active' : ''}">
-            <i data-lucide="${m.icon}" class="w-4 h-4"></i><span class="flex-1 text-left">${m.label}</span>${m.key === 'manage-approvals' ? `<span id="sidebar-approval-badge" class="${pendingApprovalCount > 0 ? '' : 'hidden'} ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">${pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}</span>` : ''}
-          </button>`).join('')}
+        <!-- หมวด จัดการข้อมูล — พื้นหลังส้มอ่อน -->
+        <div class="rounded-2xl p-2" style="background:#fff7ed;">
+          <p class="px-2 text-[10px] font-bold uppercase tracking-wider mb-1.5" style="color:#c2410c;">จัดการข้อมูล</p>
+          ${manageItems.map(m => `
+            <button data-nav="${m.key}" class="nav-link w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-secondary-600 transition ${currentPage === m.key ? 'nav-active' : 'hover:bg-orange-100'}">
+              <i data-lucide="${m.icon}" class="w-4 h-4"></i><span class="flex-1 text-left">${m.label}</span>${m.key === 'manage-approvals' ? `<span id="sidebar-approval-badge" class="${pendingApprovalCount > 0 ? '' : 'hidden'} ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">${pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}</span>` : ''}
+            </button>`).join('')}
+        </div>
         ` : ''}
       </nav>
       <div class="p-3 border-t border-secondary-100">
@@ -5710,10 +5725,16 @@ function openProductionForm(plantKey, editingRow) {
         if (error) throw error;
         // LINE แจ้งเตือน — fire-and-forget เฉพาะ pending
         if (payload.status === 'pending') {
+          // คำนวณ runtime เอง (generated column ไม่อยู่ใน payload)
+          const _shM = (payload.start_hour||0)*60 + (payload.start_minute||0);
+          const _stM = (payload.stop_hour||0)*60  + (payload.stop_minute||0);
+          const _rtMins = Math.max(0, _stM - _shM);
           fetch('https://pcmpwkcmvsxrvbximjgf.supabase.co/functions/v1/line-notify', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'INSERT', table: cfg2.table, record: Object.assign({}, payload, {
-              recorder_name: currentUser?.full_name || currentUser?.username || '-'
+              recorder_name: currentUser?.full_name || currentUser?.username || '-',
+              runtime_hour:   Math.floor(_rtMins / 60),
+              runtime_minute: _rtMins % 60,
             }) })
           }).catch(() => {});
         }
@@ -8774,6 +8795,8 @@ async function loadReportData() {
         if (results[i].error) throw results[i].error;
         (results[i].data || []).forEach(r => rows.push(Object.assign({ _plant: APPROVAL_PLANT_LABELS[p] }, r)));
       });
+      // เรียงวันที่เก่าสุดก่อน (ascending) หลัง merge หลายโรงงาน
+      rows.sort((a, b) => (a.production_date || '') < (b.production_date || '') ? -1 : (a.production_date || '') > (b.production_date || '') ? 1 : 0);
     } else if (_reportState.type === 'drone') {
       let q = db.from('drone_stock').select('*, factories(name)');
       if (_reportState.factoryId !== 'all') q = q.eq('factory_id', _reportState.factoryId);
@@ -8975,10 +8998,99 @@ function exportLoaderDailyExcel() {
   XLSX.writeFile(wb, `loader_daily_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// ─── Production Report (แบบรูปที่ 2 — แสดงคอลัมน์ครบ ตามแต่ละโรงงาน) ─────────
+function renderProductionReport() {
+  const tableBlock = document.getElementById('report-table-block');
+  if (!tableBlock) return;
+  const rows = applyReportSort(_reportState.rows);
+
+  // คอลัมน์ผลิตภัณฑ์ตามโรงงาน
+  const PLANT_PROD_COLS = {
+    CDE:    [{ key:'os_ton',label:'O/S'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_screening_3_8_ton',label:'หินเกล็ด 3/8'},{ key:'msand_ton',label:'M-Sand'},{ key:'silk_sediment_ton',label:'ตะกอน Silk'}],
+    Propel: [{ key:'os_ton',label:'O/S'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_screening_3_8_ton',label:'หินเกล็ด 3/8'},{ key:'msand_ton',label:'M-Sand'},{ key:'silk_sediment_ton',label:'ตะกอน Silk'},{ key:'stone_1_2_ton',label:'หิน 1/2'}],
+    Sanon1: [{ key:'stone_6_8_ton',label:'หิน 6/8'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_kluk_ton',label:'หินคลุก'},{ key:'stone_dust_ton',label:'ฝุ่นหิน'}],
+    Sanon2: [{ key:'stone_6_8_ton',label:'หิน 6/8'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_kluk_ton',label:'หินคลุก'},{ key:'stone_dust_ton',label:'ฝุ่นหิน'},{ key:'stone_3_8_ton',label:'หิน 3/8'},{ key:'stone_special2_ton',label:'พิเศษ'}],
+  };
+  const METER_PLANTS = ['CDE','Propel']; // โรงงานที่มี Flowmeter
+
+  const plants = _reportState.prodPlants.length ? _reportState.prodPlants : ['cde','propel','sanon1','sanon2'];
+  const plantLabels = plants.map(p => APPROVAL_PLANT_LABELS[p] || p);
+  const multiPlant  = plants.length > 1;
+  const hasMeter    = plantLabels.some(l => METER_PLANTS.includes(l));
+
+  // รวม product columns (union) — ถ้าหลายโรงงาน
+  const prodColMap = new Map();
+  plantLabels.forEach(pl => {
+    (PLANT_PROD_COLS[pl] || []).forEach(c => { if (!prodColMap.has(c.key)) prodColMap.set(c.key, c.label); });
+  });
+  const prodCols = [...prodColMap.entries()].map(([key, label]) => ({ key, label }));
+
+  const fmtD = (s) => {
+    if (!s) return '-';
+    const d = new Date(s + 'T00:00:00');
+    return isNaN(d) ? s : d.toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'2-digit' });
+  };
+  const fmtN = (v, dec=1) => {
+    const n = Number(v);
+    if (v == null || v === '' || isNaN(n) || n === 0) return '-';
+    return n.toLocaleString('th-TH', { minimumFractionDigits:dec, maximumFractionDigits:dec });
+  };
+  const badge = (status) => {
+    if (status === 'approved') return `<span class="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-medium whitespace-nowrap">🟢 จริง</span>`;
+    if (status === 'rejected') return `<span class="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-medium whitespace-nowrap">❌ ปฏิเสธ</span>`;
+    return `<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium whitespace-nowrap">🟡 เบื้องต้น</span>`;
+  };
+
+  const thCls = 'py-2 pr-3 text-xs font-semibold text-secondary-400 whitespace-nowrap';
+  const tdR   = 'py-2 pr-3 text-right text-sm tabular-nums';
+  const tdL   = 'py-2 pr-3 text-sm';
+
+  const thead = `<tr class="text-left border-b border-secondary-100">
+    ${multiPlant ? `<th class="${thCls}">หน่วยผลิต</th>` : ''}
+    <th class="${thCls}">วันเดือนปี</th>
+    <th class="${thCls}">ยอดข้อมูล</th>
+    <th class="${thCls}">เวลาเดิน</th>
+    <th class="${thCls} text-right">เฉลี่ย<br>(ตัน/ชม.)</th>
+    <th class="${thCls} text-right">ป้อน<br>(ตัน)</th>
+    ${prodCols.map(c=>`<th class="${thCls} text-right">${escapeHtml(c.label)}</th>`).join('')}
+    ${hasMeter ? `<th class="${thCls} text-right">มิตร.<br>เริ่ม</th><th class="${thCls} text-right">มิตร.<br>หยุด</th><th class="${thCls} text-right">FM<br>รวม</th><th class="${thCls} text-right">FM</th>` : ''}
+    <th class="${thCls}">Breakdown</th>
+  </tr>`;
+
+  const tbody = rows.length ? rows.map(r => {
+    const plant = r._plant || '';
+    const hasMeterRow = METER_PLANTS.includes(plant);
+    return `<tr class="border-b border-secondary-50 hover:bg-secondary-50">
+      ${multiPlant ? `<td class="${tdL} font-medium text-secondary-600">${escapeHtml(plant)}</td>` : ''}
+      <td class="${tdL} whitespace-nowrap">${fmtD(r.production_date)}</td>
+      <td class="py-2 pr-3">${badge(r.status)}</td>
+      <td class="${tdL} whitespace-nowrap text-secondary-700">${Number(r.runtime_hour)||0}ชม.${Number(r.runtime_minute)||0}น.</td>
+      <td class="${tdR}">${fmtN(r.avg_ton_per_hour,1)}</td>
+      <td class="${tdR} font-medium">${fmtN(r.feed_ton,0)}</td>
+      ${prodCols.map(c=>`<td class="${tdR}">${fmtN(r[c.key],0)}</td>`).join('')}
+      ${hasMeter ? `
+        <td class="${tdR}">${hasMeterRow ? fmtN(r.meter_start,1) : '-'}</td>
+        <td class="${tdR}">${hasMeterRow ? fmtN(r.meter_stop,1) : '-'}</td>
+        <td class="${tdR}">${hasMeterRow ? fmtN(r.flowmeter_total,2) : '-'}</td>
+        <td class="${tdR}">${hasMeterRow ? fmtN(r.flowmeter_result,2) : '-'}</td>
+      ` : ''}
+      <td class="${tdL} text-xs text-secondary-500 max-w-[200px] truncate" title="${escapeHtml(r.breakdown_detail||'')}">${escapeHtml(r.breakdown_detail||'-')}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="20" class="py-8 text-center text-secondary-400">ไม่พบข้อมูล</td></tr>`;
+
+  tableBlock.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <table class="w-full" id="report-data-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+      <p class="text-xs text-secondary-400 px-5 py-3">ทั้งหมด ${rows.length} รายการ</p>
+    </div>`;
+  refreshIcons();
+}
+
 function renderReportTable() {
   const tableBlock = document.getElementById('report-table-block');
   if (!tableBlock) return;
   if (_reportState.type === 'loader_daily') { renderLoaderDailyReport(); return; }
+  if (_reportState.type === 'production')  { renderProductionReport();  return; }
   const rows = applyReportSort(_reportState.rows);
   const cols = _reportState.columns;
 
@@ -9630,10 +9742,62 @@ function csvEscapeField(val) {
   return s;
 }
 
+// สร้าง cols + rows สำหรับ Export รายงานการผลิต (ตรงกับตาราง renderProductionReport)
+function buildProductionExportData() {
+  const PLANT_PROD_COLS = {
+    CDE:    [{ key:'os_ton',label:'O/S'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_screening_3_8_ton',label:'หินเกล็ด 3/8'},{ key:'msand_ton',label:'M-Sand'},{ key:'silk_sediment_ton',label:'ตะกอน Silk'}],
+    Propel: [{ key:'os_ton',label:'O/S'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_screening_3_8_ton',label:'หินเกล็ด 3/8'},{ key:'msand_ton',label:'M-Sand'},{ key:'silk_sediment_ton',label:'ตะกอน Silk'},{ key:'stone_1_2_ton',label:'หิน 1/2'}],
+    Sanon1: [{ key:'stone_6_8_ton',label:'หิน 6/8'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_kluk_ton',label:'หินคลุก'},{ key:'stone_dust_ton',label:'ฝุ่นหิน'}],
+    Sanon2: [{ key:'stone_6_8_ton',label:'หิน 6/8'},{ key:'stone_3_4_ton',label:'หิน 3/4'},{ key:'stone_kluk_ton',label:'หินคลุก'},{ key:'stone_dust_ton',label:'ฝุ่นหิน'},{ key:'stone_3_8_ton',label:'หิน 3/8'},{ key:'stone_special2_ton',label:'พิเศษ'}],
+  };
+  const METER_PLANTS = ['CDE','Propel'];
+
+  const plants = _reportState.prodPlants.length ? _reportState.prodPlants : ['cde','propel','sanon1','sanon2'];
+  const plantLabels = plants.map(p => APPROVAL_PLANT_LABELS[p] || p);
+  const multiPlant  = plants.length > 1;
+  const hasMeter    = plantLabels.some(l => METER_PLANTS.includes(l));
+
+  const prodColMap = new Map();
+  plantLabels.forEach(pl => {
+    (PLANT_PROD_COLS[pl] || []).forEach(c => { if (!prodColMap.has(c.key)) prodColMap.set(c.key, c.label); });
+  });
+  const prodCols = [...prodColMap.entries()].map(([key, label]) => ({ key, label }));
+
+  const cols = [];
+  if (multiPlant) cols.push({ key: '_plant', label: 'หน่วยผลิต' });
+  cols.push({ key: 'production_date', label: 'วันเดือนปี' });
+  cols.push({ key: '_status_th', label: 'ยอดข้อมูล' });
+  cols.push({ key: '_runtime_str', label: 'เวลาเดิน' });
+  cols.push({ key: 'avg_ton_per_hour', label: 'เฉลี่ย(ตัน/ชม)' });
+  cols.push({ key: 'feed_ton', label: 'ป้อน(ตัน)' });
+  prodCols.forEach(c => cols.push(c));
+  if (hasMeter) {
+    cols.push({ key: 'meter_start', label: 'มิตร.เริ่ม' });
+    cols.push({ key: 'meter_stop', label: 'มิตร.หยุด' });
+    cols.push({ key: 'flowmeter_total', label: 'FM รวม' });
+    cols.push({ key: 'flowmeter_result', label: 'FM' });
+  }
+  cols.push({ key: 'breakdown_detail', label: 'Breakdown' });
+
+  const statusTh = s => s === 'approved' ? 'จริง' : s === 'rejected' ? 'ปฏิเสธ' : 'เบื้องต้น';
+  const rows = applyReportSort(_reportState.rows).map(r => ({
+    ...r,
+    _status_th:  statusTh(r.status),
+    _runtime_str: `${Number(r.runtime_hour)||0}ชม.${Number(r.runtime_minute)||0}น.`,
+  }));
+
+  return { cols, rows };
+}
+
 function exportReportCsv() {
   if (_reportState.type === 'loader_daily') { exportLoaderDailyExcel(); return; }
-  const cols = _reportState.columns;
-  const rows = applyReportSort(_reportState.rows);
+  let cols, rows;
+  if (_reportState.type === 'production') {
+    ({ cols, rows } = buildProductionExportData());
+  } else {
+    cols = _reportState.columns;
+    rows = applyReportSort(_reportState.rows);
+  }
   if (!rows.length) { showToast('ไม่มีข้อมูลให้ export', 'warning'); return; }
   const headerLine = cols.map(c => csvEscapeField(c.label)).join(',');
   const lines = rows.map(r => cols.map(c => csvEscapeField(r[c.key])).join(','));
@@ -9651,12 +9815,17 @@ function exportReportCsv() {
 
 function exportReportExcel() {
   if (_reportState.type === 'loader_daily') { exportLoaderDailyExcel(); return; }
-  const cols = _reportState.columns;
-  const rows = applyReportSort(_reportState.rows);
+  let cols, rows;
+  if (_reportState.type === 'production') {
+    ({ cols, rows } = buildProductionExportData());
+  } else {
+    cols = _reportState.columns;
+    rows = applyReportSort(_reportState.rows);
+  }
   if (!rows.length) { showToast('ไม่มีข้อมูลให้ export', 'warning'); return; }
   const exportRows = rows.map(r => {
     const obj = {};
-    cols.forEach(c => { obj[c.label] = r[c.key]; });
+    cols.forEach(c => { obj[c.label] = r[c.key] ?? ''; });
     return obj;
   });
   const ws = XLSX.utils.json_to_sheet(exportRows);
@@ -10179,7 +10348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!user) {
           try {
             const shared = JSON.parse(localStorage.getItem('_sn_shared_sess') || 'null');
-            if (shared?.id && shared?.username) user = shared;
+            if (shared?.id && shared?.username) { user = shared; page = shared.lastPage || null; }
           } catch(_) {}
         }
       }
