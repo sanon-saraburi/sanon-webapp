@@ -2288,6 +2288,9 @@ async function loadChemDash(){
   const pTotWdQty=displayItems.reduce((s,ci)=>s+(prevWd[ci.id]?.qty||0),0);
   const pTotWdCost=displayItems.reduce((s,ci)=>s+(prevWd[ci.id]?.cost||0),0);
   const pTotRcvQty=displayItems.reduce((s,ci)=>s+(prevRcv[ci.id]?.qty||0),0);
+  // น้ำหนักรวม (กก.) สำหรับ KPI
+  const totWdKg=displayItems.reduce((s,ci)=>s+(curWd[ci.id]?.qty||0)*(itemLookup[ci.id].wpkg||0),0);
+  const totRcvKg=displayItems.reduce((s,ci)=>s+(curRcv[ci.id]?.qty||0)*(itemLookup[ci.id].wpkg||0),0);
 
   function trendBadge(curr,prev,inverse=false){
     if(!prev||prev===0)return'';
@@ -2301,10 +2304,10 @@ async function loadChemDash(){
 
   // ── KPI Cards ──
   const kpiDef=[
-    {icon:'package-minus',bg:'bg-orange-100',ic:'text-orange-600',title:'เบิกจ่ายเดือนนี้',val:`${fmtNum(totWdQty,1)} ถุง`,badge:trendBadge(totWdQty,pTotWdQty,true),sub:`เดือนก่อน ${fmtNum(pTotWdQty,1)} ถุง`},
-    {icon:'banknote',bg:'bg-red-100',ic:'text-red-600',title:'ค่าใช้จ่ายเบิก',val:`฿${fmtNum(totWdCost,0)}`,badge:trendBadge(totWdCost,pTotWdCost,true),sub:`เดือนก่อน ฿${fmtNum(pTotWdCost,0)}`},
-    {icon:'package-plus',bg:'bg-blue-100',ic:'text-blue-600',title:'รับเข้าเดือนนี้',val:`${fmtNum(totRcvQty,1)} ถุง`,badge:trendBadge(totRcvQty,pTotRcvQty,false),sub:`เดือนก่อน ${fmtNum(pTotRcvQty,1)} ถุง`},
-    {icon:'wallet',bg:'bg-emerald-100',ic:'text-emerald-700',title:'ค่าใช้จ่ายรับเข้า',val:`฿${fmtNum(totRcvCost,0)}`,badge:'',sub:'มูลค่าสต็อครับเข้า'},
+    {icon:'package-minus',bg:'bg-orange-100',ic:'text-orange-600',title:'เบิกจ่ายเดือนนี้',val:`${fmtNum(totWdQty,1)} ถุง`,kg:totWdKg>0?`${fmtNum(totWdKg,0)} กก.`:'',badge:trendBadge(totWdQty,pTotWdQty,true),sub:`เดือนก่อน ${fmtNum(pTotWdQty,1)} ถุง`},
+    {icon:'banknote',bg:'bg-red-100',ic:'text-red-600',title:'ค่าใช้จ่ายเบิก',val:`฿${fmtNum(totWdCost,0)}`,kg:'',badge:trendBadge(totWdCost,pTotWdCost,true),sub:`เดือนก่อน ฿${fmtNum(pTotWdCost,0)}`},
+    {icon:'package-plus',bg:'bg-blue-100',ic:'text-blue-600',title:'รับเข้าเดือนนี้',val:`${fmtNum(totRcvQty,1)} ถุง`,kg:totRcvKg>0?`${fmtNum(totRcvKg,0)} กก.`:'',badge:trendBadge(totRcvQty,pTotRcvQty,false),sub:`เดือนก่อน ${fmtNum(pTotRcvQty,1)} ถุง`},
+    {icon:'wallet',bg:'bg-emerald-100',ic:'text-emerald-700',title:'ค่าใช้จ่ายรับเข้า',val:`฿${fmtNum(totRcvCost,0)}`,kg:'',badge:'',sub:'มูลค่าสต็อครับเข้า'},
   ];
   if(kpiWrap)kpiWrap.innerHTML=kpiDef.map(c=>`
     <div class="bg-white rounded-2xl shadow-md border border-gray-100 p-4">
@@ -2315,6 +2318,7 @@ async function loadChemDash(){
         ${c.badge}
       </div>
       <div class="text-2xl font-bold text-gray-900 mb-0.5">${c.val}</div>
+      ${c.kg?`<div class="text-sm font-medium text-gray-500 -mt-0.5 mb-0.5">${c.kg}</div>`:''}
       <div class="text-xs font-medium text-gray-600">${c.title}</div>
       <div class="text-xs text-gray-500 mt-0.5">${c.sub}</div>
     </div>`).join('');
@@ -2330,7 +2334,10 @@ async function loadChemDash(){
     const _fkey=Object.keys(FCLR).find(k=>_fac.includes(k));
     const _clr=_fkey?FCLR[_fkey]:{border:'border-teal-500',bar:'bg-teal-400',price:'text-teal-800',bg:'bg-white',badge:'bg-teal-100 text-teal-700',code:'text-gray-500'};
     const _facLbl=itemLookup[ci.id]?.fac||'';
-    const _facBadge=_facLbl?`<div class="mb-2"><span class="inline-block text-xs font-bold px-2.5 py-0.5 rounded-full ${_clr.badge}">🏭 ${escapeHtml(_facLbl)}</span></div>`:'';
+    const _todayTH=(()=>{const d=new Date();return `${d.getDate()} ${MN[d.getMonth()]} ${d.getFullYear()+543}`;})();
+    const _facBadge=`<div class="mb-2 flex items-center justify-between">`
+      +(_facLbl?`<span class="inline-block text-xs font-bold px-2.5 py-0.5 rounded-full ${_clr.badge}">🏭 ${escapeHtml(_facLbl)}</span>`:`<span></span>`)
+      +`<span class="text-xs text-gray-400">ณ ${_todayTH}</span></div>`;
     const barColor=isLow?'bg-red-400':_clr.bar;
     const statusBadge=isLow
       ?'<span class="text-xs bg-red-200 text-red-700 px-2 py-0.5 rounded-full font-bold">⚠ ใกล้หมด</span>'
@@ -2352,10 +2359,21 @@ async function loadChemDash(){
         ${wpkg>0?`<div class="text-right"><div class="text-base font-semibold text-gray-800">${fmtNum(stock*wpkg,0)}</div><div class="text-xs text-gray-500">กก. รวม</div></div>`:''}
         ${(()=>{const ip=Number(_invItems.find(i=>i.id===ci.id)?.unit_price)||0;const priceShow=ac>0?fmtNum(ac,0):ip>0?fmtNum(ip,0):null;return priceShow?`<div class="text-right ml-auto"><div class="text-sm font-bold ${_clr.price}">฿${priceShow}</div><div class="text-xs text-gray-500">บ./ถุง (ราคาเฉลี่ย)</div></div>`:''})()}
       </div>
-      ${pct!==null?`<div>
+      ${pct!==null?`<div class="mb-3">
         <div class="flex justify-between text-xs text-gray-400 mb-1"><span>ขั้นต่ำ ${ci.min_stock} ${ci.unit||'ถุง'}</span><span>${pct}%</span></div>
         <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="${barColor} h-2.5 rounded-full transition-all" style="width:${pct}%"></div></div>
-      </div>`:''}
+      </div>`:'<div class="mb-3"></div>'}
+      <div class="flex gap-3 pt-3 border-t border-gray-200">
+        <div class="flex-1 text-center">
+          <div class="text-sm font-bold ${(curWd[ci.id]?.qty||0)>0?'text-orange-600':'text-gray-400'}">${fmtNum(curWd[ci.id]?.qty||0,1)}</div>
+          <div class="text-xs text-gray-500">เบิกเดือนนี้ (${MN[month]})</div>
+        </div>
+        <div class="w-px bg-gray-200"></div>
+        <div class="flex-1 text-center">
+          <div class="text-sm font-bold ${(curRcv[ci.id]?.qty||0)>0?'text-blue-600':'text-gray-400'}">${fmtNum(curRcv[ci.id]?.qty||0,1)}</div>
+          <div class="text-xs text-gray-500">รับเข้าเดือนนี้</div>
+        </div>
+      </div>
     </div>`;
   }).join('');
 
