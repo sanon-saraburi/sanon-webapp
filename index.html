@@ -9592,9 +9592,9 @@ function printOtherReport() {
       const dates=Object.keys(byDate).sort();
       let tMH=0,tKW=0,tCost=0,tbody='';
       dates.forEach((dt,i)=>{ const {mh,kw,cost}=byDate[dt]; tMH+=mh;tKW+=kw;tCost+=cost;
-        tbody+=`<tr class="${i%2?'alt-row':''}"><td class="tc">${i+1}</td><td class="nowrap">${_fmtD(dt)}</td><td class="tr">${_fmtN(mh,2)}</td><td class="tr">${mh>0?_fmtN(kw/mh,2):'-'}</td><td class="tr">${_fmtN(kw,1)}</td><td class="tr">${_fmtN0(cost)}</td></tr>`;
+        tbody+=`<tr class="${i%2?'alt-row':''}"><td class="tc">${i+1}</td><td class="nowrap">${_fmtD(dt)}</td><td class="tr">${_fmtN(mh,2)}</td><td class="tr">${mh>0?_fmtN(kw/mh,2):'-'}</td><td class="tr">${_fmtN(kw,2)}</td><td class="tr">${_fmtN(cost,2)}</td></tr>`;
       });
-      tbody+=`<tr class="grand-total"><td colspan="2" class="tc">Grand Total</td><td class="tr">${_fmtN(tMH,2)}</td><td class="tr">${tMH>0?_fmtN(tKW/tMH,2):'-'}</td><td class="tr">${_fmtN(tKW,1)}</td><td class="tr">${_fmtN0(tCost)}</td></tr>`;
+      tbody+=`<tr class="grand-total"><td colspan="2" class="tc">Grand Total</td><td class="tr">${_fmtN(tMH,2)}</td><td class="tr">${tMH>0?_fmtN(tKW/tMH,2):'-'}</td><td class="tr">${_fmtN(tKW,2)}</td><td class="tr">${_fmtN(tCost,2)}</td></tr>`;
       sections+=`${li>0?'<div class="page-break"></div>':''}
         <div class="plant-section">
           <div class="plant-header"><span class="plant-badge">🚜 ${_esc(ln)}</span><span class="plant-period">${dates.length} วัน</span></div>
