@@ -6142,7 +6142,7 @@ async function loadManageLoader() {
     const to = `${_mLoaderFilter.year}-${pad2(_mLoaderFilter.month)}-${pad2(lastDay)}`;
     let query = db.from('electric_loader').select('*, factories(name)').gte('work_date', from).lte('work_date', to);
     if (_mLoaderFilter.factoryId !== 'all') query = query.eq('factory_id', _mLoaderFilter.factoryId);
-    const { data, error } = await query.order('work_date', { ascending: false });
+    const { data, error } = await query.order('work_date', { ascending: false }).order('machine_hour_start', { ascending: false, nullsFirst: false });
     if (error) throw error;
     _mLoaderCache = data || [];
     renderManageLoaderTables();
@@ -10220,11 +10220,13 @@ async function renderElecManageTable() {
           ${bpt ? `<div class="text-xs" style="color:${f.color}">${bpt} ฿/ต.</div>` : `<div class="text-xs text-secondary-300">${ton>0?fmtNum(ton,0)+' ต.':'–'}</div>`}
         </td>`;
       }).join('');
-      return `<tr class="border-b border-secondary-100 hover:bg-secondary-50 cursor-pointer" onclick="openElecMonthModal(${m},${year})">
-        <td class="px-3 py-2 font-medium text-secondary-700 whitespace-nowrap">${MN[m-1]}</td>
-        ${cells}
-        <td class="px-3 py-2 text-center">
-          <button class="text-xs px-2 py-1 rounded-lg border border-secondary-200 text-secondary-500 hover:bg-secondary-100">แก้ไข</button>
+      const hasData = ELEC_FACTORIES.some(f => (elecMap[f.key][m]?.baht || 0) > 0);
+      return `<tr class="border-b border-secondary-100 hover:bg-secondary-50">
+        <td class="px-3 py-2 font-medium text-secondary-700 whitespace-nowrap cursor-pointer" onclick="openElecMonthModal(${m},${year})">${MN[m-1]}</td>
+        ${cells.replace(/onclick="[^"]*"/g, `onclick="openElecMonthModal(${m},${year})"`) }
+        <td class="px-3 py-2 text-center whitespace-nowrap">
+          <button onclick="openElecMonthModal(${m},${year})" class="text-xs px-2 py-1 rounded-lg border border-secondary-200 text-secondary-500 hover:bg-secondary-100 mr-1">แก้ไข</button>
+          ${hasData ? `<button onclick="deleteElecMonth(${m},${year})" class="text-xs px-2 py-1 rounded-lg border border-red-200 text-red-500 hover:bg-red-50">ลบ</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -10247,9 +10249,19 @@ async function renderElecManageTable() {
 
 async function openElecMonthModal(month, year) {
   const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const yearNow = new Date().getFullYear();
+  const monthOpts = MN.map((n,i) => `<option value="${i+1}" ${i+1===month?'selected':''}>${n}</option>`).join('');
+  const yearOpts  = Array.from({length:5},(_,i)=>yearNow-i).map(y=>`<option value="${y}" ${y===year?'selected':''}>${y+543}</option>`).join('');
+
   const fields = ELEC_FACTORIES.map(f => `
     <div>
-      <label class="text-xs font-semibold mb-1 block" style="color:${f.color}">${f.label}</label>
+      <label class="text-xs font-semibold mb-1 block flex items-center justify-between">
+        <span style="color:${f.color}">${f.label}</span>
+        <button type="button" onclick="deleteElecFactory('${f.key}')"
+          class="text-xs text-red-400 hover:text-red-600 flex items-center gap-1 font-normal">
+          <i data-lucide="trash-2" class="w-3 h-3"></i>ลบข้อมูลโรงงานนี้
+        </button>
+      </label>
       <div class="flex gap-2">
         <input id="elec-baht-${f.key}" type="number" inputmode="decimal" min="0" step="1" placeholder="ค่าไฟ (บาท)"
           class="flex-1 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
@@ -10257,17 +10269,51 @@ async function openElecMonthModal(month, year) {
           class="w-28 border border-secondary-200 rounded-xl px-3 py-2 text-sm" />
       </div>
     </div>`).join('');
+
   showModal({
-    title: `ค่าไฟฟ้า ${MN[month-1]} ${year+543}`,
+    title: 'บันทึก/แก้ไขค่าไฟฟ้า',
     bodyHtml: `<div class="space-y-4">
+      <!-- เลือกเดือน/ปี -->
+      <div class="flex gap-2 items-center">
+        <div class="flex-1">
+          <label class="text-xs text-secondary-500 mb-1 block">เดือน</label>
+          <select id="elec-modal-month" onchange="loadElecModalData()" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm font-semibold">${monthOpts}</select>
+        </div>
+        <div class="w-28">
+          <label class="text-xs text-secondary-500 mb-1 block">ปี (พ.ศ.)</label>
+          <select id="elec-modal-year" onchange="loadElecModalData()" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm font-semibold">${yearOpts}</select>
+        </div>
+      </div>
       <p class="text-xs text-secondary-400">กรอกค่าไฟฟ้า (บาท) และหน่วยไฟฟ้า (kWh) ถ้ามี ของแต่ละโรงงาน</p>
       ${fields}
     </div>`,
     confirmText: 'บันทึก',
-    onConfirm: () => saveElecMonth(month, year),
+    onConfirm: () => {
+      const m = parseInt(document.getElementById('elec-modal-month')?.value);
+      const y = parseInt(document.getElementById('elec-modal-year')?.value);
+      saveElecMonth(m, y);
+    },
   });
+
   // โหลดค่าเดิมหลัง modal เปิด
-  const { data } = await db.from('electricity_costs').select('factory,baht,kwh').eq('year',year).eq('month',month);
+  await loadElecModalData();
+}
+
+async function loadElecModalData() {
+  const monthEl = document.getElementById('elec-modal-month');
+  const yearEl  = document.getElementById('elec-modal-year');
+  if (!monthEl || !yearEl) return;
+  const m = parseInt(monthEl.value);
+  const y = parseInt(yearEl.value);
+  // เคลียร์ field ก่อน
+  ELEC_FACTORIES.forEach(f => {
+    const b = document.getElementById(`elec-baht-${f.key}`);
+    const k = document.getElementById(`elec-kwh-${f.key}`);
+    if (b) b.value = '';
+    if (k) k.value = '';
+  });
+  // โหลดข้อมูลเดือน/ปีที่เลือก
+  const { data } = await db.from('electricity_costs').select('factory,baht,kwh').eq('year',y).eq('month',m);
   (data||[]).forEach(r => {
     const b = document.getElementById(`elec-baht-${r.factory}`);
     const k = document.getElementById(`elec-kwh-${r.factory}`);
@@ -10277,25 +10323,72 @@ async function openElecMonthModal(month, year) {
 }
 
 async function saveElecMonth(month, year) {
-  const rows = ELEC_FACTORIES.map(f => {
+  const toUpsert = [], toDelete = [];
+  ELEC_FACTORIES.forEach(f => {
     const bahtEl = document.getElementById(`elec-baht-${f.key}`);
     const kwhEl  = document.getElementById(`elec-kwh-${f.key}`);
     const baht = parseFloat(bahtEl?.value || '') || null;
     const kwh  = parseFloat(kwhEl?.value  || '') || null;
-    return { factory: f.key, year, month, baht, kwh };
-  }).filter(r => r.baht !== null);
+    if (baht !== null) {
+      toUpsert.push({ factory: f.key, year, month, baht, kwh, created_by: currentUser?.id || null });
+    } else {
+      toDelete.push(f.key); // field ว่าง → ลบ record นั้น
+    }
+  });
 
-  if (rows.length === 0) { showToast('ไม่มีข้อมูลที่จะบันทึก','warn'); return; }
   try {
-    const { error } = await db.from('electricity_costs').upsert(
-      rows.map(r => ({ ...r, created_by: currentUser?.id || null })),
-      { onConflict: 'factory,year,month' }
-    );
-    if (error) throw error;
-    showToast(`บันทึกค่าไฟ ${rows.length} โรงงาน เรียบร้อย`, 'success');
+    if (toUpsert.length) {
+      const { error } = await db.from('electricity_costs').upsert(toUpsert, { onConflict: 'factory,year,month' });
+      if (error) throw error;
+    }
+    if (toDelete.length) {
+      const { error } = await db.from('electricity_costs').delete()
+        .eq('year', year).eq('month', month).in('factory', toDelete);
+      if (error) throw error;
+    }
+    const msg = toUpsert.length ? `บันทึก ${toUpsert.length} โรงงาน` : '';
+    const msg2 = toDelete.length ? `ลบ ${toDelete.length} โรงงาน` : '';
+    showToast([msg, msg2].filter(Boolean).join(' · ') + ' เรียบร้อย', 'success');
     renderElecManageTable();
   } catch(err) {
     showToast('บันทึกไม่สำเร็จ: ' + err.message, 'error');
+  }
+}
+
+async function deleteElecMonth(month, year) {
+  const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  if (!confirm(`ลบข้อมูลค่าไฟฟ้า ${MN[month-1]} ${year+543} ทุกโรงงาน?\nไม่สามารถกู้คืนได้`)) return;
+  try {
+    const { error } = await db.from('electricity_costs').delete().eq('year', year).eq('month', month);
+    if (error) throw error;
+    showToast(`ลบค่าไฟ ${MN[month-1]} ${year+543} เรียบร้อย`, 'success');
+    renderElecManageTable();
+  } catch(err) {
+    showToast('ลบไม่สำเร็จ: ' + err.message, 'error');
+  }
+}
+
+async function deleteElecFactory(factoryKey) {
+  const monthEl = document.getElementById('elec-modal-month');
+  const yearEl  = document.getElementById('elec-modal-year');
+  if (!monthEl || !yearEl) return;
+  const m = parseInt(monthEl.value);
+  const y = parseInt(yearEl.value);
+  const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  if (!confirm(`ลบข้อมูลค่าไฟฟ้าโรงงาน ${factoryKey} เดือน ${MN[m-1]} ${y+543}?`)) return;
+  try {
+    const { error } = await db.from('electricity_costs').delete()
+      .eq('year', y).eq('month', m).eq('factory', factoryKey);
+    if (error) throw error;
+    // เคลียร์ field ใน modal
+    const b = document.getElementById(`elec-baht-${factoryKey}`);
+    const k = document.getElementById(`elec-kwh-${factoryKey}`);
+    if (b) b.value = '';
+    if (k) k.value = '';
+    showToast(`ลบข้อมูล ${factoryKey} เรียบร้อย`, 'success');
+    renderElecManageTable();
+  } catch(err) {
+    showToast('ลบไม่สำเร็จ: ' + err.message, 'error');
   }
 }
 
