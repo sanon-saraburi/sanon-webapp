@@ -5740,6 +5740,19 @@ function openProductionForm(plantKey, editingRow) {
         }
         showToast('บันทึกข้อมูลสำเร็จ', 'success');
         loadProductionDistinctRawMaterialsAndLatest(plantKey); // refresh latestRow หลัง insert
+        // switch month filter ไปเดือนของข้อมูลที่เพิ่งบันทึก
+        if (payload.production_date) {
+          const _d = new Date(payload.production_date);
+          if (!isNaN(_d)) {
+            const st2 = getMProdState(plantKey);
+            st2.month = _d.getMonth() + 1;
+            st2.year  = _d.getFullYear();
+            const mSel = document.getElementById(`mp-${plantKey}-month`);
+            const ySel = document.getElementById(`mp-${plantKey}-year`);
+            if (mSel) mSel.value = st2.month;
+            if (ySel) ySel.value = st2.year;
+          }
+        }
       }
       closePfModal();
       loadProductionData(plantKey);
@@ -6001,6 +6014,23 @@ async function importProductionExcel(e, plantKey, finalMode = false) {
       showToast(`นำเข้าข้อมูล (เบื้องต้น) สำเร็จ ${rows.length} รายการ`, 'success');
     }
     e.target.value = '';
+    // switch filter ไปเดือนของข้อมูลที่ import (เดือนล่าสุดในไฟล์)
+    if (rows.length) {
+      const _latestDate = rows.map(r => r.production_date).filter(Boolean).sort().reverse()[0];
+      if (_latestDate) {
+        const _d = new Date(_latestDate);
+        if (!isNaN(_d)) {
+          const st = getMProdState(plantKey);
+          st._initialized = true; // ไม่ให้ auto-detect ทับค่าที่เพิ่งตั้ง
+          st.month = _d.getMonth() + 1;
+          st.year  = _d.getFullYear();
+          const mSel = document.getElementById(`mp-${plantKey}-month`);
+          const ySel = document.getElementById(`mp-${plantKey}-year`);
+          if (mSel) mSel.value = st.month;
+          if (ySel) ySel.value = st.year;
+        }
+      }
+    }
     loadProductionData(plantKey);
     fetchPendingApprovalCount();
   } catch (err) {
