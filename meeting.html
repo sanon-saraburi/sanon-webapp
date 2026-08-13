@@ -66,7 +66,7 @@
 <body class="bg-slate-100 min-h-screen">
 
 <!-- ===== LOGIN SCREEN ===== -->
-<div id="login-screen" class="fixed inset-0 z-[999] bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+<div id="login-screen" class="fixed inset-0 z-[999] bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 overflow-y-auto flex items-start justify-center p-4 py-6">
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
       <div class="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -129,8 +129,8 @@
 <header class="bg-gradient-to-r from-blue-900 to-blue-700 text-white px-4 py-3 flex items-center justify-between shadow-lg">
   <div class="flex items-center gap-2">
     <!-- Hamburger (mobile, เฉพาะ role ที่มี sidebar) -->
-    <button id="hamburger-btn" onclick="toggleMobileSidebar()" class="hidden w-9 h-9 bg-white/10 hover:bg-white/20 rounded-lg items-center justify-center transition">
-      <i class="fa-solid fa-bars"></i>
+    <button id="hamburger-btn" onclick="toggleMobileSidebar()" class="hidden w-9 h-9 bg-white/10 hover:bg-white/20 rounded-lg items-center justify-center transition" style="display:none">
+      <i class="fa-solid fa-bars text-lg"></i>
     </button>
     <div class="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
       <i class="fa-regular fa-calendar-check text-lg"></i>
@@ -141,9 +141,10 @@
     </div>
   </div>
   <div class="flex items-center gap-2">
-    <button id="btn-book-header" onclick="openBookingModal()" class="bg-white text-blue-900 hover:bg-blue-50 font-semibold text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow transition">
-      <i class="fa-solid fa-plus"></i>
+    <button id="btn-book-header" onclick="openBookingModal()" class="bg-amber-400 hover:bg-amber-300 text-blue-900 font-bold text-sm px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg transition active:scale-95" style="box-shadow:0 0 0 3px rgba(251,191,36,.4)">
+      <i class="fa-solid fa-plus text-base"></i>
       <span class="hidden sm:inline">จองห้อง</span>
+      <span class="sm:hidden text-xs font-bold">จอง</span>
     </button>
     <!-- User + Logout dropdown -->
     <div class="relative flex items-center gap-1.5 bg-white/10 rounded-lg px-2 py-1">
@@ -289,9 +290,10 @@
           <h2 class="text-lg sm:text-xl font-bold text-slate-800">การประชุมที่กำลังจะมาถึง</h2>
           <p class="text-xs sm:text-sm text-slate-500 mt-0.5">คลิก "ลงทะเบียนเข้าร่วม" ที่การประชุมที่คุณต้องการเข้าร่วม</p>
         </div>
+        <!-- ปุ่มปฏิทินซ่อนบน mobile, เห็นเฉพาะ sm ขึ้นไป -->
         <button onclick="showCalendarView()"
-          class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-xs sm:text-sm rounded-xl transition shadow-sm">
-          <i class="fa-regular fa-calendar"></i> <span class="hidden sm:inline">ดูปฏิทิน</span><span class="sm:hidden">ปฏิทิน</span>
+          class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-sm rounded-xl transition shadow-sm">
+          <i class="fa-regular fa-calendar"></i> ดูปฏิทิน
         </button>
       </div>
       <div id="urv-list" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 pb-6">
@@ -971,8 +973,11 @@ function updateSidebarVisibility() {
       sidebar.classList.remove('hidden');
       sidebar.classList.add('flex');
     }
-    if (hamburger) hamburger.classList.remove('hidden');
-    hamburger?.classList.replace('hidden','flex');
+    if (hamburger) {
+      hamburger.style.display = '';
+      hamburger.classList.remove('hidden');
+      hamburger.classList.add('flex');
+    }
   }
 }
 
