@@ -195,6 +195,20 @@ const SYSTEMS = [
         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>`,
   },
+  {
+    id: 5,
+    name: 'จองห้องประชุม',
+    sub: 'ประชุม / อบรม / กิจกรรม',
+    url: '/sanon-webapp/meeting.html',
+    prefixes: [],           // ไม่ใช้ prefix-based RBAC
+    usesMeetingAccess: true,// ใช้ meeting_access column แทน
+    grad: 'linear-gradient(135deg,#0e7490,#0284c7)',
+    glow: 'rgba(14,116,144,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>`,
+  },
 ];
 
 // ─── SECTION 2: State ──────────────────────────────────────────
@@ -220,7 +234,7 @@ async function doLogin() {
   try {
     const { data, error } = await db
       .from('app_users')
-      .select('id,username,full_name,role,factory,department,status')
+      .select('id,username,full_name,role,factory,department,status,meeting_access')
       .eq('username', username)
       .eq('password', password)
       .single();
@@ -296,6 +310,12 @@ async function getAllowedMenus(user) {
 }
 
 function hasSystemAccess(menus, sys) {
+  // System 5 — จองห้องประชุม: ใช้ meeting_access column
+  if (sys.usesMeetingAccess) {
+    if (menus === 'all') return true;                // admin เห็นเสมอ
+    return currentUser?.meeting_access === true ||
+           currentUser?.role === 'admin';
+  }
   if (menus === 'all') return true;
   return menus.some(m => sys.prefixes.some(p => m.startsWith(p)));
 }

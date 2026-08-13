@@ -1575,7 +1575,7 @@ function renderAppShell() {
       <!-- System Switcher -->
       <div class="px-3 pt-3 pb-3 border-b border-secondary-100 flex-shrink-0">
         <p class="px-0.5 text-[10px] font-semibold text-secondary-400 uppercase tracking-widest mb-2">เปลี่ยนระบบ</p>
-        <div class="grid grid-cols-2 gap-1.5">
+        <div class="grid grid-cols-3 gap-1.5">
           <!-- System 1 — active -->
           <div class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
                style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.35)">
@@ -1607,6 +1607,14 @@ function renderAppShell() {
               <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">เช็คอิน</span>
+          </a>
+          <!-- System 5 — Meeting -->
+          <a href="#" onclick="event.preventDefault();gotoSystem('meeting.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#0e7490,#0284c7);box-shadow:0 2px 8px rgba(14,116,144,.30)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">จองห้อง</span>
           </a>
         </div>
       </div>
@@ -1779,6 +1787,18 @@ function renderAppShell() {
             <div>
               <p class="text-sm font-bold text-white leading-tight">ระบบเช็คอิน</p>
               <p class="text-[10px] text-white/70 leading-tight">บันทึกเวลาพัก</p>
+            </div>
+          </a>
+          <!-- System 5 — Meeting -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('meeting.html')"
+             class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#0e7490,#0284c7);box-shadow:0 4px 12px rgba(14,116,144,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="calendar-check" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">จองห้องประชุม</p>
+              <p class="text-[10px] text-white/70 leading-tight">ประชุม / อบรม</p>
             </div>
           </a>
         </div>

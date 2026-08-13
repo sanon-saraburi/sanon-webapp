@@ -7,15 +7,16 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-05)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-13)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
-| Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User | — |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, Mobile System Switcher (4 ระบบ + bottom sheet), LINE แจ้งเตือนจาก JS | ไม่มี Loading Screen (ถูก revert) |
+| Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 5 ระบบ (รวมจองห้องประชุม)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns** | ไม่มี Loading Screen (ถูก revert) |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
+| System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | จองห้องประชุม, RBAC 5 ระดับ, อนุมัติ/ปฏิเสธ, ปฏิทิน FullCalendar, pending badge, QR Share link, Print ตาราง, Remember-me, Guest mode, Mobile responsive | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -71,16 +72,17 @@
 > **กฎ:** ทุกครั้งที่มีการแก้ไขหรือทำระบบเพิ่ม ให้ copy ไฟล์ที่แก้ไปไว้ใน `GitHub/` ก่อนเสมอ
 > แล้วค่อย upload ทุกอย่างใน `GitHub/` ขึ้น GitHub — ป้องกันอัปไฟล์ไม่ครบ
 
-### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-08-01)
+### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-08-13)
 
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
-| `portal.html` | Portal | 2026-08-01 (Smart Launcher ตามสิทธิ์ — ใหม่) |
-| `index.html` | System 1 | 2026-08-01 ดึก (Mobile System Sheet 4 ระบบ + Desktop sidebar 2×2 grid + เช็คอิน) |
-| `inventory.html` | System 2 | 2026-08-01 (revert loading screen + normCat filter fix) |
-| `pm.html` | System 3 | 2026-08-01 (restore จาก commit 30 ก.ค. — ไม่มี loading screen) |
+| `portal.html` | Portal | 2026-08-13 (เพิ่ม System 5 จองห้องประชุม + meeting_access check) |
+| `index.html` | System 1 | 2026-08-13 (System Switcher 5 ระบบ — Desktop grid-cols-3 + Mobile sheet) |
+| `meeting.html` | System 5 | 2026-08-13 (ระบบจองห้องประชุม — RBAC 5 ระดับ, QR Share, Print, Guest mode) |
+| `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
+| `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
-| `CLAUDE.md` | ทุกระบบ | 2026-08-02 |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-13 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
@@ -297,6 +299,37 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-08 — index.html: แก้ Export รายงานการผลิต + เปลี่ยน Export Excel → CSV
+
+**`index.html` — การเปลี่ยนแปลงหลัก:**
+
+**1. แก้ Export ในหน้า manage-reports (รายงาน) — เพิ่ม columns ครบ:**
+- สร้างฟังก์ชัน `buildProductionExportData()` ใหม่สำหรับ production type
+- Export CSV/Excel ของหน้ารายงานตอนนี้ครบทุก column ตรงกับตารางที่แสดงผล:
+  - หน่วยผลิต, วันเดือนปี, ยอดข้อมูล, เวลาเดิน, เฉลี่ย(ตัน/ชม), ป้อน(ตัน)
+  - Product cols ตามโรงงาน (O/S, หิน 3/4, หินเกล็ด 3/8, M-Sand, ตะกอน Silk ฯลฯ)
+  - มิตร.เริ่ม, มิตร.หยุด, FM รวม, FM (เฉพาะ CDE/Propel)
+  - Breakdown
+- Status แปลงเป็นภาษาไทย: approved→จริง, rejected→ปฏิเสธ, else→เบื้องต้น
+
+**2. เปลี่ยน Export ในหน้า manage-prod-* (ยอดผลิต CDE/Propel/Sanon1/Sanon2):**
+- เปลี่ยนจาก `.xlsx` → `.csv` (UTF-8 with BOM เปิด Excel ได้ปกติ)
+- หัวคอลัมน์เป็น DB column keys ตรงกับ import template ทุกโรงงาน
+- ลำดับคอลัมน์: `production_date → start_hour → start_minute → stop_hour → stop_minute → breakdown_detail → raw_material → feed_ton → [product cols] → meter_start → meter_stop (ถ้ามี flowmeter) → note`
+- เรียงวันที่จากน้อยไปหามาก (ascending) — เหมาะสำหรับนำไปแก้ไขแล้ว re-import
+- เปลี่ยนชื่อปุ่ม "Export Excel" → "Export CSV"
+
+**Workflow ที่รองรับ:**
+1. กด Export CSV → ได้ไฟล์ `production_cde_export.csv`
+2. เปิดใน Excel → แก้ยอดผลิตจริง → Save as CSV
+3. กด "นำเข้า ยอดจริงสิ้นเดือน" → upload → ระบบ update ข้อมูลจริง
+
+**ไฟล์ที่แก้ไข:** `index.html`
+**Copy ไป GitHub/:** `index.html` ✅ | `CLAUDE.md` ✅
+**ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ upload
+
+---
 
 ### 2026-08-05 — inventory.html: Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน
 
