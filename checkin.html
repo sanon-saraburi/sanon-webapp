@@ -402,10 +402,24 @@ tbody tr:last-child td{border-bottom:none;}
   <div class="modal-box">
     <div class="modal-title" id="memp-title">เพิ่มพนักงาน</div>
     <input type="hidden" id="memp-orig">
-    <div class="form-field"><label class="lbl">รหัสพนักงาน *</label><input type="text" id="memp-id" placeholder="EMP001"></div>
-    <div class="form-field"><label class="lbl">ชื่อ-นามสกุล *</label><input type="text" id="memp-name" placeholder="สมชาย ใจดี"></div>
-    <div class="form-field"><label class="lbl">แผนก</label><input type="text" id="memp-dept" placeholder="แผนกผลิต"></div>
-    <div class="form-field"><label class="lbl">รหัส QR / Barcode</label><input type="text" id="memp-qr" placeholder="ถ้าว่างจะใช้รหัสพนักงานแทน"></div>
+    <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:4px;">
+      <div style="flex:1;">
+        <div class="form-field"><label class="lbl">รหัสพนักงาน *</label><input type="text" id="memp-id" placeholder="EM001"></div>
+        <div class="form-field"><label class="lbl">ชื่อ-นามสกุล *</label><input type="text" id="memp-name" placeholder="สมชาย ใจดี"></div>
+        <div class="form-field"><label class="lbl">ตำแหน่งงาน</label><input type="text" id="memp-pos" placeholder="พนักงานขับรถ"></div>
+        <div class="form-field"><label class="lbl">แผนก</label><input type="text" id="memp-dept" placeholder="เหมือง / ขนส่ง / sanon 1 ฯลฯ"></div>
+        <div class="form-field"><label class="lbl">รหัส QR / Barcode</label><input type="text" id="memp-qr" placeholder="ถ้าว่างจะใช้รหัสพนักงานแทน"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px;">
+        <div id="memp-photo-preview" style="width:90px;height:115px;border-radius:8px;background:#f1f5f9;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px dashed #cbd5e1;flex-shrink:0;">
+          <span style="font-size:38px;color:#94a3b8;">👤</span>
+        </div>
+        <input type="file" id="memp-photo-file" accept="image/*" style="display:none;" onchange="previewEmpPhoto(this)">
+        <button type="button" onclick="document.getElementById('memp-photo-file').click()" style="font-size:11px;padding:5px 10px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;white-space:nowrap;">📷 อัปโหลดรูป</button>
+        <button type="button" id="memp-photo-del-btn" onclick="clearEmpPhoto()" style="display:none;font-size:11px;padding:5px 10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;white-space:nowrap;">🗑 ลบรูป</button>
+        <div style="font-size:10px;color:#94a3b8;text-align:center;">resize อัตโนมัติ</div>
+      </div>
+    </div>
     <div class="form-err" id="memp-err"></div>
     <div class="modal-footer">
       <button class="btn-primary" onclick="saveEmp()">บันทึก</button>
@@ -665,6 +679,11 @@ const PAGE_TITLES = {
 
 function nav(page) {
   if (!ckCanAccess(page)) return;
+  // หยุด auto-refresh dashboard เมื่อออกจากหน้า
+  if (page !== 'ck-supervisor') {
+    clearInterval(_svRefreshTimer);
+    clearInterval(_svCountTimer);
+  }
 
   document.querySelectorAll('.sb-item,.bn-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll(`.sb-item,.bn-item`).forEach(el => {
@@ -792,10 +811,12 @@ function renderGuard() {
         <span class="badge b-blue" style="font-size:12px;">รปภ.: ${escHtml(currentUser.name)}</span>
       </div>
       <label class="lbl">รหัสพนักงาน / QR Code</label>
-      <div class="scan-row">
-        <input type="text" id="scan-input" placeholder="สแกนหรือพิมพ์รหัส เช่น EMP001"
-          autofocus onkeydown="if(event.key==='Enter')doLookup()" oninput="_updateScanBtn()">
-        <button class="btn-scan" id="btn-scan-main" onclick="scanOrCamera()" style="min-width:90px;">📷 สแกน</button>
+      <div class="scan-row" style="position:relative;">
+        <input type="text" id="scan-input" placeholder="พิมพ์ชื่อหรือรหัสพนักงาน..."
+          autofocus autocomplete="off"
+          onkeydown="if(event.key==='Enter'){_scanPickFirst();}" oninput="_scanAutoSearch()">
+        <button class="btn-scan" onclick="openCamera()" style="min-width:56px;flex-shrink:0;" title="สแกน QR">📷</button>
+        <div id="scan-dropdown" style="display:none;position:absolute;top:100%;left:0;right:56px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:220px;overflow-y:auto;margin-top:4px;"></div>
       </div>
       <div class="scan-msg" id="scan-msg"></div>
       <div id="result-box" style="display:none;"></div>
@@ -834,10 +855,18 @@ async function doLookup(empId) {
   if (!q) return;
   if (msg) msg.textContent = '';
 
+  // 1. exact match (สแกน QR ได้รหัสเต็ม)
   let { data } = await sb.from('checkin_employees').select('*')
-    .or(`employee_id.eq.${q},qr_code.eq.${q}`).limit(1);
+    .or(`employee_id.eq.${q},qr_code.eq.${q}`).eq('status','active').limit(1);
+  // 2. partial match รหัส (พิมพ์บางส่วน เช่น "001" หรือ "EM0")
   if (!data?.length) {
-    ({ data } = await sb.from('checkin_employees').select('*').ilike('name',`%${q}%`).limit(1));
+    ({ data } = await sb.from('checkin_employees').select('*')
+      .or(`employee_id.ilike.%${q}%,qr_code.ilike.%${q}%`).eq('status','active').limit(1));
+  }
+  // 3. ค้นชื่อ
+  if (!data?.length) {
+    ({ data } = await sb.from('checkin_employees').select('*')
+      .ilike('name',`%${q}%`).eq('status','active').limit(1));
   }
   if (!data?.length) { if(msg) msg.textContent='⚠ ไม่พบพนักงานในระบบ'; return; }
 
@@ -859,13 +888,17 @@ function showResult(e) {
   const now = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   const gn  = gateName(currentGate);
 
+  const photoHtml = e.photo_url
+    ? `<img src="${e.photo_url}" style="width:80px;height:100px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,0.35);flex-shrink:0;" onerror="this.style.display='none'">`
+    : `<div style="width:80px;height:100px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:40px;flex-shrink:0;">👤</div>`;
+
   if (e.status === 'IN') {
     // กำลังจะ CHECK-OUT
     box.innerHTML = `
     <div class="pass-form">
-      <div class="pass-hd hd-out">
-        <div class="pass-logo">📤</div>
-        <div>
+      <div class="pass-hd hd-out" style="display:flex;align-items:center;gap:14px;">
+        ${photoHtml}
+        <div style="flex:1;">
           <div class="pass-title">ออกพักเที่ยง</div>
           <div class="pass-co">บริษัท สานนท์ จำกัด</div>
         </div>
@@ -907,9 +940,9 @@ function showResult(e) {
     const over = min > OVERTIME_MIN;
     box.innerHTML = `
     <div class="pass-form">
-      <div class="pass-hd ${over?'hd-warn':'hd-in'}">
-        <div class="pass-logo">${over?'⚠️':'📥'}</div>
-        <div>
+      <div class="pass-hd ${over?'hd-warn':'hd-in'}" style="display:flex;align-items:center;gap:14px;">
+        ${photoHtml}
+        <div style="flex:1;">
           <div class="pass-title">กลับเข้าทำงาน${over?' — เกินเวลา':''}</div>
           <div class="pass-co">บริษัท สานนท์ จำกัด</div>
         </div>
@@ -1040,7 +1073,7 @@ async function loadGuardLog() {
   const el=document.getElementById('guard-log');
   if (!el) return;
   const { data } = await sb.from('checkin_gate_logs')
-    .select('*, checkin_employees(name,department)')
+    .select('*, checkin_employees(name,department,position)')
     .eq('gate_id',currentGate).gte('timestamp',todayStr()+'T00:00:00')
     .order('timestamp',{ascending:false}).limit(20);
   if (!data?.length) { el.innerHTML='<div class="log-empty">ยังไม่มีการสแกนวันนี้</div>'; return; }
@@ -1050,7 +1083,11 @@ async function loadGuardLog() {
       const emp=r.checkin_employees||{};
       return `<tr>
         <td><div class="emp-name">${escHtml(emp.name||r.employee_id)}</div>
-          <div class="emp-dept">${escHtml(emp.department||'')}${r.method==='MANUAL'?' <span class="badge b-manual">ลืมบัตร</span>':''}</div></td>
+          <div class="emp-dept" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+            <span style="color:#94a3b8;font-size:11px;font-family:monospace;">${escHtml(r.employee_id)}</span>
+            ${emp.position?`<span style="color:#64748b;font-size:11px;">· ${escHtml(emp.position)}</span>`:''}
+            ${r.method==='MANUAL'?' <span class="badge b-manual">ลืมบัตร</span>':''}
+          </div></td>
         <td style="white-space:nowrap;">${fmtTime(r.timestamp)} น.</td>
         <td><span class="badge ${r.action==='OUT'?'b-out':'b-in'}">${r.action==='OUT'?'ออก':'เข้า'}</span></td>
         <td style="color:#64748b;font-size:12px;">${escHtml(r.scanned_by||'-')}</td>
@@ -1513,117 +1550,197 @@ async function saveAppointment() {
 // ============================================================
 // SECTION 6 — SUPERVISOR DASHBOARD
 // ============================================================
+let _svRefreshTimer = null;
+let _svCountdown = 30;
+let _svCountTimer = null;
+
 async function renderSupervisor() {
-  document.getElementById('page-content').innerHTML=`
-    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
-      <div class="stat-card s-out"><div class="stat-num" id="sv-out">…</div><div class="stat-lbl">ออกพักอยู่</div></div>
-      <div class="stat-card s-late"><div class="stat-num" id="sv-late">…</div><div class="stat-lbl">เกินเวลา</div></div>
-      <div class="stat-card s-ok"><div class="stat-num" id="sv-ok">…</div><div class="stat-lbl">กลับแล้ววันนี้</div></div>
-      <div class="stat-card" style="border:1px solid #e2e8f0;"><div class="stat-num" id="sv-vis" style="color:#7c3aed;">…</div><div class="stat-lbl">ผู้เยี่ยมชมวันนี้</div></div>
+  // ครั้งแรก — วาง skeleton
+  if (!document.getElementById('sv-out')) {
+    document.getElementById('page-content').innerHTML=`
+    <style>
+      .sv-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+      @media(max-width:640px){.sv-kpi-grid{grid-template-columns:repeat(2,1fr);}}
+      .sv-kpi{border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.07);}
+      .sv-kpi-icon{font-size:28px;width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .sv-kpi-num{font-size:32px;font-weight:700;line-height:1;}
+      .sv-kpi-lbl{font-size:12px;margin-top:3px;opacity:.75;}
+      .sv-refresh-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:12px;color:#94a3b8;}
+      .sv-refresh-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:svpulse 1.5s infinite;}
+      @keyframes svpulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+      .sv-emp-row{display:flex;align-items:center;gap:8px;}
+      .sv-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #e2e8f0;}
+      .sv-avatar-ph{width:32px;height:32px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+      .sv-overdue-row{background:linear-gradient(90deg,#fff8f8,#fff)!important;}
+      .sv-section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+      .sv-section-title{font-size:15px;font-weight:600;color:#1e293b;display:flex;align-items:center;gap:8px;}
+    </style>
+    <div class="sv-kpi-grid">
+      <div class="sv-kpi" style="background:linear-gradient(135deg,#fef3c7,#fde68a);">
+        <div class="sv-kpi-icon" style="background:#f59e0b22;">🚶</div>
+        <div><div class="sv-kpi-num" id="sv-out" style="color:#d97706;">…</div><div class="sv-kpi-lbl" style="color:#92400e;">ออกพักอยู่</div></div>
+      </div>
+      <div class="sv-kpi" style="background:linear-gradient(135deg,#fee2e2,#fecaca);">
+        <div class="sv-kpi-icon" style="background:#ef444422;">⏰</div>
+        <div><div class="sv-kpi-num" id="sv-late" style="color:#dc2626;">…</div><div class="sv-kpi-lbl" style="color:#991b1b;">เกินเวลา</div></div>
+      </div>
+      <div class="sv-kpi" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);">
+        <div class="sv-kpi-icon" style="background:#22c55e22;">✅</div>
+        <div><div class="sv-kpi-num" id="sv-ok" style="color:#16a34a;">…</div><div class="sv-kpi-lbl" style="color:#166534;">กลับแล้ววันนี้</div></div>
+      </div>
+      <div class="sv-kpi" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);">
+        <div class="sv-kpi-icon" style="background:#7c3aed22;">🏢</div>
+        <div><div class="sv-kpi-num" id="sv-vis" style="color:#7c3aed;">…</div><div class="sv-kpi-lbl" style="color:#5b21b6;">ผู้เยี่ยมชมวันนี้</div></div>
+      </div>
+    </div>
+    <div class="sv-refresh-bar">
+      <div class="sv-refresh-dot"></div>
+      <span>Live — รีเฟรชอัตโนมัติทุก 30 วินาที (อีก <span id="sv-countdown">30</span> วิ)</span>
+      <button onclick="_svManualRefresh()" style="font-size:11px;padding:3px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;color:#475569;">↻ ตอนนี้เลย</button>
     </div>
     <div id="sv-overdue"></div>
     <div id="sv-active"></div>
     <div id="sv-log"></div>
     <div id="sv-visitor"></div>`;
+  }
+
+  _startSvCountdown();
   await updateOverdue();
   const today=todayStr();
-  const { data: sessions } = await sb.from('checkin_lunch_sessions')
-    .select('*, checkin_employees(name,department,employee_id)')
-    .eq('session_date',today).order('checkout_time',{ascending:false});
+
+  const [{ data: sessions }, { data: visRows }] = await Promise.all([
+    sb.from('checkin_lunch_sessions')
+      .select('*, checkin_employees(name,department,employee_id,photo_url)')
+      .eq('session_date',today).order('checkout_time',{ascending:false}),
+    sb.from('checkin_visitors')
+      .select('id,name,visit_purpose,company,status,checkin_time,checkout_time')
+      .eq('session_date',today).order('checkin_time',{ascending:false}).limit(20)
+  ]);
   if (!sessions) return;
 
   const active  = sessions.filter(s=>s.status==='ACTIVE');
   const overdue = sessions.filter(s=>s.status==='OVERDUE');
   const returned= sessions.filter(s=>s.status==='RETURNED');
-
-  document.getElementById('sv-out').textContent  = active.length;
-  document.getElementById('sv-late').textContent = overdue.length;
-  document.getElementById('sv-ok').textContent   = returned.length;
-
-  // ดึงผู้เยี่ยมชมวันนี้
-  const { data: visRows } = await sb.from('checkin_visitors')
-    .select('id,name,visit_purpose,company,status,checkin_time,checkout_time')
-    .eq('session_date', today).order('checkin_time',{ascending:false}).limit(20);
   const vis = visRows||[];
-  document.getElementById('sv-vis').textContent = vis.length;
   const visInside = vis.filter(v=>v.status==='IN');
-  document.getElementById('sv-visitor').innerHTML = vis.length ? `
-    <div class="card"><div class="card-hd">
-      <div class="card-title">🏢 ผู้เยี่ยมชมวันนี้</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        ${visInside.length?`<span class="badge b-out">${visInside.length} คนยังอยู่</span>`:''}
-        <button onclick="nav('ck-visitor')" style="font-size:12px;padding:5px 12px;">ดูทั้งหมด</button>
-      </div>
-    </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>ชื่อ</th><th>วัตถุประสงค์</th><th>บริษัท</th><th>เข้า</th><th>ออก</th><th>สถานะ</th></tr></thead>
-      <tbody>${vis.map(v=>`<tr${v.status==='IN'?' style="background:#fffbeb;"':''}>
-        <td class="emp-name">${escHtml(v.name)}</td>
-        <td style="font-size:12px;">${escHtml(v.visit_purpose||'-')}</td>
-        <td style="font-size:12px;">${escHtml(v.company||'-')}</td>
-        <td style="white-space:nowrap;">${fmtTime(v.checkin_time)} น.</td>
-        <td style="white-space:nowrap;">${v.checkout_time?fmtTime(v.checkout_time)+' น.':'-'}</td>
-        <td><span class="badge ${v.status==='IN'?'b-out':'b-in'}">${v.status==='IN'?'ยังอยู่':'ออกแล้ว'}</span></td>
-      </tr>`).join('')}
-      </tbody></table></div>
-    </div>` : '';
 
-  function sessionTable(arr,showMin=true) {
-    return `<div class="tbl-wrap fixed-h"><table>
-      <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ออกจาก</th>${showMin?'<th>สถานะ</th>':''}</tr></thead>
-      <tbody>${arr.map(s=>{
-        const emp=s.checkin_employees||{};
-        const min=minAgo(s.checkout_time);
-        const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
-        return `<tr${s.status==='OVERDUE'?' style="background:#fff8f8;"':''}>
-          <td><div class="emp-name">${escHtml(emp.name||'')}</div>
-            <div class="emp-dept">${escHtml(emp.department||'')} · ${emp.employee_id||''}</div></td>
-          <td><span style="font-size:13px;color:#475569;">${escHtml(s.reason||'-')}</span></td>
-          <td>${fmtTime(s.checkout_time)} น.</td>
-          <td>${gateName(s.checkout_gate||'')}</td>
-          ${showMin?`<td>${badge} <span style="font-size:11px;color:#94a3b8;">${min}น.</span></td>`:''}
-        </tr>`;}).join('')}
-      </tbody></table></div>`;
+  const _n = id => { const el=document.getElementById(id); if(el) el.textContent=({
+    'sv-out':active.length,'sv-late':overdue.length,'sv-ok':returned.length,'sv-vis':vis.length
+  }[id]??''); };
+  ['sv-out','sv-late','sv-ok','sv-vis'].forEach(_n);
+
+  // helper: avatar
+  const _av = emp => emp?.photo_url
+    ? `<img src="${emp.photo_url}" class="sv-avatar" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'sv-avatar-ph',textContent:'👤'}))">`
+    : `<div class="sv-avatar-ph">👤</div>`;
+
+  // helper: session table row
+  function _sessTr(s, showReturn=false) {
+    const emp=s.checkin_employees||{};
+    const min=minAgo(s.checkout_time);
+    const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
+    return `<tr class="${s.status==='OVERDUE'?'sv-overdue-row':''}">
+      <td><div class="sv-emp-row">${_av(emp)}<div>
+        <div class="emp-name">${escHtml(emp.name||'')}</div>
+        <div class="emp-dept" style="font-size:11px;">${escHtml(emp.department||'')} · ${emp.employee_id||''}</div>
+      </div></div></td>
+      <td><span style="font-size:12px;color:#475569;">${escHtml(s.reason||'-')}</span></td>
+      <td style="white-space:nowrap;">${fmtTime(s.checkout_time)} น.</td>
+      <td style="font-size:12px;">${gateName(s.checkout_gate||'')}</td>
+      ${showReturn?`<td style="white-space:nowrap;">${s.checkin_time?fmtTime(s.checkin_time)+' น.':'-'}</td><td style="font-size:12px;">${gateName(s.checkin_gate||'-')}</td>`:''}
+      <td>${badge}${!showReturn?` <span style="font-size:11px;color:#94a3b8;">${min}น.</span>`:` <span style="font-size:11px;color:#94a3b8;">${s.duration_min?Math.round(s.duration_min)+' น.':'-'}</span>`}</td>
+    </tr>`;
   }
 
-  document.getElementById('sv-overdue').innerHTML = overdue.length?`
-    <div class="card"><div class="card-hd">
-      <div class="card-title">⚠️ เกินเวลา</div>
-      <span class="badge b-late">${overdue.length} คน</span>
-    </div>${sessionTable(overdue)}</div>`:'';
-
-  document.getElementById('sv-active').innerHTML = active.length?`
-    <div class="card"><div class="card-hd">
-      <div class="card-title">🟡 ออกพักอยู่</div>
-      <span class="badge b-gray">${active.length} คน</span>
-    </div>${sessionTable(active)}</div>`:'';
-
-  document.getElementById('sv-log').innerHTML=`
-    <div class="card"><div class="card-hd">
-      <div class="card-title">📋 บันทึกวันนี้</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span class="badge b-gray">${sessions.length} รายการ</span>
-        <button onclick="renderSupervisor()" style="font-size:12px;padding:5px 12px;">↻ รีเฟรช</button>
+  // เกินเวลา
+  const svOvEl = document.getElementById('sv-overdue');
+  if (svOvEl) svOvEl.innerHTML = overdue.length?`
+    <div class="card" style="border-left:4px solid #dc2626;">
+      <div class="sv-section-hd">
+        <div class="sv-section-title">⚠️ เกินเวลา <span style="background:#fee2e2;color:#dc2626;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:500;">${overdue.length} คน</span></div>
       </div>
-    </div>
-    ${sessions.length?`<div class="tbl-wrap fixed-h"><table>
-      <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ประตูออก</th>
-        <th>เวลากลับ</th><th>ประตูกลับ</th><th>รวม(นาที)</th><th>สถานะ</th></tr></thead>
-      <tbody>${sessions.map(s=>{
-        const emp=s.checkin_employees||{};
-        const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
-        return `<tr><td><div class="emp-name">${escHtml(emp.name||'')}</div>
-          <div class="emp-dept">${escHtml(emp.department||'')}</div></td>
-          <td><span style="font-size:12px;color:#475569;">${escHtml(s.reason||'-')}</span></td>
-          <td>${fmtTime(s.checkout_time)} น.</td>
-          <td>${gateName(s.checkout_gate||'-')}</td>
-          <td>${s.checkin_time?fmtTime(s.checkin_time)+' น.':'-'}</td>
-          <td>${gateName(s.checkin_gate||'-')}</td>
-          <td>${s.duration_min?Math.round(s.duration_min):'-'}</td>
-          <td>${badge}</td></tr>`;}).join('')}
-      </tbody></table></div>`:'<div class="log-empty">ยังไม่มีข้อมูลวันนี้</div>'}
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ประตู</th><th>สถานะ</th></tr></thead>
+        <tbody>${overdue.map(s=>_sessTr(s)).join('')}</tbody>
+      </table></div>
+    </div>`:'';
+
+  // ออกพักอยู่
+  const svAcEl = document.getElementById('sv-active');
+  if (svAcEl) svAcEl.innerHTML = active.length?`
+    <div class="card" style="border-left:4px solid #f59e0b;">
+      <div class="sv-section-hd">
+        <div class="sv-section-title">🟡 ออกพักอยู่ <span style="background:#fef3c7;color:#d97706;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:500;">${active.length} คน</span></div>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ประตู</th><th>ระยะเวลา</th></tr></thead>
+        <tbody>${active.map(s=>_sessTr(s)).join('')}</tbody>
+      </table></div>
+    </div>`:'';
+
+  // บันทึกวันนี้
+  const svLogEl = document.getElementById('sv-log');
+  if (svLogEl) svLogEl.innerHTML=`
+    <div class="card">
+      <div class="sv-section-hd">
+        <div class="sv-section-title">📋 บันทึกวันนี้ <span style="background:#f1f5f9;color:#475569;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:500;">${sessions.length} รายการ</span></div>
+      </div>
+      ${sessions.length?`<div class="tbl-wrap fixed-h"><table>
+        <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>เวลาออก</th><th>ประตูออก</th><th>เวลากลับ</th><th>ประตูกลับ</th><th>สถานะ</th></tr></thead>
+        <tbody>${sessions.map(s=>_sessTr(s,true)).join('')}</tbody>
+      </table></div>`:'<div class="log-empty">ยังไม่มีข้อมูลวันนี้</div>'}
     </div>`;
+
+  // ผู้เยี่ยมชม
+  const svVisEl = document.getElementById('sv-visitor');
+  if (svVisEl) svVisEl.innerHTML = vis.length?`
+    <div class="card" style="border-left:4px solid #7c3aed;">
+      <div class="sv-section-hd">
+        <div class="sv-section-title">🏢 ผู้เยี่ยมชมวันนี้
+          ${visInside.length?`<span style="background:#ede9fe;color:#7c3aed;font-size:12px;padding:2px 10px;border-radius:20px;font-weight:500;">${visInside.length} คนยังอยู่</span>`:''}
+        </div>
+        <button onclick="nav('ck-visitor')" style="font-size:12px;padding:5px 12px;">ดูทั้งหมด →</button>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>ชื่อ</th><th>วัตถุประสงค์</th><th>บริษัท</th><th>เข้า</th><th>ออก</th><th>สถานะ</th></tr></thead>
+        <tbody>${vis.map(v=>`<tr${v.status==='IN'?' style="background:#fdf4ff;"':''}>
+          <td class="emp-name">${escHtml(v.name)}</td>
+          <td style="font-size:12px;">${escHtml(v.visit_purpose||'-')}</td>
+          <td style="font-size:12px;">${escHtml(v.company||'-')}</td>
+          <td style="white-space:nowrap;">${fmtTime(v.checkin_time)} น.</td>
+          <td style="white-space:nowrap;">${v.checkout_time?fmtTime(v.checkout_time)+' น.':'-'}</td>
+          <td><span class="badge ${v.status==='IN'?'b-out':'b-in'}">${v.status==='IN'?'ยังอยู่':'ออกแล้ว'}</span></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`:'';
 }
+
+function _startSvCountdown() {
+  clearInterval(_svRefreshTimer);
+  clearInterval(_svCountTimer);
+  _svCountdown = 30;
+  const cdEl = () => document.getElementById('sv-countdown');
+  if (cdEl()) cdEl().textContent = _svCountdown;
+  _svCountTimer = setInterval(() => {
+    _svCountdown--;
+    if (cdEl()) cdEl().textContent = Math.max(0,_svCountdown);
+    if (_svCountdown <= 0) { _svSilentRefresh(); }
+  }, 1000);
+}
+
+async function _svSilentRefresh() {
+  // refresh ข้อมูลโดยไม่ re-render skeleton
+  await renderSupervisor();
+}
+
+function _svManualRefresh() {
+  clearInterval(_svCountTimer);
+  clearInterval(_svRefreshTimer);
+  renderSupervisor();
+}
+
+// หยุด auto-refresh เมื่อออกจาก dashboard
+const _origNav = typeof nav === 'function' ? nav : null;
 
 // ============================================================
 // SECTION 7 — REPORTS
@@ -1655,60 +1772,60 @@ async function renderReport() {
       <!-- Employee filters -->
       <div id="rp-emp-filters" style="display:${_rpTab==='emp'?'block':'none'}">
         <div class="filter-row" style="flex-wrap:wrap;gap:10px;">
-          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="rp-from" value="${weekAgo}"></div>
-          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="rp-to" value="${today}"></div>
+          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="rp-from" value="${weekAgo}" onchange="loadReport()"></div>
+          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="rp-to" value="${today}" onchange="loadReport()"></div>
           <div class="fg"><label>พนักงาน</label>
-            <input type="text" id="rp-emp" placeholder="รหัสหรือชื่อ" style="min-width:160px;"></div>
+            <input type="text" id="rp-emp" placeholder="รหัสหรือชื่อ" style="min-width:160px;" oninput="_rpDebounce()"></div>
           <div class="fg"><label>แผนก</label>
-            <select id="rp-dept" style="min-width:140px;">${deptOpts}</select></div>
+            <select id="rp-dept" style="min-width:140px;" onchange="loadReport()">${deptOpts}</select></div>
           <div class="fg"><label>ประตู</label>
-            <select id="rp-gate" style="min-width:130px;">${gateOpts}</select></div>
+            <select id="rp-gate" style="min-width:130px;" onchange="loadReport()">${gateOpts}</select></div>
           <div class="fg"><label>สถานะ</label>
-            <select id="rp-status" style="min-width:130px;">
+            <select id="rp-status" style="min-width:130px;" onchange="loadReport()">
               <option value="">ทุกสถานะ</option>
               <option value="RETURNED">กลับแล้ว</option>
               <option value="OVERDUE">เกินกำหนด</option>
               <option value="ACTIVE">ออกอยู่</option>
             </select></div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn-filter" onclick="loadReport()">🔍 ค้นหา</button>
             <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
           </div>
         </div>
         <div id="rp-summary" style="margin-bottom:14px;"></div>
-        <div id="rp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+        <div id="rp-table"><div class="log-empty">กำลังโหลด...</div></div>
       </div>
 
       <!-- Visitor filters -->
       <div id="rp-vis-filters" style="display:${_rpTab==='visitor'?'block':'none'}">
         <div class="filter-row" style="flex-wrap:wrap;gap:10px;">
-          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="vp-from" value="${weekAgo}"></div>
-          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="vp-to" value="${today}"></div>
+          <div class="fg"><label>วันที่เริ่ม</label><input type="date" id="vp-from" value="${weekAgo}" onchange="loadVisitorReport()"></div>
+          <div class="fg"><label>วันที่สิ้นสุด</label><input type="date" id="vp-to" value="${today}" onchange="loadVisitorReport()"></div>
           <div class="fg"><label>ชื่อ / บริษัท</label>
-            <input type="text" id="vp-search" placeholder="ชื่อหรือบริษัท" style="min-width:160px;"></div>
+            <input type="text" id="vp-search" placeholder="ชื่อหรือบริษัท" style="min-width:160px;" oninput="_vpDebounce()"></div>
           <div class="fg"><label>ประเภท</label>
-            <select id="vp-type" style="min-width:140px;">
+            <select id="vp-type" style="min-width:140px;" onchange="loadVisitorReport()">
               <option value="">ทุกประเภท</option>
               <option value="walkin">Walk-in</option>
               <option value="appointment">นัดหมาย</option>
             </select></div>
           <div class="fg"><label>ประตูเข้า</label>
-            <select id="vp-gate" style="min-width:130px;">${gateOpts}</select></div>
+            <select id="vp-gate" style="min-width:130px;" onchange="loadVisitorReport()">${gateOpts}</select></div>
           <div class="fg"><label>สถานะ</label>
-            <select id="vp-status" style="min-width:130px;">
+            <select id="vp-status" style="min-width:130px;" onchange="loadVisitorReport()">
               <option value="">ทุกสถานะ</option>
               <option value="IN">ยังอยู่ในโรงงาน</option>
               <option value="OUT">ออกแล้ว</option>
             </select></div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn-filter" onclick="loadVisitorReport()">🔍 ค้นหา</button>
             <button onclick="exportVisitorReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
           </div>
         </div>
         <div id="vp-summary" style="margin-bottom:14px;"></div>
-        <div id="vp-table"><div class="log-empty">กดค้นหาเพื่อดูรายงาน</div></div>
+        <div id="vp-table"><div class="log-empty">กำลังโหลด...</div></div>
       </div>
     </div>`;
+  // โหลดข้อมูลอัตโนมัติทันที
+  loadReport();
 }
 
 function switchRpTab(tab) {
@@ -1718,9 +1835,15 @@ function switchRpTab(tab) {
   if (activeBtn) activeBtn.classList.add('active');
   document.getElementById('rp-emp-filters').style.display = tab==='emp' ? 'block' : 'none';
   document.getElementById('rp-vis-filters').style.display = tab==='visitor' ? 'block' : 'none';
+  if (tab==='emp') loadReport(); else loadVisitorReport();
 }
 
 let _rpData = [];
+let _rpTimer = null;
+function _rpDebounce() { clearTimeout(_rpTimer); _rpTimer = setTimeout(loadReport, 500); }
+let _vpTimer = null;
+function _vpDebounce() { clearTimeout(_vpTimer); _vpTimer = setTimeout(loadVisitorReport, 500); }
+
 async function loadReport() {
   const from   = document.getElementById('rp-from').value;
   const to     = document.getElementById('rp-to').value;
@@ -2981,20 +3104,92 @@ async function loadStats() {
 // SECTION 8 — EMPLOYEE MANAGEMENT + CSV
 // ============================================================
 let _empShowResigned = false;
+let _empPhotoFile = null;
+
+// resize รูปก่อน upload (Canvas API)
+async function resizeImage(file, maxW=400, maxH=500, quality=0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w=img.width, h=img.height;
+      const ratio = Math.min(maxW/w, maxH/h, 1);
+      w=Math.round(w*ratio); h=Math.round(h*ratio);
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(blob=>{ URL.revokeObjectURL(img.src); resolve(blob); },'image/jpeg',quality);
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+// upload รูปไปยัง Supabase Storage
+async function uploadEmpPhoto(empId, file) {
+  const blob = await resizeImage(file);
+  const path = `${empId}.jpg`;
+  const { error } = await sb.storage.from('employee-photos').upload(path, blob, {
+    contentType:'image/jpeg', upsert:true
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('employee-photos').getPublicUrl(path);
+  return data.publicUrl + '?t=' + Date.now(); // cache-bust
+}
+
+// preview รูปใน modal
+function previewEmpPhoto(input) {
+  const file = input.files?.[0]; if (!file) return;
+  _empPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const el = document.getElementById('memp-photo-preview');
+    if (el) el.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
+    _showPhotoDelBtn(true);
+  };
+  reader.readAsDataURL(file);
+}
+
+// แสดง/ซ่อนปุ่มลบรูป
+function _showPhotoDelBtn(show) {
+  const btn = document.getElementById('memp-photo-del-btn');
+  if (btn) btn.style.display = show ? 'block' : 'none';
+}
+
+// ลบรูปออกจาก preview + flag ให้ saveEmp รู้
+let _empPhotoDeleted = false;
+function clearEmpPhoto() {
+  if (!confirm('ลบรูปพนักงานนี้ออกจากระบบด้วยหรือไม่?')) return;
+  _empPhotoFile = null;
+  _empPhotoDeleted = true;
+  const el = document.getElementById('memp-photo-preview');
+  if (el) el.innerHTML = '<span style="font-size:38px;color:#94a3b8;">👤</span>';
+  const fi = document.getElementById('memp-photo-file');
+  if (fi) fi.value = '';
+  _showPhotoDelBtn(false);
+}
+
+// ลบไฟล์จาก Supabase Storage
+async function deleteEmpPhotoFromStorage(empId) {
+  try {
+    await sb.storage.from('employee-photos').remove([`${empId}.jpg`]);
+  } catch(_) { /* ไม่ block ถ้าไม่มีไฟล์ */ }
+}
 
 async function renderEmployees() {
   document.getElementById('page-content').innerHTML=`
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">👥 รายชื่อพนักงาน</div>
+        <div class="card-title">👥 รายชื่อพนักงาน <span id="emp-count-badge" style="font-size:13px;background:#e0f2fe;color:#0369a1;padding:2px 10px;border-radius:20px;font-weight:500;margin-left:6px;"></span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button onclick="openModal('modal-csv')" style="background:#0f766e;color:#fff;border:none;font-size:13px;padding:8px 14px;">⬆ นำเข้า CSV</button>
           <button onclick="printAllCards()" style="background:#7c3aed;color:#fff;border:none;font-size:13px;padding:8px 14px;">🪪 พิมพ์ทั้งหมด</button>
           <button onclick="openEmpModal()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:8px 14px;">+ เพิ่มพนักงาน</button>
         </div>
       </div>
-      <div class="filter-row" style="margin-bottom:12px;gap:10px;">
-        <input type="text" id="emp-search" placeholder="ค้นหาชื่อหรือรหัส..." style="max-width:280px;" oninput="filterEmpTable(this.value)">
+      <div class="filter-row" style="margin-bottom:12px;gap:10px;flex-wrap:wrap;">
+        <input type="text" id="emp-search" placeholder="ค้นหาชื่อหรือรหัส..." style="max-width:240px;" oninput="applyEmpFilter()">
+        <select id="emp-dept-filter" style="max-width:220px;font-size:13px;" onchange="applyEmpFilter()">
+          <option value="">-- ทุกแผนก --</option>
+        </select>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap;">
           <input type="checkbox" id="chk-resigned" onchange="toggleResigned(this.checked)">
           แสดงพนักงานที่ลาออก
@@ -3012,7 +3207,8 @@ async function loadEmpTable() {
   if (!_empShowResigned) q = q.eq('status','active');
   const { data } = await q;
   _empAll = data||[];
-  renderEmpTable(_empAll);
+  _buildDeptFilter();
+  applyEmpFilter();
 }
 
 async function toggleResigned(checked) {
@@ -3024,15 +3220,27 @@ async function toggleResigned(checked) {
 function renderEmpTable(rows) {
   const el = document.getElementById('emp-table');
   if (!el) return;
+  // อัปเดต badge จำนวน
+  const badge = document.getElementById('emp-count-badge');
+  if (badge) {
+    const activeCount = _empAll.filter(e => e.status !== 'resigned').length;
+    const resignedCount = _empAll.filter(e => e.status === 'resigned').length;
+    badge.textContent = resignedCount > 0 && _empShowResigned
+      ? `${activeCount} คน (ลาออก ${resignedCount} คน)`
+      : `${activeCount} คน`;
+  }
   if (!rows.length) { el.innerHTML='<div class="log-empty">ไม่พบพนักงาน</div>'; return; }
   el.innerHTML=`<div class="tbl-wrap fixed-h"><table>
-    <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>QR Code</th><th>สถานะ</th><th></th></tr></thead>
+    <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่งงาน</th><th>แผนก</th><th>QR Code</th><th>สถานะ</th><th></th></tr></thead>
     <tbody>${rows.map(e => {
       const resigned = e.status === 'resigned';
       const statusBadge = resigned
         ? `<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:11px;">ลาออก${e.resign_date?' '+e.resign_date:''}</span>`
         : `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;">ทำงานอยู่</span>`;
       const rowStyle = resigned ? 'opacity:0.6;' : '';
+      const avatarHtml = e.photo_url
+        ? `<img src="${e.photo_url}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid #e2e8f0;" onerror="this.replaceWith(document.createTextNode('👤'))">`
+        : `<div style="width:30px;height:30px;border-radius:50%;background:#e2e8f0;display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>`;
       const actions = resigned
         ? `<button onclick="reactivateEmp('${e.employee_id}','${escHtml(e.name)}')" style="font-size:12px;padding:4px 10px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;cursor:pointer;">↩ กลับมาทำงาน</button>`
         : `<button onclick="printEmpCard('${e.employee_id}')" style="font-size:12px;padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">🪪 พิมพ์</button>
@@ -3040,8 +3248,9 @@ function renderEmpTable(rows) {
            <button onclick="resignEmp('${e.employee_id}','${escHtml(e.name)}')" style="font-size:12px;padding:4px 10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;">ลาออก</button>`;
       return `<tr style="${rowStyle}">
         <td>${e.employee_id}</td>
-        <td>${escHtml(e.name)}</td>
-        <td>${escHtml(e.department||'-')}</td>
+        <td><div style="display:flex;align-items:center;gap:8px;">${avatarHtml}<span>${escHtml(e.name)}</span></div></td>
+        <td style="font-size:12px;color:#475569;">${escHtml(e.position||'-')}</td>
+        <td><span style="background:#f1f5f9;padding:2px 8px;border-radius:8px;font-size:12px;">${escHtml(e.department||'-')}</span></td>
         <td><code style="font-size:11px;">${escHtml(e.qr_code||e.employee_id)}</code></td>
         <td>${statusBadge}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap;">${actions}</td>
@@ -3050,9 +3259,24 @@ function renderEmpTable(rows) {
     </tbody></table></div>`;
 }
 
-function filterEmpTable(q) {
-  if (!q) { renderEmpTable(_empAll); return; }
-  renderEmpTable(_empAll.filter(e=>(e.name||'').includes(q)||(e.employee_id||'').includes(q)||(e.department||'').includes(q)));
+function applyEmpFilter() {
+  const q    = (document.getElementById('emp-search')?.value||'').trim();
+  const dept = (document.getElementById('emp-dept-filter')?.value||'');
+  let rows = _empAll;
+  if (dept) rows = rows.filter(e => (e.department||'') === dept);
+  if (q)    rows = rows.filter(e => (e.name||'').includes(q)||(e.employee_id||'').includes(q)||(e.department||'').includes(q));
+  renderEmpTable(rows);
+}
+
+function filterEmpTable(q) { applyEmpFilter(); }
+
+function _buildDeptFilter() {
+  const sel = document.getElementById('emp-dept-filter');
+  if (!sel) return;
+  const prev = sel.value;
+  const depts = [...new Set(_empAll.map(e=>e.department||'').filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">-- ทุกแผนก --</option>' +
+    depts.map(d=>`<option value="${escHtml(d)}"${d===prev?' selected':''}>${escHtml(d)}</option>`).join('');
 }
 
 // ============================================================
@@ -3236,16 +3460,84 @@ function scanOrCamera() {
   if (val) { doLookup(); } else { openCamera(); }
 }
 
-function _updateScanBtn() {
-  const btn = document.getElementById('btn-scan-main');
-  if (!btn) return;
-  const val = (document.getElementById('scan-input')?.value || '').trim();
-  btn.textContent = val ? '🔍 ค้นหา' : '📷 สแกน';
-  btn.style.background = val ? '#1a3a5c' : '#0f766e';
+function _updateScanBtn() {} // ไม่ใช้แล้ว (เก็บไว้กัน error)
+
+// Autocomplete search สำหรับ guard page
+let _scanSearchTimer = null;
+async function _scanAutoSearch() {
+  const q = (document.getElementById('scan-input')?.value || '').trim();
+  const dd = document.getElementById('scan-dropdown');
+  if (!dd) return;
+  clearTimeout(_scanSearchTimer);
+  if (!q) { dd.style.display = 'none'; return; }
+
+  // QR สแกนได้รหัสเต็ม → lookup ตรงเลย (ไม่ต้องแสดง dropdown)
+  if (q.length >= 5 && /^EM\d+$/i.test(q)) {
+    dd.style.display = 'none';
+    await doLookup(q);
+    document.getElementById('scan-input').value = '';
+    return;
+  }
+
+  _scanSearchTimer = setTimeout(async () => {
+    // ค้นหาจาก DB
+    let { data } = await sb.from('checkin_employees').select('employee_id,name,department,position,photo_url')
+      .eq('status','active')
+      .or(`name.ilike.%${q}%,employee_id.ilike.%${q}%`)
+      .order('employee_id').limit(8);
+    if (!data?.length) { dd.innerHTML='<div style="padding:12px 14px;color:#94a3b8;font-size:13px;">ไม่พบพนักงาน</div>'; dd.style.display='block'; return; }
+    dd.innerHTML = data.map(e => {
+      const avatar = e.photo_url
+        ? `<img src="${e.photo_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'👤',style:'width:36px;height:36px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0'}))">`
+        : `<div style="width:36px;height:36px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">👤</div>`;
+      return `<div onclick="_scanSelectEmp('${e.employee_id}')"
+        style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;"
+        onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+        ${avatar}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:500;color:#1e293b;">${escHtml(e.name)}</div>
+          <div style="font-size:11px;color:#94a3b8;">${escHtml(e.employee_id)} · ${escHtml(e.department||'-')}</div>
+        </div>
+      </div>`;
+    }).join('');
+    dd.style.display = 'block';
+  }, 250);
 }
+
+async function _scanSelectEmp(empId) {
+  const dd = document.getElementById('scan-dropdown');
+  if (dd) dd.style.display = 'none';
+  const inp = document.getElementById('scan-input');
+  if (inp) inp.value = '';
+  await doLookup(empId);
+}
+
+function _scanPickFirst() {
+  const dd = document.getElementById('scan-dropdown');
+  const first = dd?.querySelector('div[onclick]');
+  if (first) first.click();
+  else doLookup();
+}
+
+// ปิด dropdown เมื่อคลิกที่อื่น
+document.addEventListener('click', e => {
+  if (!e.target.closest('#scan-dropdown') && !e.target.closest('#scan-input')) {
+    const dd = document.getElementById('scan-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
 
 async function openEmpModal(id) {
   document.getElementById('memp-err').textContent='';
+  _empPhotoFile = null;
+  _empPhotoDeleted = false;
+  // reset photo preview
+  const prevEl = document.getElementById('memp-photo-preview');
+  if (prevEl) prevEl.innerHTML = '<span style="font-size:38px;color:#94a3b8;">👤</span>';
+  const fileEl = document.getElementById('memp-photo-file');
+  if (fileEl) fileEl.value = '';
+  _showPhotoDelBtn(false);
+
   if (id) {
     const { data } = await sb.from('checkin_employees').select('*').eq('employee_id',id).limit(1);
     const e=data?.[0];
@@ -3253,12 +3545,18 @@ async function openEmpModal(id) {
       document.getElementById('memp-orig').value = e.employee_id;
       document.getElementById('memp-id').value   = e.employee_id;
       document.getElementById('memp-name').value = e.name;
+      document.getElementById('memp-pos').value  = e.position||'';
       document.getElementById('memp-dept').value = e.department||'';
       document.getElementById('memp-qr').value   = e.qr_code||'';
       document.getElementById('memp-title').textContent='แก้ไขพนักงาน';
+      // แสดงรูปเดิม + ปุ่มลบ
+      if (e.photo_url && prevEl) {
+        prevEl.innerHTML = `<img src="${e.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" onerror="this.parentElement.innerHTML='<span style=font-size:38px;color:#94a3b8>👤</span>'">`;
+        _showPhotoDelBtn(true);
+      }
     }
   } else {
-    ['memp-orig','memp-id','memp-name','memp-dept','memp-qr'].forEach(x=>document.getElementById(x).value='');
+    ['memp-orig','memp-id','memp-name','memp-pos','memp-dept','memp-qr'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('memp-title').textContent='เพิ่มพนักงาน';
   }
   openModal('modal-emp');
@@ -3267,17 +3565,49 @@ async function openEmpModal(id) {
 async function saveEmp() {
   const id   = document.getElementById('memp-id').value.trim();
   const name = document.getElementById('memp-name').value.trim();
+  const pos  = document.getElementById('memp-pos').value.trim();
   const dept = document.getElementById('memp-dept').value.trim();
   const qr   = document.getElementById('memp-qr').value.trim()||id;
   const orig = document.getElementById('memp-orig').value;
   const err  = document.getElementById('memp-err');
   if (!id||!name) { err.textContent='กรุณากรอกรหัสและชื่อพนักงาน'; return; }
+  // ตรวจชื่อซ้ำ (query DB เพื่อรวมทั้ง active และ resigned)
+  const normName = name.replace(/\s+/g,' ').trim();
+  const { data: dupCheck } = await sb.from('checkin_employees').select('employee_id,name,status').ilike('name', normName);
+  const dupList = (dupCheck||[]).filter(e => e.employee_id !== orig);
+  if (dupList.length > 0) {
+    const dupInfo = dupList.map(e=>`• ${e.name} (${e.employee_id})${e.status==='resigned'?' [ลาออก]':''}`).join('\n');
+    const proceed = confirm(`⚠️ พบชื่อคล้ายกันในระบบ:\n\n${dupInfo}\n\nต้องการเพิ่มต่อไปหรือไม่?`);
+    if (!proceed) return;
+  }
+  // จัดการรูปภาพ
+  let photoUrl = null;
+  if (_empPhotoFile) {
+    // อัปโหลดรูปใหม่
+    try {
+      photoUrl = await uploadEmpPhoto(id, _empPhotoFile);
+    } catch(e) {
+      err.textContent = 'อัปโหลดรูปไม่สำเร็จ: ' + (e.message||e);
+      return;
+    }
+  } else if (_empPhotoDeleted) {
+    // ลบรูปจาก Storage
+    await deleteEmpPhotoFromStorage(orig || id);
+  }
+
+  const payload = {employee_id:id, name, position:pos, department:dept, qr_code:qr};
+  if (photoUrl) payload.photo_url = photoUrl;
+  else if (_empPhotoDeleted) payload.photo_url = null;
+
   if (orig) {
-    await sb.from('checkin_employees').update({employee_id:id,name,department:dept,qr_code:qr}).eq('employee_id',orig);
+    await sb.from('checkin_employees').update(payload).eq('employee_id',orig);
   } else {
-    const { error } = await sb.from('checkin_employees').insert({employee_id:id,name,department:dept,qr_code:qr});
+    payload.status = 'active';
+    const { error } = await sb.from('checkin_employees').insert(payload);
     if (error) { err.textContent='รหัสพนักงานซ้ำหรือเกิดข้อผิดพลาด'; return; }
   }
+  _empPhotoFile = null;
+  _empPhotoDeleted = false;
   closeModal('modal-emp');
   loadEmpTable();
 }
