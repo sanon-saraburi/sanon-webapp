@@ -3198,8 +3198,9 @@ async function openCamera() {
 
     _zxingReader = new ZXing.BrowserMultiFormatReader();
 
-    // เลือกกล้องหลัง (environment)
-    const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    // เลือกกล้องหลัง (environment) — ใช้ native API แทน listVideoInputDevices ที่ถูกเอาออกใน v0.19
+    const allDevices = await navigator.mediaDevices.enumerateDevices();
+    const devices = allDevices.filter(d => d.kind === 'videoinput');
     const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
     const deviceId = backCam?.deviceId || undefined;
 
