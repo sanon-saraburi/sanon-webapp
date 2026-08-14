@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0">
-<title>ระบบเช็คอินพักเที่ยง v2 — สานนท์</title>
+<title>ระบบงานบุคคล — สานนท์</title>
 <!-- PWA -->
 <link rel="manifest" href="/sanon-webapp/manifest-checkin.json">
 <meta name="theme-color" content="#7c3aed">
@@ -284,7 +284,7 @@ tbody tr:last-child td{border-bottom:none;}
   <div class="auth-card">
     <div class="auth-logo">
       <div class="brand">บริษัท สานนท์ จำกัด</div>
-      <div class="sub">ระบบบันทึกเวลาพักพนักงาน</div>
+      <div class="sub">ระบบงานบุคคล</div>
     </div>
     <div class="auth-field">
       <label class="lbl">ชื่อผู้ใช้</label>
@@ -346,7 +346,7 @@ tbody tr:last-child td{border-bottom:none;}
     <div class="sidebar" id="sidebar">
       <div class="sb-header">
         <div class="sb-brand">สานนท์ — เช็คอิน</div>
-        <div class="sb-sub">Checkin System v2</div>
+        <div class="sb-sub">ระบบงานบุคคล</div>
       </div>
       <div class="sb-menu">
         <div class="sb-sec">หน้าหลัก</div>
@@ -2980,6 +2980,8 @@ async function loadStats() {
 // ============================================================
 // SECTION 8 — EMPLOYEE MANAGEMENT + CSV
 // ============================================================
+let _empShowResigned = false;
+
 async function renderEmployees() {
   document.getElementById('page-content').innerHTML=`
     <div class="card">
@@ -2991,37 +2993,60 @@ async function renderEmployees() {
           <button onclick="openEmpModal()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:8px 14px;">+ เพิ่มพนักงาน</button>
         </div>
       </div>
-      <div class="filter-row" style="margin-bottom:12px;">
+      <div class="filter-row" style="margin-bottom:12px;gap:10px;">
         <input type="text" id="emp-search" placeholder="ค้นหาชื่อหรือรหัส..." style="max-width:280px;" oninput="filterEmpTable(this.value)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="chk-resigned" onchange="toggleResigned(this.checked)">
+          แสดงพนักงานที่ลาออก
+        </label>
       </div>
       <div id="emp-table"><div class="log-empty">กำลังโหลด...</div></div>
     </div>`;
+  _empShowResigned = false;
   await loadEmpTable();
 }
 
 let _empAll = [];
 async function loadEmpTable() {
-  const { data } = await sb.from('checkin_employees').select('*').order('employee_id');
+  let q = sb.from('checkin_employees').select('*').order('employee_id');
+  if (!_empShowResigned) q = q.eq('status','active');
+  const { data } = await q;
   _empAll = data||[];
   renderEmpTable(_empAll);
 }
 
+async function toggleResigned(checked) {
+  _empShowResigned = checked;
+  await loadEmpTable();
+  document.getElementById('emp-search').value = '';
+}
+
 function renderEmpTable(rows) {
-  const el=document.getElementById('emp-table');
+  const el = document.getElementById('emp-table');
   if (!el) return;
   if (!rows.length) { el.innerHTML='<div class="log-empty">ไม่พบพนักงาน</div>'; return; }
   el.innerHTML=`<div class="tbl-wrap fixed-h"><table>
-    <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>QR Code</th><th></th></tr></thead>
-    <tbody>${rows.map(e=>`<tr>
-      <td>${e.employee_id}</td>
-      <td>${escHtml(e.name)}</td>
-      <td>${escHtml(e.department||'-')}</td>
-      <td><code style="font-size:11px;">${escHtml(e.qr_code||e.employee_id)}</code></td>
-      <td style="display:flex;gap:6px;">
-        <button onclick="printEmpCard('${e.employee_id}')" style="font-size:12px;padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">🪪 พิมพ์</button>
-        <button onclick="openEmpModal('${e.employee_id}')" style="font-size:12px;padding:4px 10px;">แก้ไข</button>
-      </td>
-    </tr>`).join('')}
+    <thead><tr><th>รหัส</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>QR Code</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${rows.map(e => {
+      const resigned = e.status === 'resigned';
+      const statusBadge = resigned
+        ? `<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:11px;">ลาออก${e.resign_date?' '+e.resign_date:''}</span>`
+        : `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:11px;">ทำงานอยู่</span>`;
+      const rowStyle = resigned ? 'opacity:0.6;' : '';
+      const actions = resigned
+        ? `<button onclick="reactivateEmp('${e.employee_id}','${escHtml(e.name)}')" style="font-size:12px;padding:4px 10px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;cursor:pointer;">↩ กลับมาทำงาน</button>`
+        : `<button onclick="printEmpCard('${e.employee_id}')" style="font-size:12px;padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;">🪪 พิมพ์</button>
+           <button onclick="openEmpModal('${e.employee_id}')" style="font-size:12px;padding:4px 10px;">แก้ไข</button>
+           <button onclick="resignEmp('${e.employee_id}','${escHtml(e.name)}')" style="font-size:12px;padding:4px 10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;">ลาออก</button>`;
+      return `<tr style="${rowStyle}">
+        <td>${e.employee_id}</td>
+        <td>${escHtml(e.name)}</td>
+        <td>${escHtml(e.department||'-')}</td>
+        <td><code style="font-size:11px;">${escHtml(e.qr_code||e.employee_id)}</code></td>
+        <td>${statusBadge}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">${actions}</td>
+      </tr>`;
+    }).join('')}
     </tbody></table></div>`;
 }
 
@@ -3253,6 +3278,25 @@ async function saveEmp() {
     if (error) { err.textContent='รหัสพนักงานซ้ำหรือเกิดข้อผิดพลาด'; return; }
   }
   closeModal('modal-emp');
+  loadEmpTable();
+}
+
+async function resignEmp(id, name) {
+  if (!confirm(`บันทึก "${name}" (${id}) ลาออก?\n\nรายชื่อจะถูกซ่อน แต่ยังเก็บข้อมูลและประวัติไว้ครบ`)) return;
+  const today = new Date().toISOString().slice(0,10);
+  const { error } = await sb.from('checkin_employees')
+    .update({ status: 'resigned', resign_date: today })
+    .eq('employee_id', id);
+  if (error) { alert('เกิดข้อผิดพลาด: ' + error.message); return; }
+  loadEmpTable();
+}
+
+async function reactivateEmp(id, name) {
+  if (!confirm(`คืนสถานะ "${name}" (${id}) กลับมาทำงาน?`)) return;
+  const { error } = await sb.from('checkin_employees')
+    .update({ status: 'active', resign_date: null })
+    .eq('employee_id', id);
+  if (error) { alert('เกิดข้อผิดพลาด: ' + error.message); return; }
   loadEmpTable();
 }
 
