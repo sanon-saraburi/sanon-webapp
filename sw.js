@@ -2,7 +2,7 @@
 // sw.js — Sanon PWA Service Worker (GitHub Pages: /sanon-webapp/)
 // =====================================================================
 
-const CACHE_NAME   = 'sanon-pwa-v4';
+const CACHE_NAME   = 'sanon-pwa-v5';
 const BASE         = '/sanon-webapp';
 const SUPABASE_URL = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
 
