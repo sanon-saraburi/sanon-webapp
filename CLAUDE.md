@@ -7,7 +7,7 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-15 เย็น)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-16)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
@@ -17,7 +17,7 @@
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
-| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request (ขอออกนอกบริเวณ)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function** | ต้องรัน SQL 4 ชุด + Deploy Edge Function + ตั้งค่า LINE OA |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request (ขอออกนอกบริเวณ)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard (ซิ้งจาก checkin_employees.photo_url)** | ต้องรัน SQL 5 ชุด (รวม v5_patch pin_code) + Deploy Edge Function + ตั้งค่า LINE OA |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -89,13 +89,13 @@
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
 | `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
-| `leave.html` | System 6 | 2026-08-15 (10 ประเภทลา, Working day จันทร์-เสาร์, พิมพ์ใบลาฟอร์มบริษัท, Calendar วันหยุด, Admin แก้ไข+ลบคำขอ, type-cards 3 คอลัมน์ mobile-friendly, fix emp login onclick) |
+| `leave.html` | System 6 | 2026-08-16 (PIN 4 หลัก + รูปโปรไฟล์พนักงานใน Dashboard) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
-| `CLAUDE.md` | ทุกระบบ | 2026-08-13 |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-16 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
@@ -313,6 +313,58 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-16 — leave.html: PIN 4 หลัก สำหรับ Employee Mode
+
+**`leave.html` — การเปลี่ยนแปลง:**
+
+**1. PIN Authentication สำหรับ Employee Mode:**
+- `doEmpAccess()`: ดึง `pin_code` จาก DB ก่อน → แสดงขั้นตอน PIN แทนการ login ทันที
+- `_showPinStep(pinCode)`: ซ่อน search form + access button → แสดง `#pin-step`
+  - ถ้า `pin_code = null` → โหมด "ตั้ง PIN ครั้งแรก" (มี confirm boxes)
+  - ถ้ามี PIN → โหมด "ยืนยัน PIN" (auto-submit เมื่อใส่ครบ 4 หลัก)
+- `_submitPin()`: ตรวจสอบหรือบันทึก PIN → เรียก `_proceedEmpLogin()`
+- `_backToEmpSelect()`: ปุ่มย้อนกลับ — คืน search form ปกติ
+- Inline handlers: `_pinIn()`, `_pinKd()`, `_pincIn()`, `_pincKd()` — auto-advance + backspace navigation
+- `_shakePins()` — animation เขย่าเมื่อ PIN ผิด
+
+**2. เปลี่ยน PIN (พนักงาน):**
+- ปุ่ม "🔐 เปลี่ยน PIN" ในหน้า Dashboard (เฉพาะ `currentMode === 'employee'`)
+- `changePinModal()` + `saveNewPin()` — modal ป้อน PIN ใหม่ + ยืนยัน
+- PIN boxes ใน modal มี auto-advance เหมือนกัน (`_npIn/Kd`, `_npcIn/Kd`)
+
+**3. Admin รีเซ็ต PIN:**
+- Card ใหม่ "🔐 รีเซ็ต PIN พนักงาน" ในหน้าตั้งค่าระบบ
+- `searchResetPin()` — ค้นหาพนักงาน แสดงสถานะ PIN (ตั้งแล้ว/ยังไม่มี)
+- `selectResetPinEmp()` — เลือกจากผลค้นหาหลายรายการ
+- `doResetPin()` — set `pin_code = NULL` → พนักงานต้องตั้งใหม่เมื่อ login ครั้งต่อไป
+
+**`leave_schema_v5_patch.sql` — SQL ใหม่:**
+- `ALTER TABLE checkin_employees ADD COLUMN IF NOT EXISTS pin_code text DEFAULT NULL;`
+
+**`doLogout()`:** reset `_empPinHash`, ซ่อน `#pin-step`, คืน `#btn-emp-access`, enable `emp-search`
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`, `leave_schema_v5_patch.sql`
+**Copy ไป GitHub/:** `leave.html` ✅ | `leave_schema_v5_patch.sql` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-08-16 (เพิ่มเติม) — leave.html: รูปโปรไฟล์พนักงานใน Dashboard
+
+**`leave.html` — การเปลี่ยนแปลง:**
+
+**รูปโปรไฟล์พนักงานใน Dashboard (Employee mode):**
+- `renderDashboard()`: เพิ่มรูปโปรไฟล์ขนาด 72×72px ทรงกลมที่มุมขวาบนของ Greeting area
+- ดึง `photo_url` จาก `currentEmp.photo_url` — ซิ้งข้อมูลจาก `checkin_employees` ตารางเดียวกับ System 4 (ไม่ต้องดึงข้อมูลเพิ่ม)
+- ถ้า session เก่าไม่มี `photo_url` → auto-fetch จาก DB 1 ครั้ง (แก้ปัญหาพนักงานที่ login ไว้ก่อนเพิ่มรูปใน System 4)
+- ถ้า URL โหลดไม่ได้ → `onerror` fallback แสดง avatar 👤 สีฟ้าแทน
+- เฉพาะ `currentMode === 'employee'` เท่านั้น (Supervisor/Admin ไม่มีรูป)
+- ย้ายปุ่ม "🔐 เปลี่ยน PIN" ไปอยู่ใต้ชื่อ/วันที่ (ซ้ายล่าง) เพื่อให้รูปอยู่ขวา
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
+
+---
 
 ### 2026-08-15 (เย็น) — leave.html: Username Autocomplete + Pass/Leave LINE Notification
 

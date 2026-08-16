@@ -38,11 +38,16 @@ input,select,textarea{font-size:16px!important;}
 .sb-user-role{font-size:11px;color:#94a3b8;}
 
 /* ─── Bottom Nav (mobile) ─── */
-#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e2e8f0;z-index:100;padding:6px 0 env(safe-area-inset-bottom,0);}
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:100;padding:6px 0 env(safe-area-inset-bottom,0);box-shadow:0 -4px 16px rgba(0,0,0,.08);}
 .bn-items{display:flex;justify-content:space-around;}
-.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;cursor:pointer;color:#94a3b8;font-size:10px;min-width:48px;}
-.bn-item.active{color:#2563eb;}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 6px;cursor:pointer;color:#94a3b8;font-size:9px;min-width:44px;border-radius:10px;transition:all .15s;}
 .bn-item svg{width:22px;height:22px;}
+.bn-item.active{color:#fff;}
+.bn-item#bn-lv-dashboard.active{background:#6366f1;color:#fff;}
+.bn-item#bn-lv-request.active{background:#22c55e;color:#fff;}
+.bn-item#bn-lv-pass.active{background:#f59e0b;color:#fff;}
+.bn-item#bn-lv-my-hist.active{background:#3b82f6;color:#fff;}
+.bn-item#bn-lv-approvals.active{background:#ef4444;color:#fff;}
 
 /* ─── Cards ─── */
 .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:18px;margin-bottom:14px;}
@@ -97,19 +102,29 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
 .login-tab.active{background:#fff;color:#2563eb;box-shadow:0 1px 3px rgba(0,0,0,.1);}
 
 /* ─── Type select cards ─── */
-.type-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.type-card{border:2px solid #e2e8f0;border-radius:8px;padding:8px 6px;cursor:pointer;transition:all .2s;text-align:center;}
-.type-card:hover{border-color:#93c5fd;background:#eff6ff;}
-.type-card.selected{border-color:#3b82f6;background:#eff6ff;}
-.type-card .tc-icon{font-size:18px;margin-bottom:2px;}
-.type-card .tc-name{font-size:11px;font-weight:600;color:#1e293b;line-height:1.3;}
-.type-card .tc-quota{font-size:10px;color:#64748b;margin-top:1px;}
+.type-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.type-card{border:2px solid #e2e8f0;border-radius:8px;padding:6px 4px;cursor:pointer;transition:all .15s;text-align:center;background:#fff;}
+.type-card:hover{border-color:#93c5fd;background:#f0f9ff;}
+.type-card.selected{color:#fff!important;}
+.type-card.selected .tc-name{color:#fff!important;}
+.type-card.selected .tc-quota{color:rgba(255,255,255,.8)!important;}
+.type-card .tc-icon{font-size:16px;margin-bottom:1px;}
+.type-card .tc-name{font-size:10px;font-weight:700;color:#1e293b;line-height:1.2;}
+.type-card .tc-quota{font-size:9px;color:#94a3b8;margin-top:1px;}
 
 /* ─── Emp search dropdown ─── */
 #emp-search-dd{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:200;}
 .emp-dd-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;}
 .emp-dd-item:hover{background:#eff6ff;}
 .emp-dd-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+/* ─── PIN boxes ─── */
+.pin-boxes{display:flex;gap:10px;justify-content:center;margin:12px 0 4px;}
+.pin-box{width:50px;height:58px;border:2px solid #cbd5e1;border-radius:10px;text-align:center;font-size:22px;font-weight:700;color:#1e293b;font-family:'Kanit',sans-serif;outline:none;background:#fff;transition:border-color .2s,box-shadow .2s;caret-color:transparent;}
+.pin-box:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15);}
+.pin-box.filled{border-color:#2563eb;background:#eff6ff;}
+.pin-box.pin-err-shake{animation:pinShake .4s;}
+@keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}60%{transform:translateX(6px)}}
 
 /* ─── Calendar strip ─── */
 .cal-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
@@ -148,7 +163,7 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
 }
 @media(max-width:480px){
   .kpi-grid{grid-template-columns:1fr 1fr;}
-  .type-cards{grid-template-columns:1fr 1fr;}
+  .type-cards{grid-template-columns:repeat(3,1fr);}
 }
 </style>
 </head>
@@ -208,8 +223,34 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
           </div>
         </div>
       </div>
+      <!-- PIN step (แสดงหลังเลือกพนักงาน) -->
+      <div id="pin-step" style="display:none;">
+        <div style="text-align:center;margin-bottom:10px;">
+          <div id="pin-step-title" style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px;">🔐 ใส่ PIN 4 หลัก</div>
+          <div id="pin-step-sub" style="font-size:12px;color:#64748b;"></div>
+        </div>
+        <div class="pin-boxes">
+          <input class="pin-box" id="pin1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pinIn(this,0)" onkeydown="_pinKd(event,this,0)">
+          <input class="pin-box" id="pin2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pinIn(this,1)" onkeydown="_pinKd(event,this,1)">
+          <input class="pin-box" id="pin3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pinIn(this,2)" onkeydown="_pinKd(event,this,2)">
+          <input class="pin-box" id="pin4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pinIn(this,3)" onkeydown="_pinKd(event,this,3)">
+        </div>
+        <div id="pin-confirm-wrap" style="display:none;margin-top:8px;">
+          <div style="text-align:center;font-size:11px;color:#64748b;margin-bottom:2px;">ยืนยัน PIN อีกครั้ง</div>
+          <div class="pin-boxes">
+            <input class="pin-box" id="pinc1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pincIn(this,0)" onkeydown="_pincKd(event,this,0)">
+            <input class="pin-box" id="pinc2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pincIn(this,1)" onkeydown="_pincKd(event,this,1)">
+            <input class="pin-box" id="pinc3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pincIn(this,2)" onkeydown="_pincKd(event,this,2)">
+            <input class="pin-box" id="pinc4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_pincIn(this,3)" onkeydown="_pincKd(event,this,3)">
+          </div>
+        </div>
+        <div id="pin-err" style="color:#ef4444;font-size:12px;text-align:center;margin:6px 0;min-height:16px;"></div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="_submitPin()">✅ ยืนยัน PIN</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;margin-top:6px;font-size:12px;" onclick="_backToEmpSelect()">← เปลี่ยนพนักงาน</button>
+      </div>
+
       <div id="emp-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doEmpAccess()">
+      <button id="btn-emp-access" class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doEmpAccess()">
         ดูข้อมูลการลาของฉัน
       </button>
     </div>
@@ -262,9 +303,9 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
       </div>
 
       <div class="sb-section">
-        <div class="sb-label">ออกนอกบริเวณ</div>
+        <div class="sb-label">ออกนอกบริษัท</div>
         <div class="sb-link" id="sb-lv-pass" onclick="navigateTo('lv-pass')">
-          <span class="ic">🚪</span> ขอออกนอกบริเวณ
+          <span class="ic">🚪</span> ขอออกนอกบริษัท
         </div>
         <div class="sb-link" id="sb-lv-pass-hist" onclick="navigateTo('lv-pass-hist')">
           <span class="ic">📋</span> ประวัติ Pass ของฉัน
@@ -321,23 +362,26 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
 <div id="bottom-nav" style="display:none;">
   <div class="bn-items">
     <div class="bn-item" id="bn-lv-dashboard" onclick="navigateTo('lv-dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
       หน้าหลัก
     </div>
     <div class="bn-item" id="bn-lv-request" onclick="navigateTo('lv-request')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-      ยื่นคำขอ
-    </div>
-    <div class="bn-item" id="bn-lv-my-hist" onclick="navigateTo('lv-my-hist')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      ประวัติ
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      ยื่นลา
     </div>
     <div class="bn-item" id="bn-lv-pass" onclick="navigateTo('lv-pass')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
       ออกนอก
     </div>
-    <div class="bn-item" id="bn-lv-approvals" onclick="navigateTo('lv-approvals')" style="display:none;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    <div class="bn-item" id="bn-lv-my-hist" onclick="navigateTo('lv-my-hist')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      ประวัติ
+    </div>
+    <div class="bn-item" id="bn-lv-approvals" onclick="navigateTo('lv-approvals')" style="display:none;position:relative;">
+      <div style="position:relative;display:inline-flex;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span id="bn-badge-approve" style="display:none;position:absolute;top:-5px;right:-8px;background:#ef4444;color:#fff;border-radius:20px;font-size:9px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:14px;border:1.5px solid #fff;"></span>
+      </div>
       อนุมัติ
     </div>
   </div>
@@ -378,6 +422,7 @@ let _leaveTypes   = [];     // cache
 let _leaveSettings= {};
 let _holidays     = [];     // ['YYYY-MM-DD', ...] วันหยุดนักขัตฤกษ์
 let _empSelected  = null;   // พนักงานที่เลือกใน login employee tab
+let _empPinHash   = null;   // pin_code ของพนักงานที่เลือก (null = ยังไม่ตั้ง PIN)
 let _empSearchTimer = null;
 let _empSearchResults = [];  // cache ผลการค้นหาล่าสุด (ใช้ index แทน JSON ใน onclick)
 let _reqCache = {};          // cache leave_requests ที่โหลดมาแล้ว (key=request_id)
@@ -459,6 +504,136 @@ async function doEmpAccess() {
   const err = document.getElementById('emp-err');
   err.textContent = '';
   if (!_empSelected) { err.textContent = 'กรุณาเลือกพนักงานก่อน'; return; }
+
+  // ดึง pin_code จาก DB (ไม่ใช้ที่เก็บใน search cache เพื่อความปลอดภัย)
+  const { data, error } = await sb.from('checkin_employees')
+    .select('pin_code')
+    .eq('employee_id', _empSelected.employee_id)
+    .single();
+  if (error) { err.textContent = 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่'; return; }
+
+  _showPinStep(data?.pin_code || null);
+}
+
+// ── แสดงขั้นตอน PIN ────────────────────────────────────────────
+function _showPinStep(pinCode) {
+  _empPinHash = pinCode;
+  document.getElementById('emp-search').disabled  = true;
+  document.getElementById('btn-emp-access').style.display = 'none';
+  document.getElementById('emp-err').textContent  = '';
+  document.getElementById('pin-step').style.display = '';
+
+  const title = document.getElementById('pin-step-title');
+  const sub   = document.getElementById('pin-step-sub');
+  const confirmWrap = document.getElementById('pin-confirm-wrap');
+
+  if (pinCode) {
+    title.textContent = '🔐 ใส่ PIN 4 หลัก';
+    sub.textContent   = `สวัสดี, ${_empSelected.name}`;
+    confirmWrap.style.display = 'none';
+  } else {
+    title.textContent = '🔑 ตั้ง PIN ครั้งแรก';
+    sub.textContent   = 'กรุณาตั้ง PIN 4 หลักเพื่อความปลอดภัย';
+    confirmWrap.style.display = '';
+  }
+
+  // Clear boxes
+  ['pin1','pin2','pin3','pin4','pinc1','pinc2','pinc3','pinc4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value=''; el.classList.remove('filled','pin-err-shake'); }
+  });
+  document.getElementById('pin-err').textContent = '';
+  setTimeout(() => document.getElementById('pin1')?.focus(), 120);
+}
+
+// ── PIN box inline event handlers ─────────────────────────────
+const _PIN_IDS  = ['pin1','pin2','pin3','pin4'];
+const _PINC_IDS = ['pinc1','pinc2','pinc3','pinc4'];
+
+function _pinIn(el, i) {
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  el.classList.toggle('filled', el.value.length > 0);
+  if (el.value && i < 3) document.getElementById(_PIN_IDS[i+1])?.focus();
+  // ถ้าเป็น verify mode (มี PIN แล้ว) → auto-submit เมื่อครบ 4
+  if (_empPinHash && i === 3 && _PIN_IDS.every(id => document.getElementById(id)?.value)) {
+    setTimeout(_submitPin, 80);
+  }
+}
+function _pinKd(e, el, i) {
+  if (e.key==='Backspace' && !el.value && i>0) {
+    const prev = document.getElementById(_PIN_IDS[i-1]);
+    if (prev) { prev.value=''; prev.classList.remove('filled'); prev.focus(); }
+  }
+  if (e.key==='Enter') _submitPin();
+}
+function _pincIn(el, i) {
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  el.classList.toggle('filled', el.value.length > 0);
+  if (el.value && i < 3) document.getElementById(_PINC_IDS[i+1])?.focus();
+}
+function _pincKd(e, el, i) {
+  if (e.key==='Backspace' && !el.value && i>0) {
+    const prev = document.getElementById(_PINC_IDS[i-1]);
+    if (prev) { prev.value=''; prev.classList.remove('filled'); prev.focus(); }
+  }
+  if (e.key==='Enter') _submitPin();
+}
+
+function _shakePins() {
+  _PIN_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('pin-err-shake');
+    void el.offsetWidth;
+    el.classList.add('pin-err-shake');
+  });
+  setTimeout(() => document.getElementById('pin1')?.focus(), 50);
+}
+
+async function _submitPin() {
+  const err = document.getElementById('pin-err');
+  err.textContent = '';
+  const pin = _PIN_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+
+  if (!/^\d{4}$/.test(pin)) {
+    err.textContent = 'กรุณาใส่ตัวเลข 4 หลัก';
+    _shakePins();
+    return;
+  }
+
+  if (!_empPinHash) {
+    // ตั้ง PIN ครั้งแรก — ต้องยืนยัน
+    const pinc = _PINC_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+    if (!/^\d{4}$/.test(pinc)) {
+      err.textContent = 'กรุณายืนยัน PIN ครบ 4 หลัก';
+      document.getElementById('pinc1')?.focus();
+      return;
+    }
+    if (pin !== pinc) {
+      err.textContent = '❌ PIN ไม่ตรงกัน กรุณาลองใหม่';
+      _PINC_IDS.forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('filled');}});
+      document.getElementById('pinc1')?.focus();
+      return;
+    }
+    // บันทึก PIN ใหม่
+    const { error } = await sb.from('checkin_employees')
+      .update({ pin_code: pin })
+      .eq('employee_id', _empSelected.employee_id);
+    if (error) { err.textContent = 'บันทึก PIN ไม่สำเร็จ'; return; }
+  } else {
+    // ตรวจสอบ PIN
+    if (pin !== _empPinHash) {
+      err.textContent = '❌ PIN ไม่ถูกต้อง กรุณาลองใหม่';
+      _PIN_IDS.forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('filled');}});
+      _shakePins();
+      return;
+    }
+  }
+
+  await _proceedEmpLogin();
+}
+
+async function _proceedEmpLogin() {
   currentEmp  = _empSelected;
   currentMode = 'employee';
   currentUser = {
@@ -472,6 +647,14 @@ async function doEmpAccess() {
   await _bootApp();
 }
 
+function _backToEmpSelect() {
+  _empPinHash = null;
+  document.getElementById('pin-step').style.display    = 'none';
+  document.getElementById('emp-search').disabled        = false;
+  document.getElementById('btn-emp-access').style.display = '';
+  document.getElementById('pin-err').textContent        = '';
+}
+
 function doLogout() {
   localStorage.removeItem(SESSION_KEY);
   currentUser = null; currentEmp = null; currentMode = null;
@@ -481,8 +664,12 @@ function doLogout() {
   document.getElementById('lg-user').value = '';
   document.getElementById('lg-pass').value = '';
   _empSelected = null;
+  _empPinHash  = null;
   document.getElementById('emp-search').value = '';
+  document.getElementById('emp-search').disabled = false;
   document.getElementById('emp-selected').style.display = 'none';
+  document.getElementById('pin-step').style.display = 'none';
+  document.getElementById('btn-emp-access').style.display = '';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -579,6 +766,16 @@ function can(action) {
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// parse [เกินโควต้า:X] จาก reason field — คืน {badge, reason}
+function parseQuotaBadge(reason) {
+  const m = String(reason||'').match(/^\[เกินโควต้า:([\d.]+)\](.*)/);
+  if(!m) return { badge:'', reason: reason||'' };
+  return {
+    badge: `<span style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;white-space:nowrap;">⚠️ เกินโควต้า ${m[1]} วัน</span>`,
+    reason: m[2].trim()
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // SECTION 5 — Toast & Modal
 // ─────────────────────────────────────────────────────────────
@@ -603,7 +800,7 @@ function _overlayClick(e) { if(e.target.id==='modal-overlay') closeModal(); }
 const PAGE_TITLES = {
   'lv-dashboard':'แดชบอร์ด','lv-request':'ยื่นคำขอลา','lv-my-hist':'ประวัติของฉัน',
   'lv-approvals':'อนุมัติคำขอ','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
-  'lv-pass':'ขอออกนอกบริเวณ','lv-pass-hist':'ประวัติ Pass ของฉัน','lv-pass-approve':'อนุมัติ Pass'
+  'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติ Pass ของฉัน','lv-pass-approve':'อนุมัติ Pass'
 };
 function navigateTo(page) {
   currentPage = page;
@@ -648,13 +845,20 @@ async function renderDashboard() {
   const empName = currentUser?.full_name || currentEmp?.name || '';
   const year = thisYear();
 
+  // Fetch fresh photo_url for employee mode (in case session doesn't have it)
+  if (currentMode === 'employee' && empId && !currentEmp?.photo_url) {
+    const { data: empData } = await sb.from('checkin_employees')
+      .select('photo_url').eq('employee_id', empId).single();
+    if (empData?.photo_url && currentEmp) currentEmp.photo_url = empData.photo_url;
+  }
+
   // Parallel fetch
   const [typesRes, myReqRes, pendingRes, balRes] = await Promise.all([
     sb.from('leave_types').select('*').eq('is_active',true).order('sort_order'),
     sb.from('leave_requests').select('*').eq('employee_id', empId)
       .order('created_at',{ascending:false}).limit(5),
     can('approve') ? (()=>{
-      let q = sb.from('leave_requests').select('request_id').eq('status','pending');
+      let q = sb.from('leave_requests').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(20);
       if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
       return q;
     })() : Promise.resolve({data:[]}),
@@ -670,19 +874,30 @@ async function renderDashboard() {
   const pc = pending.length;
   const badge = document.getElementById('sb-badge-approve');
   if (badge) { badge.textContent = pc||''; badge.style.display = pc>0?'':'none'; }
+  const bnBadge = document.getElementById('bn-badge-approve');
+  if (bnBadge) { bnBadge.textContent = pc||''; bnBadge.style.display = pc>0?'':'none'; }
 
-  // Build balance cards
+  // Build balance rows (compact)
   const typeCards = types.filter(t=>t.code!=='out').map(t => {
-    const bal = bals.find(b=>b.type_id===t.type_id);
+    const bal   = bals.find(b=>b.type_id===t.type_id);
     const quota = bal?.quota ?? t.default_quota;
     const used  = myReqs.filter(r=>r.type_id===t.type_id && ['approved','pending'].includes(r.status))
                         .reduce((s,r)=>s+Number(r.days),0);
-    const left  = Math.max(0, quota - used);
+    const left  = quota > 0 ? quota - used : null;
+    const over  = left !== null && left < 0;
+    const pct   = quota > 0 ? Math.min(100, Math.round(used/quota*100)) : 0;
+    const barColor = over ? '#ef4444' : (pct>=80 ? '#f59e0b' : t.color||'#3b82f6');
     return `
-    <div class="kpi" style="background:${t.color}18;border-color:${t.color};">
-      <div class="kpi-val" style="color:${t.color};">${quota>0?left:'∞'}</div>
-      <div class="kpi-lbl">${t.icon||''} ${t.name}</div>
-      ${quota>0?`<div style="font-size:10px;color:#94a3b8;">ใช้ ${used} / ${quota} วัน</div>`:''}
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:${t.color}10;border-radius:8px;border-left:3px solid ${t.color||'#94a3b8'};">
+      <span style="font-size:16px;flex-shrink:0;">${t.icon||'📋'}</span>
+      <span style="font-size:12px;font-weight:600;color:#1e293b;flex:1;min-width:80px;">${esc(t.name)}</span>
+      ${quota>0 ? `
+      <div style="flex:2;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;min-width:40px;">
+        <div style="height:100%;background:${barColor};border-radius:3px;width:${pct}%;transition:width .3s;"></div>
+      </div>
+      <span style="font-size:13px;font-weight:700;color:${over?'#ef4444':barColor};min-width:20px;text-align:right;">${left}</span>
+      <span style="font-size:10px;color:#94a3b8;white-space:nowrap;">/ ${quota} วัน</span>
+      ` : `<span style="font-size:11px;color:#94a3b8;">ไม่จำกัด</span>`}
     </div>`;
   }).join('');
 
@@ -696,23 +911,57 @@ async function renderDashboard() {
     </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">ยังไม่มีประวัติการลา</td></tr>';
 
-  // Pending approval section (supervisor only)
-  const pendingSection = can('approve') ? `
-  <div class="card">
-    <div class="card-hd">
-      <div class="card-title">⏳ รออนุมัติ (${pc} รายการ)</div>
-      <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-approvals')">ดูทั้งหมด</button>
-    </div>
-    ${pc>0
-      ? `<p style="font-size:13px;color:#ef4444;font-weight:600;">มีคำขอรออนุมัติ ${pc} รายการ กรุณาตรวจสอบ</p>`
-      : `<p style="font-size:13px;color:#22c55e;">✅ ไม่มีคำขอรออนุมัติ</p>`}
-  </div>` : '';
+  // Pending approval section (supervisor only) — แสดง list จริงในหน้า dashboard
+  const pendingSection = can('approve') ? (() => {
+    const pendingItems = pending.map(r => {
+      const qb = parseQuotaBadge(r.reason);
+      const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
+      const dateRange = fmtDate(r.start_date) + (r.start_date!==r.end_date ? ' – '+fmtDate(r.end_date) : '');
+      return `
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
+            <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+          </div>
+          <span style="color:${typeColor(r.type_code)};font-weight:700;font-size:13px;white-space:nowrap;flex-shrink:0;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-bottom:4px;">📅 ${dateRange} · <b>${r.days} วัน</b></div>
+        ${qb.reason ? `<div style="font-size:11px;color:#64748b;margin-bottom:4px;">📝 ${esc(qb.reason.slice(0,60))}</div>` : ''}
+        ${qb.badge ? `<div style="margin-bottom:6px;">${qb.badge}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-success btn-xs" style="flex:1;" onclick="dashApprove(${r.request_id})">✅ อนุมัติ</button>
+          <button class="btn btn-danger btn-xs" style="flex:1;" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
+          <button class="btn btn-xs btn-outline" onclick="printLeaveForm(${r.request_id})" title="พิมพ์">🖨️</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">⏳ รออนุมัติ (${pc} รายการ)</div>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-approvals')">ดูทั้งหมด</button>
+      </div>
+      ${pc > 0 ? pendingItems
+        : `<div style="text-align:center;color:#22c55e;padding:16px;font-size:14px;">✅ ไม่มีคำขอรออนุมัติ</div>`}
+    </div>`;
+  })() : '';
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:900px;">
-    <div style="margin-bottom:16px;">
-      <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0;">สวัสดี, ${esc(empName)} 👋</h2>
-      <p style="font-size:13px;color:#64748b;margin:4px 0 0;">${new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+    <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <div style="flex:1;min-width:0;">
+        <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">สวัสดี, ${esc(empName)} 👋</h2>
+        <p style="font-size:13px;color:#64748b;margin:4px 0 6px;">${new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+        ${currentMode==='employee' ? `<button class="btn btn-outline btn-sm" onclick="changePinModal()" title="เปลี่ยน PIN สำหรับเข้าระบบ">🔐 เปลี่ยน PIN</button>` : ''}
+      </div>
+      ${currentMode==='employee' ? (() => {
+        const photo = currentEmp?.photo_url;
+        return photo
+          ? `<img src="${esc(photo)}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #e2e8f0;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.12);" onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'👤',style:'width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#dbeafe,#bfdbfe);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;border:3px solid #e2e8f0;box-sizing:border-box'}))">`
+          : `<div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#dbeafe,#bfdbfe);display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;border:3px solid #e2e8f0;">👤</div>`;
+      })() : ''}
     </div>
 
     <!-- วันลาคงเหลือ -->
@@ -721,7 +970,7 @@ async function renderDashboard() {
         <div class="card-title">📊 วันลาคงเหลือ ปี ${year+543}</div>
         <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-request')">+ ยื่นคำขอ</button>
       </div>
-      <div class="kpi-grid">${typeCards}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">${typeCards}</div>
     </div>
 
     ${pendingSection}
@@ -763,7 +1012,7 @@ async function renderNewRequest() {
   const dept    = currentUser?.department||currentEmp?.department||'';
   const today   = todayISO();
 
-  const typeCardsHtml = _leaveTypes.map(t => `
+  const typeCardsHtml = _leaveTypes.filter(t=>t.code!=='out').map(t => `
     <div class="type-card" id="tc-${t.type_id}" onclick="selectLeaveType(${t.type_id},'${t.code}','${esc(t.name)}','${t.color}')">
       <div class="tc-icon">${t.icon||'📋'}</div>
       <div class="tc-name">${esc(t.name)}</div>
@@ -787,7 +1036,7 @@ async function renderNewRequest() {
       <!-- เลือกประเภทลา -->
       <div class="form-group">
         <label class="form-label">ประเภทการลา <span style="color:#ef4444;">*</span></label>
-        <div class="type-cards">${typeCardsHtml}</div>
+        <div class="type-cards" id="lv-type-cards">${typeCardsHtml}</div>
         <input type="hidden" id="req-type-id">
       </div>
 
@@ -843,9 +1092,19 @@ async function renderNewRequest() {
 let _halfDay = '';
 function selectLeaveType(id, code, name, color) {
   _reqTypeId=id; _reqTypeCode=code; _reqTypeName=name;
-  document.querySelectorAll('.type-card').forEach(el=>el.classList.remove('selected'));
+  // Reset all cards
+  document.querySelectorAll('#lv-type-cards .type-card').forEach(el=>{
+    el.classList.remove('selected');
+    el.style.background='';
+    el.style.borderColor='';
+  });
+  // Highlight selected card with solid fill
   const tc = document.getElementById('tc-'+id);
-  if(tc) { tc.classList.add('selected'); tc.style.borderColor=color; }
+  if(tc) {
+    tc.classList.add('selected');
+    tc.style.background = color||'#3b82f6';
+    tc.style.borderColor= color||'#3b82f6';
+  }
   document.getElementById('req-type-id').value=id;
   document.getElementById('half-day-grp').style.display='';
   _calcDays();
@@ -893,11 +1152,34 @@ async function submitRequest() {
   const empName= currentUser?.full_name||currentEmp?.name||'';
   const dept   = currentUser?.department||currentEmp?.department||'';
 
+  // ตรวจโควต้า — แจ้งเตือนแต่ยังยื่นได้
+  let overQuotaNote = '';
+  const selType = _leaveTypes.find(t=>t.type_id===_reqTypeId);
+  if(selType && selType.default_quota > 0) {
+    const year = new Date().getFullYear();
+    const { data: balData } = await sb.from('leave_balances').select('quota').eq('employee_id',empId).eq('type_id',_reqTypeId).eq('year',year).single();
+    const quota = balData?.quota ?? selType.default_quota;
+    const { data: usedData } = await sb.from('leave_requests').select('days').eq('employee_id',empId).eq('type_id',_reqTypeId).in('status',['approved','pending']);
+    const used = (usedData||[]).reduce((s,r)=>s+Number(r.days),0);
+    if(used + days > quota) {
+      const over = (used + days - quota).toFixed(1);
+      if(selType.allow_exceed === false) {
+        // Hard block — ห้ามยื่นเด็ดขาด
+        err.textContent = `❌ ไม่สามารถยื่น${_reqTypeName}ได้ เนื่องจากโควต้าเต็มแล้ว (ใช้ไป ${used} วัน จากโควต้า ${quota} วัน)`;
+        return;
+      }
+      // Soft warn — confirm แล้วยื่นได้
+      if(!confirm(`⚠️ คำเตือน: ลา${_reqTypeName} เกินโควต้า ${over} วัน\n(โควต้า ${quota} วัน, ใช้ไปแล้ว ${used} วัน)\n\nหัวหน้าจะได้รับแจ้งว่าเกินโควต้า\nยังต้องการยื่นคำขอต่อหรือไม่?`)) return;
+      overQuotaNote = `[เกินโควต้า:${over}]`;
+    }
+  }
+
   const payload = {
     employee_id: empId, employee_name: empName, department: dept,
     type_id: _reqTypeId, type_name: _reqTypeName, type_code: _reqTypeCode,
     start_date: start, end_date: end, days, half_day: _halfDay||null,
-    reason: reason||null, status:'pending'
+    reason: overQuotaNote ? `${overQuotaNote}${reason?` ${reason}`:''}` : (reason||null),
+    status:'pending'
   };
 
   const { data, error } = await sb.from('leave_requests').insert([payload]).select().single();
@@ -1192,17 +1474,20 @@ async function renderApprovals() {
   // Update badge
   const badge = document.getElementById('sb-badge-approve');
   if(badge){ badge.textContent=reqs.length||''; badge.style.display=reqs.length>0?'':'none'; }
+  const bnBadge2 = document.getElementById('bn-badge-approve');
+  if(bnBadge2){ bnBadge2.textContent=reqs.length||''; bnBadge2.style.display=reqs.length>0?'':'none'; }
 
   reqs.forEach(r => { _reqCache[r.request_id] = r; });
 
   const isMobile = window.innerWidth <= 768;
 
   const items = reqs.length ? reqs.map(r=>{
-    const isAuto = (r.reason||'').startsWith('[Auto จากบัตรตอก]');
+    const qb = parseQuotaBadge(r.reason);
+    const isAuto = qb.reason.startsWith('[Auto จากบัตรตอก]');
     const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
     const dateRange = fmtDate(r.start_date)+(r.start_date!==r.end_date?' – '+fmtDate(r.end_date):'');
     const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;">🔄 บัตรตอก</span>` : '';
-    const reasonText = isAuto ? '🔄 สร้างจากบัตรตอกอัตโนมัติ' : (r.reason||'').slice(0,60)||'—';
+    const reasonText = isAuto ? '🔄 สร้างจากบัตรตอกอัตโนมัติ' : qb.reason.slice(0,60)||'—';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:10px;">
@@ -1214,8 +1499,8 @@ async function renderApprovals() {
           <span style="color:${typeColor(r.type_code)};font-weight:700;font-size:13px;white-space:nowrap;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>
         </div>
         <div style="font-size:13px;color:#475569;margin-bottom:4px;">📅 ${dateRange} &nbsp;·&nbsp; <b>${r.days} วัน</b></div>
-        ${r.reason ? `<div style="font-size:12px;color:#64748b;margin-bottom:8px;">📝 ${esc(reasonText)}</div>` : ''}
-        ${autoBadge}
+        ${(qb.reason||isAuto) ? `<div style="font-size:12px;color:#64748b;margin-bottom:6px;">📝 ${esc(reasonText)}</div>` : ''}
+        ${qb.badge || autoBadge ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${autoBadge}${qb.badge}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="btn btn-success btn-sm" style="flex:1;" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
           <button class="btn btn-danger btn-sm" style="flex:1;" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
@@ -1226,10 +1511,10 @@ async function renderApprovals() {
     // Desktop: table row
     return `<tr>
       <td><div style="font-weight:600;color:#0f172a;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
-      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge}</td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}</td>
       <td>${dateRange}</td>
       <td style="font-weight:700;">${r.days} วัน</td>
-      <td><span style="font-size:12px;color:#64748b;">${esc(reasonText)}</span></td>
+      <td><span style="font-size:12px;color:#64748b;">${esc(reasonText)}</span>${qb.badge ? '<br>'+qb.badge : ''}</td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-success btn-xs" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
         <button class="btn btn-danger btn-xs" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
@@ -1260,6 +1545,21 @@ async function renderApprovals() {
   </div>`;
 }
 
+// อนุมัติจาก dashboard — reload dashboard หลังเสร็จ
+async function dashApprove(id) {
+  if(!confirm('ยืนยันการอนุมัติคำขอนี้?')) return;
+  const approverId   = currentUser?.id||'';
+  const approverName = currentUser?.full_name||'';
+  const { data, error } = await sb.from('leave_requests').update({
+    status:'approved', approver_id:approverId, approver_name:approverName,
+    approved_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  }).eq('request_id',id).select().single();
+  if(error) { showToast('อนุมัติไม่สำเร็จ','error'); return; }
+  await sendLineNotify(data, 'approved');
+  showToast('อนุมัติเรียบร้อย ✅','success');
+  renderDashboard(); // reload dashboard
+}
+
 async function approveRequest(id) {
   if(!confirm('ยืนยันการอนุมัติคำขอนี้?')) return;
   const approverId   = currentUser?.id||'';
@@ -1272,7 +1572,7 @@ async function approveRequest(id) {
   if(error) { showToast('อนุมัติไม่สำเร็จ','error'); return; }
   await sendLineNotify(data, 'approved');
   showToast('อนุมัติเรียบร้อย ✅','success');
-  renderApprovals();
+  currentPage === 'lv-dashboard' ? renderDashboard() : renderApprovals();
 }
 
 function openRejectModal(id) {
@@ -1303,7 +1603,7 @@ async function rejectRequest(id) {
   closeModal();
   await sendLineNotify(data,'rejected');
   showToast('ปฏิเสธคำขอเรียบร้อย','info');
-  renderApprovals();
+  currentPage === 'lv-dashboard' ? renderDashboard() : renderApprovals();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1325,27 +1625,50 @@ async function renderAllRequests() {
 
   reqs.forEach(r => { _reqCache[r.request_id] = r; });
 
-  const rows = reqs.length ? reqs.map(r=>{
-    const isAuto = (r.reason||'').startsWith('[Auto จากบัตรตอก]');
-    const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;margin-left:4px;">🔄 บัตรตอก</span>` : '';
+  const isMobile = window.innerWidth <= 768;
+
+  const items = reqs.length ? reqs.map(r=>{
+    const qb = parseQuotaBadge(r.reason);
+    const isAuto = qb.reason.startsWith('[Auto จากบัตรตอก]');
+    const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;">🔄 บัตรตอก</span>` : '';
     const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
+    const dateRange = fmtDate(r.start_date)+(r.start_date!==r.end_date?' – '+fmtDate(r.end_date):'');
+
+    if(isMobile) {
+      return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
+            <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+          </div>
+          ${statusBadge(r.status)}
+        </div>
+        <div style="font-size:12px;color:#475569;margin-bottom:3px;"><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}${qb.badge ? ' '+qb.badge : ''}</div>
+        <div style="font-size:12px;color:#475569;margin-bottom:3px;">📅 ${dateRange} · <b>${r.days} วัน</b></div>
+        ${r.approver_name?`<div style="font-size:11px;color:#94a3b8;">ผู้อนุมัติ: ${esc(r.approver_name)}</div>`:''}
+        ${can('admin')?`<div style="display:flex;gap:6px;margin-top:8px;">
+          <button class="btn btn-xs btn-outline" onclick="openEditRequestModal(${r.request_id})">✏️ แก้ไข</button>
+          <button class="btn btn-xs btn-danger" onclick="adminDeleteRequest(${r.request_id})">🗑️ ลบ</button>
+        </div>`:''}
+      </div>`;
+    }
     return `
     <tr>
       <td style="font-size:12px;color:#64748b;">${fmtDate(r.created_at)}</td>
       <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
-      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge}</td>
-      <td>${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}</td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}</td>
+      <td>${dateRange}</td>
       <td style="font-weight:700;">${r.days}</td>
-      <td>${statusBadge(r.status)}</td>
+      <td>${statusBadge(r.status)}${qb.badge ? '<br>'+qb.badge : ''}</td>
       <td style="font-size:12px;color:#64748b;">${r.approver_name?esc(r.approver_name):'—'}</td>
-      <td>
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-xs btn-outline" onclick="openEditRequestModal(${r.request_id})" title="แก้ไข">✏️</button>
-          <button class="btn btn-xs btn-danger" onclick="adminDeleteRequest(${r.request_id})" title="ลบ">🗑️</button>
-        </div>
-      </td>
+      <td><div style="display:flex;gap:4px;">
+        <button class="btn btn-xs btn-outline" onclick="openEditRequestModal(${r.request_id})" title="แก้ไข">✏️</button>
+        <button class="btn btn-xs btn-danger" onclick="adminDeleteRequest(${r.request_id})" title="ลบ">🗑️</button>
+      </div></td>
     </tr>`;}).join('')
-    : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีข้อมูล</td></tr>';
+    : (isMobile
+        ? '<div style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีข้อมูล</div>'
+        : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีข้อมูล</td></tr>');
 
   const statFilter = ['','pending','approved','rejected'].map(s=>`
     <button class="btn btn-sm ${_allFilter.status===s?'btn-primary':'btn-outline'}" onclick="_allFilter.status='${s}';renderAllRequests();">
@@ -1365,12 +1688,13 @@ async function renderAllRequests() {
         <button class="btn btn-outline btn-sm" onclick="renderAllRequests()">🔄 รีเฟรช</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">${statFilter}</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>วันที่ยื่น</th><th>พนักงาน</th><th>ประเภท</th><th>วันลา</th><th>วัน</th><th>สถานะ</th><th>ผู้อนุมัติ</th><th>จัดการ</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${isMobile
+        ? `<div>${items}</div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>วันที่ยื่น</th><th>พนักงาน</th><th>ประเภท</th><th>วันลา</th><th>วัน</th><th>สถานะ</th><th>ผู้อนุมัติ</th><th>จัดการ</th></tr></thead>
+            <tbody>${items}</tbody>
+           </table></div>`
+      }
     </div>
   </div>`;
 }
@@ -1460,7 +1784,7 @@ async function adminDeleteRequest(requestId) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SECTION 11C — Pass Request (ขอออกนอกบริเวณ)
+// SECTION 11C — Pass Request (ขอออกนอกบริษัท)
 // ─────────────────────────────────────────────────────────────
 let _passReasons = [];      // cache จาก pass_reasons table
 let _passReasonSelected = null; // {reason_id, name, icon, max_minutes, requires_approval}
@@ -1468,7 +1792,9 @@ let _passReasonSelected = null; // {reason_id, name, icon, max_minutes, requires
 async function loadPassReasons() {
   if (_passReasons.length) return;
   const { data } = await sb.from('pass_reasons').select('*').eq('is_active',true).order('sort_order');
-  _passReasons = data || [];
+  // Deduplicate by name (ป้องกัน SQL รันซ้ำ)
+  const seen = new Set();
+  _passReasons = (data||[]).filter(r => { if(seen.has(r.name)) return false; seen.add(r.name); return true; });
 }
 
 async function renderPassRequest() {
@@ -1486,15 +1812,16 @@ async function renderPassRequest() {
     <div class="type-card" id="pr-card-${r.reason_id}" onclick="selectPassReason(${r.reason_id})" style="cursor:pointer;">
       <div class="tc-icon">${r.icon}</div>
       <div class="tc-name">${esc(r.name)}</div>
-      <div class="tc-quota">${r.max_minutes} นาที${r.requires_approval ? '' : ' · ไม่ต้องอนุมัติ'}</div>
+      <div class="tc-quota">${r.max_minutes} นาที${r.requires_approval ? '' : ' · ⚡ ทันที'}</div>
+      ${r.name==='อื่นๆ' ? `<div style="font-size:9px;color:#f59e0b;font-weight:600;margin-top:2px;">* ต้องระบุหมายเหตุ</div>` : ''}
     </div>`).join('');
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:600px;">
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">🚪 ขอออกนอกบริเวณ</div>
-        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-pass-hist')">ประวัติของฉัน →</button>
+        <div class="card-title">📋 กรอกรายละเอียด</div>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-pass-hist')">ประวัติ →</button>
       </div>
 
       <!-- ข้อมูลผู้ขอ -->
@@ -1514,12 +1841,12 @@ async function renderPassRequest() {
         <div class="type-cards" id="pass-reason-cards">${reasonCards}</div>
       </div>
 
-      <!-- วัน-เวลา -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">วันที่</label>
-          <input type="date" id="pass-date" class="form-control" value="${todayISO}" min="${todayISO}">
-        </div>
+      <!-- วัน-เวลา (เรียงลงมา) -->
+      <div class="form-group">
+        <label class="form-label">วันที่</label>
+        <input type="date" id="pass-date" class="form-control" value="${todayISO}" min="${todayISO}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">เวลาออก</label>
           <input type="time" id="pass-out-time" class="form-control" value="${timeNow}">
@@ -1531,15 +1858,15 @@ async function renderPassRequest() {
       </div>
 
       <!-- หมายเหตุ -->
-      <div class="form-group">
-        <label class="form-label">หมายเหตุ (ถ้ามี)</label>
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label" id="pass-note-label">หมายเหตุ (ถ้ามี)</label>
         <textarea id="pass-note" class="form-control" rows="2" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
       </div>
 
       <div id="pass-err" style="color:#ef4444;font-size:13px;margin-bottom:10px;"></div>
 
-      <div id="pass-submit-info" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1e40af;display:none;">
-        <strong>ℹ️ ทานข้าว/ออกรถ</strong> — ไม่ต้องรออนุมัติ บันทึกได้ทันที
+      <div id="pass-submit-info" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#166534;display:none;">
+        <strong>⚡ พักทานข้าว</strong> — ไม่ต้องรออนุมัติ ระบบแจ้งเตือน LINE ทันที
       </div>
 
       <button class="btn btn-primary" onclick="submitPassRequest()" style="width:100%;">
@@ -1560,7 +1887,14 @@ function selectPassReason(reasonId) {
     el.style.borderColor = el.id===`pr-card-${reasonId}` ? '#6d28d9' : '#e2e8f0';
     el.style.background  = el.id===`pr-card-${reasonId}` ? '#ede9fe' : '';
   });
-  // แสดง info ถ้าไม่ต้องอนุมัติ
+  // อัปเดต label หมายเหตุ — อื่นๆ บังคับ
+  const noteLabel = document.getElementById('pass-note-label');
+  if(noteLabel) {
+    noteLabel.innerHTML = r.name === 'อื่นๆ'
+      ? 'หมายเหตุ <span style="color:#ef4444;">* (จำเป็น)</span>'
+      : 'หมายเหตุ (ถ้ามี)';
+  }
+  // แสดง info banner เฉพาะพักทานข้าว
   const info = document.getElementById('pass-submit-info');
   if (info) info.style.display = r.requires_approval ? 'none' : '';
 }
@@ -1581,7 +1915,14 @@ async function submitPassRequest() {
   const dept    = currentUser?.department || currentEmp?.department || '';
   const note    = document.getElementById('pass-note')?.value.trim();
 
-  // ถ้าไม่ต้องอนุมัติ → approved ทันที + out ทันที (walk-in)
+  // ตรวจ: อื่นๆ ต้องระบุหมายเหตุ
+  if (_passReasonSelected.name === 'อื่นๆ' && !note) {
+    err.textContent = 'กรุณาระบุหมายเหตุสำหรับ "อื่นๆ"';
+    document.getElementById('pass-note')?.focus();
+    return;
+  }
+
+  // พักทานข้าว → approved ทันที, อื่นๆ → รออนุมัติ
   const isWalkIn = !_passReasonSelected.requires_approval;
   const status   = isWalkIn ? 'approved' : 'pending';
 
@@ -1590,16 +1931,18 @@ async function submitPassRequest() {
     reason_id: _passReasonSelected.reason_id, reason_name: _passReasonSelected.name,
     request_date: date, out_time: outTime, expected_return: retTime,
     note: note || null, status,
-    approver_name: isWalkIn ? 'Auto (ไม่ต้องอนุมัติ)' : null
+    approver_name: isWalkIn ? 'Auto (พักทานข้าว)' : null
   };
 
   const { data, error } = await sb.from('pass_requests').insert([payload]).select('pass_id').single();
   if (error) { err.textContent = 'บันทึกไม่สำเร็จ: '+error.message; return; }
 
   if (isWalkIn) {
-    showToast('✅ บันทึกสำเร็จ (ไม่ต้องรออนุมัติ)', 'success');
+    // พักทานข้าว — แจ้ง LINE ทันที (event = 'walkin')
+    sendPassLineNotify(data.pass_id, payload, 'walkin');
+    showToast('✅ บันทึกสำเร็จ — แจ้ง LINE เรียบร้อย', 'success');
   } else {
-    // แจ้ง LINE (ถ้ามี)
+    // ธุระ / พบแพทย์ / ออกรถ / อื่นๆ — รออนุมัติ แจ้ง LINE หัวหน้า
     sendPassLineNotify(data.pass_id, payload, 'pending');
     showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
   }
@@ -1643,7 +1986,7 @@ async function renderMyPassHistory() {
   <div style="max-width:900px;">
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">📋 ประวัติคำขอออกนอกบริเวณ</div>
+        <div class="card-title">📋 ประวัติคำขอออกนอกบริษัท</div>
         <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-pass')">+ คำขอใหม่</button>
       </div>
       <div class="tbl-wrap">
@@ -1685,45 +2028,56 @@ async function renderPassApprovals() {
 
   const PASS_COLOR = { pending:'#f59e0b', approved:'#22c55e', out:'#3b82f6', returned:'#6d28d9' };
 
-  const rows = reqs.length ? reqs.map(r=>`
-    <tr>
-      <td>
-        <div style="font-weight:600;">${esc(r.employee_name)}</div>
-        <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
-      </td>
+  const isMobile = window.innerWidth <= 768;
+  const PASS_LABEL = {pending:'⏳ รออนุมัติ',approved:'✅ อนุมัติ',out:'🚪 กำลังออก',returned:'🏭 กลับแล้ว'};
+
+  const items = reqs.length ? reqs.map(r=>{
+    const actionBtns = r.status==='pending' ? `
+      <button class="btn btn-success btn-xs" onclick="approvePass(${r.pass_id})" style="flex:1;">✅ อนุมัติ</button>
+      <button class="btn btn-danger btn-xs"  onclick="rejectPass(${r.pass_id})" style="flex:1;">❌ ปฏิเสธ</button>` : '';
+
+    if(isMobile) {
+      return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
+            <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+          </div>
+          <span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${PASS_LABEL[r.status]||r.status}</span>
+        </div>
+        <div style="font-size:13px;color:#475569;margin-bottom:3px;">📋 ${esc(r.reason_name)}</div>
+        <div style="font-size:12px;color:#475569;margin-bottom:3px;">🕐 ออก ${r.request_date} ${r.out_time?.slice(0,5)} · กลับ ~${r.expected_return?.slice(0,5)}</div>
+        ${r.note?`<div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">📝 ${esc(r.note)}</div>`:''}
+        ${r.status==='pending'?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}</div>`:''}
+      </div>`;
+    }
+    return `<tr>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
       <td>${esc(r.reason_name)}</td>
       <td style="font-size:12px;">${r.request_date} ${r.out_time?.slice(0,5)}</td>
       <td style="font-size:12px;">~${r.expected_return?.slice(0,5)}</td>
       <td style="font-size:12px;color:#64748b;">${r.note?esc(r.note).slice(0,30):'—'}</td>
-      <td>
-        <span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">
-          ${{pending:'⏳ รออนุมัติ',approved:'✅ อนุมัติ',out:'🚪 กำลังออก',returned:'🏭 กลับแล้ว'}[r.status]||r.status}
-        </span>
-      </td>
-      <td>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          ${r.status==='pending'?`
-            <button class="btn btn-success btn-xs" onclick="approvePass(${r.pass_id})">✅ อนุมัติ</button>
-            <button class="btn btn-danger btn-xs"  onclick="rejectPass(${r.pass_id})">❌</button>
-          `:''}
-        </div>
-      </td>
-    </tr>`).join('')
-    : '<tr><td colspan="7" style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</td></tr>';
+      <td><span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${PASS_LABEL[r.status]||r.status}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}</div></td>
+    </tr>`;}).join('')
+    : (isMobile
+        ? '<div style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</div>'
+        : '<tr><td colspan="7" style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</td></tr>');
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:1100px;">
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">🔑 อนุมัติคำขอออกนอกบริเวณ (วันนี้เป็นต้นไป)</div>
+        <div class="card-title">🔑 อนุมัติคำขอออกนอกบริษัท (วันนี้เป็นต้นไป)</div>
         <button class="btn btn-outline btn-sm" onclick="renderPassApprovals()">🔄 รีเฟรช</button>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>วันเวลาออก</th><th>กลับประมาณ</th><th>หมายเหตุ</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${isMobile
+        ? `<div>${items}</div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>วันเวลาออก</th><th>กลับประมาณ</th><th>หมายเหตุ</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <tbody>${items}</tbody>
+           </table></div>`
+      }
     </div>
   </div>`;
 }
@@ -1753,24 +2107,31 @@ async function rejectPass(passId) {
 
 // LINE Notify สำหรับ pass (fire-and-forget)
 async function sendPassLineNotify(passId, r, event) {
+  // event: 'pending' = รออนุมัติ, 'walkin' = พักทานข้าว (auto), 'approved' = อนุมัติโดยหัวหน้า
+  const statusMap = { pending:'pending', walkin:'approved', approved:'approved' };
+  const status = statusMap[event] || 'pending';
   try {
-    await fetch(`${SUPA_URL}/functions/v1/line-notify`, {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    fetch(`${SB_URL}/functions/v1/line-notify`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        type: 'pass_request', event,
-        pass_id: passId,
-        employee_name: r.employee_name,
-        department: r.department,
-        reason_name: r.reason_name,
-        request_date: r.request_date,
-        out_time: r.out_time,
-        expected_return: r.expected_return,
-        note: r.note,
-        approver_name: r.approver_name
+        type: 'INSERT',
+        table: 'pass_requests',
+        record: {
+          pass_id: passId,
+          status,
+          employee_name: r.employee_name,
+          department:    r.department,
+          reason_name:   r.reason_name,
+          request_date:  r.request_date,
+          out_time:      r.out_time,
+          expected_return: r.expected_return,
+          note:          r.note,
+          approver_name: r.approver_name || null
+        }
       })
-    });
-  } catch(e) { console.warn('pass LINE notify failed', e); }
+    }).catch(e => console.warn('pass LINE notify failed:', e));
+  } catch(e) { console.warn('pass LINE notify error:', e); }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1873,6 +2234,221 @@ function exportReportExcel() {
 // ─────────────────────────────────────────────────────────────
 // SECTION 13 — Settings (Admin)
 // ─────────────────────────────────────────────────────────────
+
+// ── Pass Time Rules Editor ──────────────────────────────────
+let _passRulesData = [];
+
+async function loadPassTimeRulesEditor() {
+  const { data } = await sb.from('pass_reasons').select('*').order('sort_order');
+  _passRulesData = (data || []).map(r => ({ ...r })); // clone
+  _renderPassRulesTable();
+}
+
+function _renderPassRulesTable() {
+  const el = document.getElementById('pass-rules-tbody');
+  if (!el) return;
+  const STATUSES = ['สาย', 'เกินกำหนด', 'ลาครึ่งวัน'];
+  const statusOpts = (val) => `<option value="">-- ไม่ใช้ --</option>` +
+    STATUSES.map(s => `<option value="${s}" ${val===s?'selected':''}>${s}</option>`).join('');
+
+  if (!_passRulesData.length) {
+    el.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px;">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+  el.innerHTML = _passRulesData.map((r, i) => `
+    <tr>
+      <td><input class="form-control" style="width:100%;font-size:12px;padding:4px 6px;" value="${esc(r.name)}"
+          oninput="_passRulesData[${i}].name=this.value"></td>
+      <td><input type="number" class="form-control" style="width:100%;font-size:12px;padding:4px 4px;text-align:center;" placeholder="นาที"
+          value="${r.level1_minutes||''}"
+          oninput="_passRulesData[${i}].level1_minutes=this.value?+this.value:null"></td>
+      <td><select class="form-control" style="width:100%;font-size:11px;padding:4px 2px;" onchange="_passRulesData[${i}].level1_status=this.value">
+          ${statusOpts(r.level1_status||'')}</select></td>
+      <td><input type="number" class="form-control" style="width:100%;font-size:12px;padding:4px 4px;text-align:center;" placeholder="นาที"
+          value="${r.level2_minutes||''}"
+          oninput="_passRulesData[${i}].level2_minutes=this.value?+this.value:null"></td>
+      <td><select class="form-control" style="width:100%;font-size:11px;padding:4px 2px;" onchange="_passRulesData[${i}].level2_status=this.value">
+          ${statusOpts(r.level2_status||'')}</select></td>
+      <td style="text-align:center;"><button class="btn btn-xs btn-danger" onclick="removePassRule(${i})" title="ลบ">🗑</button></td>
+    </tr>`).join('');
+}
+
+function addPassRule() {
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">➕ เพิ่มเหตุผลการออกนอกบริษัท</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="form-group">
+      <label class="form-label">ชื่อเหตุผล <span style="color:#ef4444;">*</span></label>
+      <input id="new-rsn-name" class="form-control" placeholder="เช่น ธุระส่วนตัว, พบแพทย์">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <div class="form-group" style="flex:0 0 80px;">
+        <label class="form-label">ไอคอน</label>
+        <input id="new-rsn-icon" class="form-control" value="📋" maxlength="2">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label" style="display:block;margin-bottom:6px;">การอนุมัติ</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px;">
+          <input type="checkbox" id="new-rsn-apv" checked>
+          <span style="font-size:13px;">ต้องอนุมัติ (ไม่ติ๊ก = ยืนยันทันที)</span>
+        </label>
+      </div>
+    </div>
+    <div id="new-rsn-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveNewPassReason()" style="flex:1;justify-content:center;">💾 เพิ่มเหตุผล</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('new-rsn-name')?.focus(),100);
+}
+
+async function saveNewPassReason() {
+  const name = document.getElementById('new-rsn-name')?.value.trim();
+  const icon = document.getElementById('new-rsn-icon')?.value.trim() || '📋';
+  const apv  = document.getElementById('new-rsn-apv')?.checked ?? true;
+  const err  = document.getElementById('new-rsn-err');
+  err.textContent = '';
+  if (!name) { err.textContent = 'กรุณาระบุชื่อเหตุผล'; return; }
+  const sortOrder = _passRulesData.length
+    ? Math.max(..._passRulesData.map(r=>+(r.sort_order||0))) + 1 : 99;
+  const { error } = await sb.from('pass_reasons').insert([{
+    name, icon, requires_approval: apv, is_active: true,
+    max_minutes: 60, sort_order: sortOrder
+  }]);
+  if (error) { err.textContent = 'บันทึกไม่สำเร็จ: ' + (error.message||''); return; }
+  _passReasons = []; // clear cache — pass form จะโหลดใหม่
+  showToast(`เพิ่ม "${name}" สำเร็จ ✅`, 'success');
+  closeModal();
+  await loadPassTimeRulesEditor();
+}
+
+async function removePassRule(idx) {
+  const r = _passRulesData[idx];
+  if (r.reason_id) {
+    if (!confirm(`ลบ "${r.name}" ออกจากระบบ?`)) return;
+    await sb.from('pass_reasons').delete().eq('reason_id', r.reason_id);
+    _passReasons = []; // clear cache
+  }
+  _passRulesData.splice(idx, 1);
+  _renderPassRulesTable();
+}
+
+async function savePassTimeRules() {
+  let ok = 0;
+  for (const r of _passRulesData) {
+    if (!r.name.trim()) continue;
+    const payload = {
+      name: r.name.trim(), icon: r.icon||'📋',
+      max_minutes: r.level1_minutes || r.max_minutes || 60,
+      requires_approval: r.requires_approval ?? true,
+      is_active: r.is_active ?? true,
+      sort_order: r.sort_order || 99,
+      level1_minutes: r.level1_minutes || null,
+      level1_status:  r.level1_status  || null,
+      level2_minutes: r.level2_minutes || null,
+      level2_status:  r.level2_status  || null
+    };
+    if (r.reason_id) {
+      await sb.from('pass_reasons').update(payload).eq('reason_id', r.reason_id);
+    } else {
+      await sb.from('pass_reasons').insert([payload]);
+    }
+    ok++;
+  }
+  _passReasons = []; // clear cache ให้โหลดใหม่
+  showToast(`บันทึก ${ok} รายการเรียบร้อย ✅`, 'success');
+  await loadPassTimeRulesEditor();
+}
+
+// ── เปลี่ยน PIN (พนักงาน) ─────────────────────────────────────
+function changePinModal() {
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">🔐 เปลี่ยน PIN</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:14px;">ตั้ง PIN ใหม่ 4 หลักสำหรับการเข้าสู่ระบบครั้งต่อไป</p>
+    <div style="margin-bottom:12px;">
+      <div style="text-align:center;font-size:13px;font-weight:600;color:#1e293b;margin-bottom:4px;">PIN ใหม่</div>
+      <div class="pin-boxes">
+        <input class="pin-box" id="np1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npIn(this,0)" onkeydown="_npKd(event,this,0)">
+        <input class="pin-box" id="np2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npIn(this,1)" onkeydown="_npKd(event,this,1)">
+        <input class="pin-box" id="np3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npIn(this,2)" onkeydown="_npKd(event,this,2)">
+        <input class="pin-box" id="np4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npIn(this,3)" onkeydown="_npKd(event,this,3)">
+      </div>
+    </div>
+    <div style="margin-bottom:6px;">
+      <div style="text-align:center;font-size:13px;font-weight:600;color:#1e293b;margin-bottom:4px;">ยืนยัน PIN ใหม่</div>
+      <div class="pin-boxes">
+        <input class="pin-box" id="npc1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npcIn(this,0)" onkeydown="_npcKd(event,this,0)">
+        <input class="pin-box" id="npc2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npcIn(this,1)" onkeydown="_npcKd(event,this,1)">
+        <input class="pin-box" id="npc3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npcIn(this,2)" onkeydown="_npcKd(event,this,2)">
+        <input class="pin-box" id="npc4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_npcIn(this,3)" onkeydown="_npcKd(event,this,3)">
+      </div>
+    </div>
+    <div id="np-err" style="color:#ef4444;font-size:12px;text-align:center;margin:6px 0;min-height:16px;"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-primary" onclick="saveNewPin()" style="flex:1;justify-content:center;">💾 บันทึก PIN ใหม่</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('np1')?.focus(),100);
+}
+const _NP_IDS=['np1','np2','np3','np4'], _NPC_IDS=['npc1','npc2','npc3','npc4'];
+function _npIn(el,i){el.value=el.value.replace(/\D/g,'').slice(-1);el.classList.toggle('filled',!!el.value);if(el.value&&i<3)document.getElementById(_NP_IDS[i+1])?.focus();}
+function _npKd(e,el,i){if(e.key==='Backspace'&&!el.value&&i>0){const p=document.getElementById(_NP_IDS[i-1]);if(p){p.value='';p.classList.remove('filled');p.focus();}}if(e.key==='Enter')saveNewPin();}
+function _npcIn(el,i){el.value=el.value.replace(/\D/g,'').slice(-1);el.classList.toggle('filled',!!el.value);if(el.value&&i<3)document.getElementById(_NPC_IDS[i+1])?.focus();}
+function _npcKd(e,el,i){if(e.key==='Backspace'&&!el.value&&i>0){const p=document.getElementById(_NPC_IDS[i-1]);if(p){p.value='';p.classList.remove('filled');p.focus();}}if(e.key==='Enter')saveNewPin();}
+
+async function saveNewPin() {
+  const err = document.getElementById('np-err');
+  err.textContent='';
+  const np  = _NP_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+  const npc = _NPC_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+  if(!/^\d{4}$/.test(np)){err.textContent='กรุณาใส่ PIN ใหม่ 4 หลัก';return;}
+  if(np!==npc){err.textContent='❌ PIN ไม่ตรงกัน';_NPC_IDS.forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('filled');}});document.getElementById('npc1')?.focus();return;}
+  const empId=currentEmp?.employee_id||currentUser?.id;
+  const{error}=await sb.from('checkin_employees').update({pin_code:np}).eq('employee_id',empId);
+  if(error){err.textContent='บันทึกไม่สำเร็จ';return;}
+  showToast('เปลี่ยน PIN สำเร็จ ✅','success');
+  closeModal();
+}
+
+// ── รีเซ็ต PIN (Admin) ─────────────────────────────────────────
+let _resetPinEmpId = null;
+
+async function searchResetPin(q) {
+  const res = document.getElementById('reset-pin-result');
+  _resetPinEmpId = null;
+  if (!q.trim()) { res.innerHTML=''; return; }
+  const { data } = await sb.from('checkin_employees')
+    .select('employee_id,name,department,pin_code')
+    .eq('status','active')
+    .or(`name.ilike.%${q.trim()}%,employee_id.ilike.%${q.trim()}%`)
+    .limit(5);
+  if (!data||!data.length) { res.textContent='ไม่พบพนักงาน'; return; }
+  if (data.length===1) {
+    _resetPinEmpId = data[0].employee_id;
+    res.innerHTML=`<span style="color:#0f172a;font-weight:600;">✅ ${esc(data[0].name)} (${esc(data[0].employee_id)})</span>
+      — PIN: ${data[0].pin_code?'<span style="color:#22c55e;font-weight:600;">ตั้งแล้ว 🔐</span>':'<span style="color:#f59e0b;">ยังไม่มี PIN</span>'}`;
+  } else {
+    res.innerHTML=data.map(e=>`<div style="cursor:pointer;padding:5px 8px;border-radius:6px;background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:4px;"
+      onclick="selectResetPinEmp('${esc(e.employee_id)}','${esc(e.name)}')">
+      👤 ${esc(e.name)} <span style="color:#94a3b8;font-size:11px;">(${esc(e.employee_id)}) ${e.pin_code?'🔐':''}</span>
+    </div>`).join('');
+  }
+}
+function selectResetPinEmp(empId,name) {
+  _resetPinEmpId=empId;
+  document.getElementById('reset-pin-search').value=name;
+  document.getElementById('reset-pin-result').innerHTML=`<span style="color:#16a34a;font-weight:600;">✅ เลือก: ${esc(name)} (${esc(empId)})</span>`;
+}
+async function doResetPin() {
+  if(!_resetPinEmpId){showToast('กรุณาเลือกพนักงานก่อน','warning');return;}
+  if(!confirm('ยืนยันการรีเซ็ต PIN ของพนักงานนี้?\nพนักงานต้องตั้ง PIN ใหม่เมื่อเข้าระบบครั้งต่อไป'))return;
+  const{error}=await sb.from('checkin_employees').update({pin_code:null}).eq('employee_id',_resetPinEmpId);
+  if(error){showToast('รีเซ็ตไม่สำเร็จ','error');return;}
+  showToast('รีเซ็ต PIN สำเร็จ ✅','success');
+  _resetPinEmpId=null;
+  document.getElementById('reset-pin-search').value='';
+  document.getElementById('reset-pin-result').innerHTML='';
+}
+
 async function renderSettings() {
   if(!can('admin')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">เฉพาะผู้ดูแลระบบเท่านั้น</div>'; return; }
 
@@ -1895,6 +2471,9 @@ async function renderSettings() {
       <td>${t.default_quota>0?t.default_quota+' วัน/ปี':'ไม่จำกัด'}</td>
       <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${t.color};"></span></td>
       <td>${t.is_active?'✅ เปิดใช้':'❌ ปิด'}</td>
+      <td>${t.allow_exceed!==false
+        ? '<span style="color:#16a34a;font-size:11px;font-weight:600;">✅ ยื่นเกินได้</span>'
+        : '<span style="color:#dc2626;font-size:11px;font-weight:600;">🚫 ปิดกั้น</span>'}</td>
       <td><button class="btn btn-xs btn-outline" onclick="editLeaveType(${t.type_id})">แก้ไข</button></td>
     </tr>`).join('');
 
@@ -1944,9 +2523,66 @@ async function renderSettings() {
         <button class="btn btn-primary btn-sm" onclick="editLeaveType(null)">+ เพิ่มประเภท</button>
       </div>
       <div class="tbl-wrap">
-        <table><thead><tr><th>ชื่อ</th><th>Code</th><th>โควต้า</th><th>สี</th><th>สถานะ</th><th></th></tr></thead>
-        <tbody>${typeRows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูล</td></tr>'}</tbody></table>
+        <table><thead><tr><th>ชื่อ</th><th>Code</th><th>โควต้า</th><th>สี</th><th>สถานะ</th><th>เกินโควต้า</th><th></th></tr></thead>
+        <tbody>${typeRows||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูล</td></tr>'}</tbody></table>
       </div>
+    </div>
+
+    <!-- กำหนดเวลาออกนอกบริษัทตามเหตุผล -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">⏱ กำหนดเวลาออกนอกบริษัทตามเหตุผล</div>
+        <span style="font-size:11px;color:#94a3b8;">Admin only</span>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:0 0 12px;">
+        ตั้งได้ 2 ระดับต่อเหตุผล — ระดับ 1 = เริ่มนับว่าเกิน, ระดับ 2 = ขั้นรุนแรง (เว้นว่าง = ไม่ใช้)
+      </p>
+      <div class="tbl-wrap">
+        <table style="table-layout:fixed;font-size:12px;">
+          <colgroup>
+            <col style="width:120px;">
+            <col style="width:72px;">
+            <col style="width:100px;">
+            <col style="width:72px;">
+            <col style="width:100px;">
+            <col style="width:44px;">
+          </colgroup>
+          <thead><tr>
+            <th>เหตุผล</th>
+            <th style="text-align:center;">ระดับ 1</th>
+            <th>สถานะ 1</th>
+            <th style="text-align:center;">ระดับ 2</th>
+            <th>สถานะ 2</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="pass-rules-tbody">
+            <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px;">กำลังโหลด...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="addPassRule()">+ เพิ่มเหตุผล</button>
+        <button class="btn btn-primary btn-sm" onclick="savePassTimeRules()">💾 บันทึกกฎเวลาพัก</button>
+        <button class="btn btn-outline btn-sm" onclick="loadPassTimeRulesEditor()">↺ รีเฟรช</button>
+      </div>
+    </div>
+
+    <!-- รีเซ็ต PIN พนักงาน -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">🔐 รีเซ็ต PIN พนักงาน</div>
+        <span style="font-size:11px;color:#94a3b8;">Admin only</span>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:0 0 12px;">ล้าง PIN พนักงาน — พนักงานต้องตั้ง PIN ใหม่เมื่อเข้าระบบครั้งต่อไป</p>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:180px;margin:0;">
+          <label class="form-label">ค้นหาพนักงาน</label>
+          <input id="reset-pin-search" class="form-control" placeholder="พิมพ์ชื่อหรือรหัสพนักงาน"
+            oninput="searchResetPin(this.value)">
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="doResetPin()">🔄 รีเซ็ต PIN</button>
+      </div>
+      <div id="reset-pin-result" style="margin-top:8px;font-size:12px;color:#64748b;"></div>
     </div>
 
     <!-- หัวหน้าแผนก -->
@@ -1983,9 +2619,10 @@ async function renderSettings() {
 
   </div>`;
 
-  // Load quota list and holiday calendar in background
+  // Load async sections in background
   loadQuotaList();
   loadHolidayCalendar();
+  loadPassTimeRulesEditor();
 }
 
 async function loadQuotaList() {
@@ -2280,6 +2917,15 @@ async function editLeaveType(id) {
       <div class="form-group"><label class="form-label">สี</label><input id="lt-color" class="form-control" type="color" value="${t.color||'#64748b'}" style="height:40px;padding:4px;"></div>
     </div>
     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="lt-active" ${t.is_active?'checked':''} style="width:16px;height:16px;"> เปิดใช้งาน</label></div>
+    <div class="form-group" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="lt-exceed" ${t.allow_exceed!==false?'checked':''} style="width:16px;height:16px;margin-top:2px;">
+        <div>
+          <div style="font-weight:600;font-size:13px;">อนุญาตยื่นเกินโควต้าได้ (พร้อมแจ้งเตือน)</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:2px;">ติ๊ก = ยื่นได้แต่มีป๊อปอัปเตือน &nbsp;|&nbsp; ไม่ติ๊ก = ระบบปิดกั้นไม่ให้ยื่น</div>
+        </div>
+      </label>
+    </div>
     <div id="lt-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-primary" onclick="saveLeaveType(${id||'null'})" style="flex:1;justify-content:center;">บันทึก</button>
@@ -2294,10 +2940,11 @@ async function saveLeaveType(id) {
   const quota  = parseInt(document.getElementById('lt-quota').value)||0;
   const color  = document.getElementById('lt-color').value;
   const active = document.getElementById('lt-active').checked;
+  const exceed = document.getElementById('lt-exceed').checked;
   const err    = document.getElementById('lt-err');
   if(!name||!code) { err.textContent='กรุณากรอกชื่อและ code'; return; }
 
-  const payload={name,code,icon,default_quota:quota,color,is_active:active};
+  const payload={name,code,icon,default_quota:quota,color,is_active:active,allow_exceed:exceed};
   let result;
   if(id) result = await sb.from('leave_types').update(payload).eq('type_id',id);
   else   result = await sb.from('leave_types').insert([payload]);
@@ -2397,10 +3044,17 @@ async function _bootApp() {
   document.getElementById('topbar-user-dept').textContent = currentUser?.department||'';
   document.getElementById('topbar-user-info').style.display='';
 
-  // Show/hide sections based on role
+  // Reset role-gated sections ก่อนเสมอ (ป้องกัน sidebar ค้างจาก session ก่อนหน้า)
+  document.getElementById('sb-sec-approve').style.display    = 'none';
+  document.getElementById('sb-sec-admin').style.display      = 'none';
+  document.getElementById('sb-lv-pass-approve').style.display= 'none';
+  const bnApv = document.getElementById('bn-lv-approvals');
+  if(bnApv) bnApv.style.display='none';
+
+  // Show sections based on role
   if(can('approve')) {
     document.getElementById('sb-sec-approve').style.display='';
-    document.getElementById('bn-lv-approvals').style.display='';
+    if(bnApv) bnApv.style.display='';
     document.getElementById('sb-lv-pass-approve').style.display='';
   }
   if(can('admin')) {
@@ -2412,7 +3066,8 @@ async function _bootApp() {
     document.getElementById('btn-menu').style.display='';
   }
 
-  navigateTo('lv-dashboard');
+  // ถ้าเป็น supervisor → เด้งไปหน้าอนุมัติทันที, พนักงานทั่วไป → dashboard
+  navigateTo(can('approve') ? 'lv-approvals' : 'lv-dashboard');
 }
 
 async function _restoreSession() {
