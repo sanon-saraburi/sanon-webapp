@@ -1639,6 +1639,14 @@ function renderAppShell() {
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">จองห้อง</span>
           </a>
+          <!-- System 6 — Leave -->
+          <a href="#" onclick="event.preventDefault();gotoSystem('leave.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#6d28d9,#7c3aed);box-shadow:0 2px 8px rgba(109,40,217,.30)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clipboard-check" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">ขอลา</span>
+          </a>
         </div>
       </div>
       <nav class="flex-1 overflow-y-auto py-3 px-2 space-y-2 scroll-thin">
@@ -1822,6 +1830,18 @@ function renderAppShell() {
             <div>
               <p class="text-sm font-bold text-white leading-tight">จองห้องประชุม</p>
               <p class="text-[10px] text-white/70 leading-tight">ประชุม / อบรม</p>
+            </div>
+          </a>
+          <!-- System 6 — Leave -->
+          <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('leave.html')"
+             class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
+             style="background:linear-gradient(135deg,#6d28d9,#7c3aed);box-shadow:0 4px 12px rgba(109,40,217,.30)">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clipboard-check" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white leading-tight">ขอลา / อนุมัติลา</p>
+              <p class="text-[10px] text-white/70 leading-tight">ลาป่วย / ลากิจ / พักร้อน</p>
             </div>
           </a>
         </div>

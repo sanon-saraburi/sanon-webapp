@@ -1,0 +1,2486 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=0.5,maximum-scale=3.0">
+<title>ระบบขอลา — สานนท์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Kanit',sans-serif;background:#f1f5f9;margin:0;padding:0;overflow-x:hidden;}
+input,select,textarea{font-size:16px!important;}
+
+/* ─── Layout ─── */
+#main-app{display:flex;height:100vh;overflow:hidden;}
+#sidebar{width:240px;background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;scrollbar-width:none;}
+#sidebar::-webkit-scrollbar{display:none;}
+#page-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 24px 80px;}
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;position:sticky;top:0;z-index:50;}
+
+/* ─── Sidebar ─── */
+.sb-logo{padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-logo h1{font-size:16px;font-weight:700;color:#fff;margin:0;}
+.sb-logo p{font-size:11px;color:#94a3b8;margin:2px 0 0;}
+.sb-section{padding:10px 0;}
+.sb-label{font-size:10px;font-weight:600;color:#64748b;padding:6px 16px 4px;text-transform:uppercase;letter-spacing:.08em;}
+.sb-link{display:flex;align-items:center;gap:10px;padding:9px 16px;color:#cbd5e1;font-size:13px;cursor:pointer;border-radius:6px;margin:1px 8px;transition:all .15s;}
+.sb-link:hover{background:rgba(255,255,255,.08);color:#fff;}
+.sb-link.active{background:linear-gradient(90deg,#3b82f6,#2563eb);color:#fff;font-weight:600;}
+.sb-link svg,.sb-link .ic{width:18px;height:18px;flex-shrink:0;}
+.sb-footer{margin-top:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);}
+.sb-user{display:flex;align-items:center;gap:10px;}
+.sb-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;}
+.sb-user-name{font-size:13px;font-weight:600;color:#fff;}
+.sb-user-role{font-size:11px;color:#94a3b8;}
+
+/* ─── Bottom Nav (mobile) ─── */
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e2e8f0;z-index:100;padding:6px 0 env(safe-area-inset-bottom,0);}
+.bn-items{display:flex;justify-content:space-around;}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;cursor:pointer;color:#94a3b8;font-size:10px;min-width:48px;}
+.bn-item.active{color:#2563eb;}
+.bn-item svg{width:22px;height:22px;}
+
+/* ─── Cards ─── */
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:18px;margin-bottom:14px;}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.card-title{font-size:15px;font-weight:700;color:#0f172a;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px;}
+.kpi{border-radius:10px;padding:14px 16px;border-left:4px solid;}
+.kpi-val{font-size:26px;font-weight:700;line-height:1;}
+.kpi-lbl{font-size:12px;color:#64748b;margin-top:4px;}
+
+/* ─── Table ─── */
+.tbl-wrap{overflow:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:#f8fafc;padding:8px 12px;text-align:left;font-weight:600;color:#475569;border-bottom:2px solid #e2e8f0;position:sticky;top:0;white-space:nowrap;}
+tbody tr{border-bottom:1px solid #f1f5f9;}
+tbody tr:hover{background:#f8fafc;}
+td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
+
+/* ─── Badges ─── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;}
+.badge-pending{background:#fef9c3;color:#854d0e;}
+.badge-approved{background:#dcfce7;color:#166534;}
+.badge-rejected{background:#fee2e2;color:#991b1b;}
+.badge-cancelled{background:#f1f5f9;color:#64748b;}
+
+/* ─── Forms ─── */
+.form-group{margin-bottom:14px;}
+.form-label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;}
+.form-control{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 12px;font-family:'Kanit',sans-serif;font-size:14px;outline:none;transition:border .15s,box-shadow .15s;}
+.form-control:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15);}
+.form-control:disabled{background:#f8fafc;color:#94a3b8;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-family:'Kanit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);}
+.btn-success{background:#22c55e;color:#fff;}
+.btn-success:hover{opacity:.9;}
+.btn-danger{background:#ef4444;color:#fff;}
+.btn-danger:hover{opacity:.9;}
+.btn-outline{background:#fff;color:#374151;border:1px solid #d1d5db;}
+.btn-outline:hover{background:#f8fafc;}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:6px;}
+
+/* ─── Login Screen ─── */
+#login-screen{min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-box{background:#fff;border-radius:20px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-logo{text-align:center;margin-bottom:24px;}
+.login-logo h1{font-size:22px;font-weight:700;color:#0f172a;margin:8px 0 2px;}
+.login-logo p{font-size:13px;color:#64748b;margin:0;}
+.login-tabs{display:flex;background:#f1f5f9;border-radius:10px;padding:3px;margin-bottom:20px;}
+.login-tab{flex:1;text-align:center;padding:8px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#64748b;transition:all .2s;}
+.login-tab.active{background:#fff;color:#2563eb;box-shadow:0 1px 3px rgba(0,0,0,.1);}
+
+/* ─── Type select cards ─── */
+.type-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.type-card{border:2px solid #e2e8f0;border-radius:8px;padding:8px 6px;cursor:pointer;transition:all .2s;text-align:center;}
+.type-card:hover{border-color:#93c5fd;background:#eff6ff;}
+.type-card.selected{border-color:#3b82f6;background:#eff6ff;}
+.type-card .tc-icon{font-size:18px;margin-bottom:2px;}
+.type-card .tc-name{font-size:11px;font-weight:600;color:#1e293b;line-height:1.3;}
+.type-card .tc-quota{font-size:10px;color:#64748b;margin-top:1px;}
+
+/* ─── Emp search dropdown ─── */
+#emp-search-dd{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:200;}
+.emp-dd-item{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;}
+.emp-dd-item:hover{background:#eff6ff;}
+.emp-dd-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+/* ─── Calendar strip ─── */
+.cal-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+.cal-strip::-webkit-scrollbar{display:none;}
+.cal-day{min-width:44px;height:56px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;background:#f8fafc;border:1px solid #e2e8f0;}
+.cal-day .cd-day{font-size:10px;color:#94a3b8;}
+.cal-day .cd-num{font-size:16px;font-weight:700;color:#1e293b;}
+.cal-day.has-leave{background:#dbeafe;border-color:#93c5fd;}
+.cal-day.today{background:#3b82f6;border-color:#2563eb;}
+.cal-day.today .cd-day,.cal-day.today .cd-num{color:#fff;}
+
+/* ─── Modal ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px;}
+.modal-box{background:#fff;border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:24px;}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.modal-title{font-size:17px;font-weight:700;color:#0f172a;}
+.modal-close{width:32px;height:32px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:#64748b;}
+.modal-close:hover{background:#e2e8f0;}
+
+/* ─── Toast ─── */
+#toast-container{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast{background:#1e293b;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:slideIn .25s ease;max-width:320px;}
+.toast.success{border-left:4px solid #22c55e;}
+.toast.error{border-left:4px solid #ef4444;}
+.toast.info{border-left:4px solid #3b82f6;}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ─── Responsive ─── */
+@media(max-width:768px){
+  #sidebar{display:none;}
+  #bottom-nav{display:block;}
+  #page-content{padding:12px 12px 90px;}
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+  .type-cards{grid-template-columns:repeat(3,1fr);gap:5px;}
+  .modal-box{border-radius:12px;}
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr 1fr;}
+  .type-cards{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div style="font-size:40px;">📋</div>
+      <h1>ระบบขอลา</h1>
+      <p>สานนท์ จำกัด — Sanon Co., Ltd.</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="login-tabs">
+      <div class="login-tab active" id="tab-supervisor" onclick="switchLoginTab('supervisor')">👔 หัวหน้า / Admin</div>
+      <div class="login-tab" id="tab-employee" onclick="switchLoginTab('employee')">👤 พนักงาน</div>
+    </div>
+
+    <!-- Supervisor Login -->
+    <div id="pane-supervisor">
+      <div class="form-group">
+        <label class="form-label">ชื่อผู้ใช้</label>
+        <input id="lg-user" class="form-control" type="text" placeholder="username" autocomplete="username" list="lg-user-list">
+        <datalist id="lg-user-list"></datalist>
+      </div>
+      <div class="form-group">
+        <label class="form-label">รหัสผ่าน</label>
+        <input id="lg-pass" class="form-control" type="password" placeholder="password" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div id="lg-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        เข้าสู่ระบบ
+      </button>
+    </div>
+
+    <!-- Employee Access -->
+    <div id="pane-employee" style="display:none;">
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;text-align:center;">ค้นหาชื่อหรือรหัสพนักงานของคุณ</p>
+      <div class="form-group" style="position:relative;">
+        <label class="form-label">ค้นหาพนักงาน</label>
+        <input id="emp-search" class="form-control" type="text" placeholder="พิมพ์ชื่อหรือรหัส เช่น EM001"
+          oninput="_empSearchInput(this)" autocomplete="off">
+        <div id="emp-search-dd" style="display:none;"></div>
+      </div>
+      <div id="emp-selected" style="display:none;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="emp-sel-avatar" style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+          <div>
+            <div id="emp-sel-name" style="font-size:14px;font-weight:700;color:#1e40af;"></div>
+            <div id="emp-sel-dept" style="font-size:12px;color:#64748b;"></div>
+          </div>
+        </div>
+      </div>
+      <div id="emp-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doEmpAccess()">
+        ดูข้อมูลการลาของฉัน
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN APP
+═══════════════════════════════════════════════════════════ -->
+<div id="main-app" style="display:none;flex-direction:column;">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="btn-menu" class="btn btn-outline btn-sm" style="display:none;" onclick="toggleMobileMenu()">☰</button>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;" id="topbar-title">ระบบขอลา</div>
+        <div style="font-size:11px;color:#94a3b8;" id="topbar-sub">สานนท์ จำกัด</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="text-align:right;display:none;" id="topbar-user-info" class="sm-show">
+        <div style="font-size:12px;font-weight:600;color:#1e293b;" id="topbar-user-name"></div>
+        <div style="font-size:11px;color:#94a3b8;" id="topbar-user-dept"></div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <div style="display:flex;flex:1;overflow:hidden;">
+
+    <!-- SIDEBAR (desktop) -->
+    <div id="sidebar">
+      <div class="sb-logo">
+        <h1>📋 ระบบขอลา</h1>
+        <p>Leave Management</p>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-label">ภาพรวม</div>
+        <div class="sb-link" id="sb-lv-dashboard" onclick="navigateTo('lv-dashboard')">
+          <span class="ic">🏠</span> แดชบอร์ด
+        </div>
+        <div class="sb-link" id="sb-lv-request" onclick="navigateTo('lv-request')">
+          <span class="ic">✏️</span> ยื่นคำขอลา
+        </div>
+        <div class="sb-link" id="sb-lv-my-hist" onclick="navigateTo('lv-my-hist')">
+          <span class="ic">📄</span> ประวัติของฉัน
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-label">ออกนอกบริเวณ</div>
+        <div class="sb-link" id="sb-lv-pass" onclick="navigateTo('lv-pass')">
+          <span class="ic">🚪</span> ขอออกนอกบริเวณ
+        </div>
+        <div class="sb-link" id="sb-lv-pass-hist" onclick="navigateTo('lv-pass-hist')">
+          <span class="ic">📋</span> ประวัติ Pass ของฉัน
+        </div>
+        <div class="sb-link" id="sb-lv-pass-approve" onclick="navigateTo('lv-pass-approve')" style="display:none;">
+          <span class="ic">🔑</span> อนุมัติ Pass
+          <span id="sb-badge-pass" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
+        </div>
+      </div>
+
+      <div class="sb-section" id="sb-sec-approve" style="display:none;">
+        <div class="sb-label">จัดการ</div>
+        <div class="sb-link" id="sb-lv-approvals" onclick="navigateTo('lv-approvals')">
+          <span class="ic">✅</span> อนุมัติคำขอ
+          <span id="sb-badge-approve" style="display:none;background:#ef4444;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
+        </div>
+        <div class="sb-link" id="sb-lv-all" onclick="navigateTo('lv-all')">
+          <span class="ic">📋</span> ทุกคำขอ
+        </div>
+        <div class="sb-link" id="sb-lv-report" onclick="navigateTo('lv-report')">
+          <span class="ic">📊</span> รายงาน
+        </div>
+      </div>
+
+      <div class="sb-section" id="sb-sec-admin" style="display:none;">
+        <div class="sb-label">ผู้ดูแล</div>
+        <div class="sb-link" id="sb-lv-settings" onclick="navigateTo('lv-settings')">
+          <span class="ic">⚙️</span> ตั้งค่าระบบ
+        </div>
+      </div>
+
+      <div class="sb-footer">
+        <div class="sb-user">
+          <div class="sb-avatar" id="sb-avatar">?</div>
+          <div>
+            <div class="sb-user-name" id="sb-name">—</div>
+            <div class="sb-user-role" id="sb-role">—</div>
+          </div>
+        </div>
+        <button onclick="doLogout()" style="margin-top:10px;width:100%;background:rgba(255,255,255,.08);color:#94a3b8;border:none;border-radius:8px;padding:7px;font-family:'Kanit',sans-serif;font-size:12px;cursor:pointer;">
+          ออกจากระบบ
+        </button>
+      </div>
+    </div>
+
+    <!-- PAGE CONTENT -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div id="page-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV (mobile) -->
+<div id="bottom-nav">
+  <div class="bn-items">
+    <div class="bn-item" id="bn-lv-dashboard" onclick="navigateTo('lv-dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      หน้าหลัก
+    </div>
+    <div class="bn-item" id="bn-lv-request" onclick="navigateTo('lv-request')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      ยื่นคำขอ
+    </div>
+    <div class="bn-item" id="bn-lv-my-hist" onclick="navigateTo('lv-my-hist')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      ประวัติ
+    </div>
+    <div class="bn-item" id="bn-lv-pass" onclick="navigateTo('lv-pass')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      ออกนอก
+    </div>
+    <div class="bn-item" id="bn-lv-approvals" onclick="navigateTo('lv-approvals')" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      อนุมัติ
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALS ═══ -->
+<div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="_overlayClick(event)">
+  <div class="modal-box" id="modal-box">
+    <!-- content injected -->
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPT
+═══════════════════════════════════════════════════════════ -->
+<script>
+// ─────────────────────────────────────────────────────────────
+// SECTION 0 — Config & Supabase
+// ─────────────────────────────────────────────────────────────
+const SB_URL  = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
+const SB_KEY  = 'sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq';
+const SESSION_KEY = '_sn_lv_sess';
+const SHARED_KEY  = '_sn_shared_sess';  // SSO ร่วม System 1-3
+const APP_VERSION = '1.0.0';
+
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 1 — Global State
+// ─────────────────────────────────────────────────────────────
+let currentUser   = null;   // { id, username, full_name, role, department } จาก checkin_users
+let currentEmp    = null;   // { employee_id, name, department, ... } จาก checkin_employees (employee mode)
+let currentMode   = null;   // 'supervisor' | 'employee'
+let currentPage   = '';
+let _leaveTypes   = [];     // cache
+let _leaveSettings= {};
+let _holidays     = [];     // ['YYYY-MM-DD', ...] วันหยุดนักขัตฤกษ์
+let _empSelected  = null;   // พนักงานที่เลือกใน login employee tab
+let _empSearchTimer = null;
+let _empSearchResults = [];  // cache ผลการค้นหาล่าสุด (ใช้ index แทน JSON ใน onclick)
+let _reqCache = {};          // cache leave_requests ที่โหลดมาแล้ว (key=request_id)
+let _holCalYear  = new Date().getFullYear();  // ปี Gregorian สำหรับปฏิทินวันหยุด
+let _holCalMonth = new Date().getMonth();     // เดือน 0-11
+let _holAllData  = [];                        // cache วันหยุดทั้งปีที่เลือก
+
+const ROLE_LABELS = { admin:'ผู้ดูแลระบบ', supervisor:'หัวหน้างาน', guard:'ยาม', employee:'พนักงาน' };
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 2 — Auth
+// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Username autocomplete (localStorage UI hint — ไม่ใช่ business data)
+// ─────────────────────────────────────────────────────────────
+const LV_RECENT_KEY = '_sn_lv_recent_users';
+const LV_RECENT_MAX = 10;
+
+function saveRecentLvUser(username) {
+  try {
+    let arr = JSON.parse(localStorage.getItem(LV_RECENT_KEY) || '[]');
+    arr = arr.filter(u => u !== username);   // dedup
+    arr.unshift(username);                   // ใหม่ขึ้นก่อน
+    if (arr.length > LV_RECENT_MAX) arr = arr.slice(0, LV_RECENT_MAX);
+    localStorage.setItem(LV_RECENT_KEY, JSON.stringify(arr));
+  } catch(e) {}
+}
+
+function loadRecentLvUsers() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LV_RECENT_KEY) || '[]');
+    const dl = document.getElementById('lg-user-list');
+    if (!dl) return;
+    dl.innerHTML = arr.map(u => `<option value="${u}"></option>`).join('');
+  } catch(e) {}
+}
+
+function switchLoginTab(tab) {
+  document.getElementById('tab-supervisor').classList.toggle('active', tab==='supervisor');
+  document.getElementById('tab-employee').classList.toggle('active', tab==='employee');
+  document.getElementById('pane-supervisor').style.display = tab==='supervisor'?'':'none';
+  document.getElementById('pane-employee').style.display   = tab==='employee'?'':'none';
+}
+
+async function doLogin() {
+  const username = document.getElementById('lg-user').value.trim();
+  const password = document.getElementById('lg-pass').value;
+  const err = document.getElementById('lg-err');
+  err.textContent = '';
+  if (!username||!password) { err.textContent = 'กรุณาระบุชื่อผู้ใช้และรหัสผ่าน'; return; }
+
+  // ใช้ app_users เดียวกับ System 1/2/3
+  const { data, error } = await sb.from('app_users')
+    .select('*').eq('username', username).single();
+
+  if (error||!data) { err.textContent = 'ไม่พบผู้ใช้นี้ในระบบ'; return; }
+  if (data.password !== password) { err.textContent = 'รหัสผ่านไม่ถูกต้อง'; return; }
+  if (data.status && data.status !== 'active' && data.status !== 'approved') {
+    err.textContent = 'บัญชีนี้ยังไม่ได้รับการอนุมัติหรือถูกระงับ'; return;
+  }
+
+  currentUser = { id: data.id, username: data.username, full_name: data.full_name||data.username,
+    role: data.role||'viewer', department: data.department||'' };
+  currentMode = 'supervisor';
+
+  saveRecentLvUser(username);   // จำ username ไว้สำหรับ autocomplete ครั้งต่อไป
+
+  const sessData = { user: currentUser, mode: currentMode, t: Date.now() };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(sessData));
+  // SSO ร่วมกับ System 1/2/3
+  localStorage.setItem(SHARED_KEY, JSON.stringify({ ...data, _t: Date.now() }));
+  await _bootApp();
+  // Deep Link — ถ้ามาจากลิงก์ LINE ให้ navigate ไปหน้าที่ระบุทันที
+  const _redirectPage = _getUrlPage() || sessionStorage.getItem('_sn_lv_redirect') || '';
+  if(_redirectPage) { sessionStorage.removeItem('_sn_lv_redirect'); navigateTo(_redirectPage); }
+}
+
+async function doEmpAccess() {
+  const err = document.getElementById('emp-err');
+  err.textContent = '';
+  if (!_empSelected) { err.textContent = 'กรุณาเลือกพนักงานก่อน'; return; }
+  currentEmp  = _empSelected;
+  currentMode = 'employee';
+  currentUser = {
+    id: currentEmp.employee_id,
+    username: currentEmp.employee_id,
+    full_name: currentEmp.name,
+    role: 'employee',
+    department: currentEmp.department||''
+  };
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ emp: currentEmp, mode: currentMode, t: Date.now() }));
+  await _bootApp();
+}
+
+function doLogout() {
+  localStorage.removeItem(SESSION_KEY);
+  currentUser = null; currentEmp = null; currentMode = null;
+  document.getElementById('main-app').style.display   = 'none';
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('lg-user').value = '';
+  document.getElementById('lg-pass').value = '';
+  _empSelected = null;
+  document.getElementById('emp-search').value = '';
+  document.getElementById('emp-selected').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 3 — Employee Search (login tab)
+// ─────────────────────────────────────────────────────────────
+async function _empSearchInput(inp) {
+  const q = inp.value.trim();
+  const dd = document.getElementById('emp-search-dd');
+  clearTimeout(_empSearchTimer);
+  if (!q) { dd.style.display='none'; return; }
+  _empSearchTimer = setTimeout(async () => {
+    const { data } = await sb.from('checkin_employees')
+      .select('employee_id,name,department,position,photo_url')
+      .eq('status','active')
+      .or(`name.ilike.%${q}%,employee_id.ilike.%${q}%`)
+      .order('employee_id').limit(8);
+
+    if (!data||!data.length) { dd.innerHTML='<div style="padding:12px;text-align:center;color:#94a3b8;font-size:13px;">ไม่พบพนักงาน</div>'; dd.style.display='block'; return; }
+
+    // เก็บผลค้นหาไว้ใน global array — ส่ง index แทน JSON ใน onclick (ป้องกัน HTML attribute break)
+    _empSearchResults = data;
+    dd.innerHTML = data.map((e, i) => {
+      const ava = e.photo_url
+        ? `<img src="${e.photo_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`
+        : `<div class="emp-dd-avatar">👤</div>`;
+      return `<div class="emp-dd-item" onclick="_empSearchSelect(${i})">
+        ${ava}
+        <div><div style="font-size:13px;font-weight:600;color:#0f172a;">${e.name}</div>
+        <div style="font-size:11px;color:#64748b;">${e.employee_id} · ${e.department||'—'}</div></div>
+      </div>`;
+    }).join('');
+    dd.style.display='block';
+  }, 250);
+}
+
+function _empSearchSelect(idx) {
+  const e = _empSearchResults[idx];
+  if (!e) return;
+  _empSelected = e;
+  document.getElementById('emp-search-dd').style.display='none';
+  document.getElementById('emp-search').value = e.name;
+  const sel = document.getElementById('emp-selected');
+  sel.style.display='';
+  document.getElementById('emp-sel-name').textContent = `${e.name} (${e.employee_id})`;
+  document.getElementById('emp-sel-dept').textContent = `${e.department||''} · ${e.position||''}`;
+  const ava = document.getElementById('emp-sel-avatar');
+  ava.innerHTML = e.photo_url
+    ? `<img src="${e.photo_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">`
+    : '👤';
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 4 — Utils
+// ─────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'});
+}
+function todayISO() { return new Date().toISOString().slice(0,10); }
+function thisYear() { return new Date().getFullYear(); }
+
+function calcWorkingDays(start, end) {
+  let d = new Date(start), e = new Date(end), count=0;
+  while (d<=e) {
+    const w  = d.getDay();
+    const ds = d.toISOString().slice(0,10);
+    if (w>0 && !_holidays.includes(ds)) count++;  // จันทร์–เสาร์ (0=อาทิตย์ → ไม่นับ)
+    d.setDate(d.getDate()+1);
+  }
+  return count;
+}
+
+function typeColor(code) {
+  const map={sick:'#ef4444',personal:'#f59e0b',annual:'#22c55e',out:'#3b82f6'};
+  return map[code]||'#64748b';
+}
+function statusBadge(status) {
+  const map={
+    pending:'<span class="badge badge-pending">⏳ รออนุมัติ</span>',
+    approved:'<span class="badge badge-approved">✅ อนุมัติ</span>',
+    rejected:'<span class="badge badge-rejected">❌ ปฏิเสธ</span>',
+    cancelled:'<span class="badge badge-cancelled">🚫 ยกเลิก</span>'
+  };
+  return map[status]||`<span class="badge">${status}</span>`;
+}
+function can(action) {
+  const role = currentUser?.role||'';
+  if (action==='approve') return ['admin','supervisor'].includes(role);
+  if (action==='admin')   return role==='admin';
+  if (action==='viewAll') return ['admin','supervisor'].includes(role);
+  return true;
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 5 — Toast & Modal
+// ─────────────────────────────────────────────────────────────
+function showToast(msg, type='info', dur=3000) {
+  const tc = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  tc.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, dur);
+}
+function openModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').style.display='flex';
+}
+function closeModal() { document.getElementById('modal-overlay').style.display='none'; }
+function _overlayClick(e) { if(e.target.id==='modal-overlay') closeModal(); }
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 6 — Navigation
+// ─────────────────────────────────────────────────────────────
+const PAGE_TITLES = {
+  'lv-dashboard':'แดชบอร์ด','lv-request':'ยื่นคำขอลา','lv-my-hist':'ประวัติของฉัน',
+  'lv-approvals':'อนุมัติคำขอ','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
+  'lv-pass':'ขอออกนอกบริเวณ','lv-pass-hist':'ประวัติ Pass ของฉัน','lv-pass-approve':'อนุมัติ Pass'
+};
+function navigateTo(page) {
+  currentPage = page;
+  // Update sidebar
+  document.querySelectorAll('.sb-link').forEach(el => {
+    el.classList.toggle('active', el.id === 'sb-'+page);
+  });
+  document.querySelectorAll('.bn-item').forEach(el => {
+    el.classList.toggle('active', el.id === 'bn-'+page);
+  });
+  document.getElementById('topbar-title').textContent = PAGE_TITLES[page]||'';
+
+  const pc = document.getElementById('page-content');
+  pc.innerHTML = '<div style="padding:40px;text-align:center;color:#94a3b8;">กำลังโหลด...</div>';
+
+  switch(page) {
+    case 'lv-dashboard': renderDashboard(); break;
+    case 'lv-request':   renderNewRequest(); break;
+    case 'lv-my-hist':   renderMyHistory(); break;
+    case 'lv-approvals': renderApprovals(); break;
+    case 'lv-all':       renderAllRequests(); break;
+    case 'lv-report':        renderReport(); break;
+    case 'lv-settings':      renderSettings(); break;
+    case 'lv-pass':          renderPassRequest(); break;
+    case 'lv-pass-hist':     renderMyPassHistory(); break;
+    case 'lv-pass-approve':  renderPassApprovals(); break;
+    default: pc.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่พบหน้านี้</div>';
+  }
+}
+function toggleMobileMenu() {
+  // Mobile: show sidebar overlay
+  const sb = document.getElementById('sidebar');
+  if (sb.style.display==='flex') { sb.style.display='none'; }
+  else { sb.style.display='flex'; sb.style.position='fixed'; sb.style.top='0'; sb.style.left='0'; sb.style.bottom='0'; sb.style.zIndex='200'; }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 7 — Dashboard
+// ─────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const empId = currentUser?.id || currentEmp?.employee_id;
+  const empName = currentUser?.full_name || currentEmp?.name || '';
+  const year = thisYear();
+
+  // Parallel fetch
+  const [typesRes, myReqRes, pendingRes, balRes] = await Promise.all([
+    sb.from('leave_types').select('*').eq('is_active',true).order('sort_order'),
+    sb.from('leave_requests').select('*').eq('employee_id', empId)
+      .order('created_at',{ascending:false}).limit(5),
+    can('approve') ? sb.from('leave_requests').select('request_id').eq('status','pending')
+      .eq('department', currentUser?.department||'') : Promise.resolve({data:[]}),
+    sb.from('leave_balances').select('*').eq('employee_id', empId).eq('year', year)
+  ]);
+
+  const types   = typesRes.data||[];
+  const myReqs  = myReqRes.data||[];
+  const pending = pendingRes.data||[];
+  const bals    = balRes.data||[];
+
+  // Update approve badge
+  const pc = pending.length;
+  const badge = document.getElementById('sb-badge-approve');
+  if (badge) { badge.textContent = pc||''; badge.style.display = pc>0?'':'none'; }
+
+  // Build balance cards
+  const typeCards = types.filter(t=>t.code!=='out').map(t => {
+    const bal = bals.find(b=>b.type_id===t.type_id);
+    const quota = bal?.quota ?? t.default_quota;
+    const used  = myReqs.filter(r=>r.type_id===t.type_id && ['approved','pending'].includes(r.status))
+                        .reduce((s,r)=>s+Number(r.days),0);
+    const left  = Math.max(0, quota - used);
+    return `
+    <div class="kpi" style="background:${t.color}18;border-color:${t.color};">
+      <div class="kpi-val" style="color:${t.color};">${quota>0?left:'∞'}</div>
+      <div class="kpi-lbl">${t.icon||''} ${t.name}</div>
+      ${quota>0?`<div style="font-size:10px;color:#94a3b8;">ใช้ ${used} / ${quota} วัน</div>`:''}
+    </div>`;
+  }).join('');
+
+  // Recent requests table
+  const recentRows = myReqs.length ? myReqs.map(r => `
+    <tr>
+      <td><span style="font-size:16px;">${_typeIcon(r.type_code)}</span> ${esc(r.type_name||'—')}</td>
+      <td>${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}</td>
+      <td>${r.days} วัน</td>
+      <td>${statusBadge(r.status)}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">ยังไม่มีประวัติการลา</td></tr>';
+
+  // Pending approval section (supervisor only)
+  const pendingSection = can('approve') ? `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">⏳ รออนุมัติ (${pc} รายการ)</div>
+      <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-approvals')">ดูทั้งหมด</button>
+    </div>
+    ${pc>0
+      ? `<p style="font-size:13px;color:#ef4444;font-weight:600;">มีคำขอรออนุมัติ ${pc} รายการ กรุณาตรวจสอบ</p>`
+      : `<p style="font-size:13px;color:#22c55e;">✅ ไม่มีคำขอรออนุมัติ</p>`}
+  </div>` : '';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+    <div style="margin-bottom:16px;">
+      <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0;">สวัสดี, ${esc(empName)} 👋</h2>
+      <p style="font-size:13px;color:#64748b;margin:4px 0 0;">${new Date().toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+    </div>
+
+    <!-- วันลาคงเหลือ -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📊 วันลาคงเหลือ ปี ${year+543}</div>
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-request')">+ ยื่นคำขอ</button>
+      </div>
+      <div class="kpi-grid">${typeCards}</div>
+    </div>
+
+    ${pendingSection}
+
+    <!-- ประวัติล่าสุด -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📄 คำขอล่าสุด</div>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-my-hist')">ดูทั้งหมด</button>
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>ประเภท</th><th>วันที่</th><th>จำนวน</th><th>สถานะ</th></tr></thead>
+        <tbody>${recentRows}</tbody></table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _typeIcon(code) {
+  const m={sick:'🤒',personal:'📌',annual:'🏖️',out:'🚗'};
+  return m[code]||'📋';
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 8 — New Request Form
+// ─────────────────────────────────────────────────────────────
+let _reqTypeId   = null;
+let _reqTypeCode = '';
+let _reqTypeName = '';
+
+async function renderNewRequest() {
+  if (!_leaveTypes.length) {
+    const { data } = await sb.from('leave_types').select('*').eq('is_active',true).order('sort_order');
+    _leaveTypes = data||[];
+  }
+
+  const empId   = currentUser?.id||currentEmp?.employee_id||'';
+  const empName = currentUser?.full_name||currentEmp?.name||'';
+  const dept    = currentUser?.department||currentEmp?.department||'';
+  const today   = todayISO();
+
+  const typeCardsHtml = _leaveTypes.map(t => `
+    <div class="type-card" id="tc-${t.type_id}" onclick="selectLeaveType(${t.type_id},'${t.code}','${esc(t.name)}','${t.color}')">
+      <div class="tc-icon">${t.icon||'📋'}</div>
+      <div class="tc-name">${esc(t.name)}</div>
+      ${t.default_quota>0?`<div class="tc-quota">${t.default_quota} วัน/ปี</div>`:'<div class="tc-quota">ไม่จำกัด</div>'}
+    </div>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:600px;">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">✏️ ยื่นคำขอลา</div></div>
+
+      <!-- ผู้ยื่น -->
+      <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;gap:12px;align-items:center;">
+        <div style="font-size:24px;">👤</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#0f172a;">${esc(empName)}</div>
+          <div style="font-size:12px;color:#64748b;">${esc(dept)||'ไม่ระบุแผนก'} · ${empId}</div>
+        </div>
+      </div>
+
+      <!-- เลือกประเภทลา -->
+      <div class="form-group">
+        <label class="form-label">ประเภทการลา <span style="color:#ef4444;">*</span></label>
+        <div class="type-cards">${typeCardsHtml}</div>
+        <input type="hidden" id="req-type-id">
+      </div>
+
+      <!-- ครึ่งวัน -->
+      <div class="form-group" id="half-day-grp" style="display:none;">
+        <label class="form-label">จำนวน</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-outline btn-sm" id="hd-full" onclick="setHalfDay('')" style="border-color:#3b82f6;color:#3b82f6;">ลาเต็มวัน</button>
+          <button type="button" class="btn btn-outline btn-sm" id="hd-am"   onclick="setHalfDay('am')">ลาครึ่งวันเช้า</button>
+          <button type="button" class="btn btn-outline btn-sm" id="hd-pm"   onclick="setHalfDay('pm')">ลาครึ่งวันบ่าย</button>
+        </div>
+      </div>
+
+      <!-- วันที่ -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">วันเริ่มลา <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="req-start" class="form-control" value="${today}" min="${today}" onchange="_calcDays()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">วันสิ้นสุด <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="req-end"   class="form-control" value="${today}" min="${today}" onchange="_calcDays()">
+        </div>
+      </div>
+
+      <!-- จำนวนวัน -->
+      <div id="days-preview" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:none;">
+        <span style="font-size:13px;color:#1e40af;font-weight:600;" id="days-count"></span>
+      </div>
+
+      <!-- เหตุผล -->
+      <div class="form-group">
+        <label class="form-label">เหตุผล</label>
+        <textarea id="req-reason" class="form-control" rows="3" placeholder="ระบุเหตุผลหรือรายละเอียด (ไม่บังคับ)"></textarea>
+      </div>
+
+      <!-- Error -->
+      <div id="req-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" onclick="submitRequest()" style="flex:1;justify-content:center;">
+          📤 ส่งคำขอ
+        </button>
+        <button class="btn btn-outline" onclick="navigateTo('lv-dashboard')">ยกเลิก</button>
+      </div>
+    </div>
+  </div>`;
+
+  _reqTypeId=null; _reqTypeCode=''; _reqTypeName='';
+  _halfDay = '';
+}
+
+let _halfDay = '';
+function selectLeaveType(id, code, name, color) {
+  _reqTypeId=id; _reqTypeCode=code; _reqTypeName=name;
+  document.querySelectorAll('.type-card').forEach(el=>el.classList.remove('selected'));
+  const tc = document.getElementById('tc-'+id);
+  if(tc) { tc.classList.add('selected'); tc.style.borderColor=color; }
+  document.getElementById('req-type-id').value=id;
+  document.getElementById('half-day-grp').style.display='';
+  _calcDays();
+}
+
+function setHalfDay(v) {
+  _halfDay=v;
+  ['full','am','pm'].forEach(k=>{
+    const btn=document.getElementById('hd-'+k);
+    if(!btn) return;
+    btn.style.background = (v===''&&k==='full'||v===k) ? '#eff6ff' : '';
+    btn.style.borderColor= (v===''&&k==='full'||v===k) ? '#3b82f6' : '';
+    btn.style.color      = (v===''&&k==='full'||v===k) ? '#2563eb' : '';
+  });
+  _calcDays();
+}
+
+function _calcDays() {
+  const s=document.getElementById('req-start')?.value;
+  const e=document.getElementById('req-end')?.value;
+  if(!s||!e) return;
+  if(e<s) { document.getElementById('req-end').value=s; return; }
+  let days = calcWorkingDays(s,e);
+  if(_halfDay) days = 0.5;
+  const prev=document.getElementById('days-preview');
+  const cnt =document.getElementById('days-count');
+  if(prev&&cnt) {
+    prev.style.display=days>0?'':'none';
+    cnt.textContent = `📅 จำนวน ${days} วันทำการ (${fmtDate(s)}${s!==e?' – '+fmtDate(e):''})`;
+  }
+}
+
+async function submitRequest() {
+  const err = document.getElementById('req-err');
+  err.textContent='';
+  if(!_reqTypeId)  { err.textContent='กรุณาเลือกประเภทการลา'; return; }
+  const start = document.getElementById('req-start').value;
+  const end   = document.getElementById('req-end').value;
+  if(!start||!end) { err.textContent='กรุณาระบุวันที่'; return; }
+  if(end<start)    { err.textContent='วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น'; return; }
+
+  const days   = _halfDay ? 0.5 : calcWorkingDays(start,end);
+  const reason = document.getElementById('req-reason').value.trim();
+  const empId  = currentUser?.id||currentEmp?.employee_id;
+  const empName= currentUser?.full_name||currentEmp?.name||'';
+  const dept   = currentUser?.department||currentEmp?.department||'';
+
+  const payload = {
+    employee_id: empId, employee_name: empName, department: dept,
+    type_id: _reqTypeId, type_name: _reqTypeName, type_code: _reqTypeCode,
+    start_date: start, end_date: end, days, half_day: _halfDay||null,
+    reason: reason||null, status:'pending'
+  };
+
+  const { data, error } = await sb.from('leave_requests').insert([payload]).select().single();
+  if(error) { err.textContent='เกิดข้อผิดพลาด: '+(error.message||error); return; }
+
+  // Send LINE notify
+  await sendLineNotify(data, 'new');
+
+  showToast('ส่งคำขอลาเรียบร้อยแล้ว ✅','success');
+  navigateTo('lv-my-hist');
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 9 — My History
+// ─────────────────────────────────────────────────────────────
+let _histFilter = 'all';
+async function renderMyHistory() {
+  const empId = currentUser?.id||currentEmp?.employee_id;
+  let q = sb.from('leave_requests').select('*').eq('employee_id',empId).order('created_at',{ascending:false});
+  if(_histFilter!=='all') q=q.eq('status',_histFilter);
+  const { data } = await q.limit(50);
+  const reqs = data||[];
+
+  const filters = ['all','pending','approved','rejected'].map(f=>`
+    <button class="btn btn-sm ${_histFilter===f?'btn-primary':'btn-outline'}" onclick="_histFilter='${f}';renderMyHistory();">
+      ${{all:'ทั้งหมด',pending:'รออนุมัติ',approved:'อนุมัติ',rejected:'ปฏิเสธ'}[f]}
+    </button>`).join('');
+
+  // cache ทุก row ใน _reqCache เพื่อให้ printLeaveForm ใช้ได้โดยไม่ต้อง fetch ซ้ำ
+  reqs.forEach(r => { _reqCache[r.request_id] = r; });
+
+  const rows = reqs.length ? reqs.map(r=>{
+    const isAuto = (r.reason||'').startsWith('[Auto จากบัตรตอก]');
+    const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;margin-left:4px;">🔄 บัตรตอก</span>` : '';
+    const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
+    return `
+    <tr>
+      <td>${fmtDate(r.created_at)}</td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge}</td>
+      <td>${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}</td>
+      <td>${r.days} วัน</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${r.status==='pending'?`<button class="btn btn-xs btn-outline" onclick="cancelRequest(${r.request_id})">ยกเลิก</button>`:''}
+          ${r.status==='rejected'&&r.reject_note?`<button class="btn btn-xs btn-outline" onclick="showRejectNote('${esc(r.reject_note)}')">เหตุผล</button>`:''}
+          <button class="btn btn-xs btn-outline" onclick="printLeaveForm(${r.request_id})" title="พิมพ์ใบลา">🖨️ พิมพ์</button>
+        </div>
+      </td>
+    </tr>`;}).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติการลา</td></tr>';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📄 ประวัติคำขอลาของฉัน</div>
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-request')">+ ยื่นคำขอ</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">${filters}</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>วันที่ยื่น</th><th>ประเภท</th><th>วันลา</th><th>จำนวน</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showRejectNote(note) {
+  openModal(`<div class="modal-hd"><span class="modal-title">❌ เหตุผลที่ปฏิเสธ</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <p style="font-size:14px;color:#374151;">${esc(note)}</p>
+    <button class="btn btn-outline btn-sm" onclick="closeModal()">ปิด</button>`);
+}
+
+async function cancelRequest(id) {
+  if(!confirm('ยืนยันการยกเลิกคำขอลานี้?')) return;
+  const { error } = await sb.from('leave_requests').update({status:'cancelled',updated_at:new Date().toISOString()}).eq('request_id',id);
+  if(error) { showToast('ยกเลิกไม่สำเร็จ','error'); return; }
+  showToast('ยกเลิกคำขอเรียบร้อย','info');
+  renderMyHistory();
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 9B — Print Leave Form (ใบลาหยุดสไตล์บริษัทสานนท์)
+// ─────────────────────────────────────────────────────────────
+async function printLeaveForm(requestId) {
+  // ใช้ cache ก่อน ถ้าไม่มีค่อย fetch
+  let r = _reqCache[requestId];
+  if (!r) {
+    const { data } = await sb.from('leave_requests').select('*').eq('request_id', requestId).single();
+    if (!data) { showToast('ไม่พบข้อมูลคำขอ', 'error'); return; }
+    r = data;
+    _reqCache[requestId] = r;
+  }
+
+  // map type_code → label ตรงกับฟอร์มบริษัท
+  const TYPE_LABELS = {
+    sick:       'ลาป่วย',
+    personal:   'ลากิจส่วนตัว',
+    annual:     'ลาพักร้อน',
+    married:    'ลาสมรส',
+    paternity:  'ลาเพื่อช่วยเหลือภรรยาคลอดบุตร',
+    maternity:  'ลาคลอดบุตร',
+    ordination: 'ลาอุปสมบท',
+    funeral:    'ลาพิธีฌาปนกิจศพ',
+    training:   'ลาเพื่อฝึกอบรม / ศึกษา',
+    out:        'ออกนอกบริษัท / ปฏิบัติงานนอกพื้นที่',
+  };
+  const LEFT_TYPES  = ['sick','personal','annual','married'];
+  const RIGHT_TYPES = ['paternity','maternity','ordination','funeral'];
+  const EXTRA_TYPES = ['training','out'];
+
+  function chk(code) {
+    return `<span style="display:inline-block;width:14px;height:14px;border:1.5px solid #333;margin-right:6px;vertical-align:middle;text-align:center;font-size:11px;line-height:13px;">${r.type_code===code?'✓':''}</span>`;
+  }
+
+  // แปลงวันที่เป็นภาษาไทย
+  function thDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                    'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()+543}`;
+  }
+  function thDateShort(iso) {
+    if (!iso) return '............';
+    const d = new Date(iso);
+    return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`;
+  }
+
+  // วันที่เขียนใบลา
+  const writtenDate = thDate(r.created_at || new Date().toISOString());
+  const writtenDateParts = writtenDate.split(' ');
+
+  // logo path (relative)
+  const logoSrc = 'logo.png';
+
+  const html = `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ใบลาหยุด — ${r.employee_name}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'TH Sarabun New','Sarabun','Kanit',sans-serif;font-size:16pt;color:#000;background:#fff;padding:20mm 20mm 15mm 25mm;}
+  .header{display:flex;align-items:flex-start;gap:20px;margin-bottom:6px;}
+  .logo{width:80px;flex-shrink:0;}
+  .company{flex:1;}
+  .company-th{font-size:14pt;font-weight:700;color:#1a3a6e;}
+  .company-en{font-size:16pt;font-weight:700;color:#1a3a6e;letter-spacing:1px;}
+  .company-addr{font-size:10pt;color:#555;margin-top:2px;}
+  hr{border:none;border-top:2px solid #1a3a6e;margin:8px 0;}
+  .title{font-size:20pt;font-weight:700;text-align:center;margin:8px 0 16px;}
+  .written-at{text-align:right;font-size:14pt;margin-bottom:4px;}
+  .written-date{text-align:right;font-size:14pt;margin-bottom:12px;}
+  .label{font-size:15pt;}
+  .dotline{display:inline-block;min-width:180px;border-bottom:1px solid #000;margin:0 4px;vertical-align:bottom;}
+  .dotline-lg{min-width:300px;}
+  .row{margin:8px 0;font-size:15pt;line-height:2;}
+  .section-title{font-size:16pt;font-weight:700;margin:14px 0 6px;}
+  .chk-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 0;margin:4px 0 4px 20px;}
+  .chk-item{font-size:14pt;line-height:1.8;}
+  .chk-extra{margin:4px 0 4px 20px;font-size:14pt;line-height:1.8;}
+  .date-row{margin:10px 0;font-size:15pt;}
+  .reason-row{margin:10px 0;font-size:15pt;}
+  .sign-section{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .sign-box{text-align:center;}
+  .sign-line{border-top:1px dotted #000;margin:40px 20px 4px;}
+  .sign-label{font-size:13pt;color:#333;}
+  .status-section{margin-top:20px;border-top:1px solid #999;padding-top:8px;}
+  .status-title{font-size:13pt;font-weight:700;margin-bottom:4px;}
+  .status-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12pt;}
+  .status-cell{border:1px solid #ccc;padding:4px 8px;text-align:center;}
+  .status-cell-hd{background:#e8ecf4;font-weight:700;}
+  @media print{
+    body{padding:10mm 15mm 10mm 20mm;}
+    @page{size:A4;margin:0;}
+    button{display:none!important;}
+  }
+</style>
+</head>
+<body>
+<!-- Header -->
+<div class="header">
+  <img src="${logoSrc}" class="logo" onerror="this.style.display='none'">
+  <div class="company">
+    <div class="company-th">บริษัท สานนท์ จำกัด</div>
+    <div class="company-en">SANON COMPANY LIMITED</div>
+    <div class="company-addr">446 หมู่ 3 ถนนพหลโยธิน ตำบลหน้าพระลาน อำเภอเฉลิมพระเกียรติ จังหวัดสระบุรี 18240</div>
+  </div>
+</div>
+<hr>
+
+<div class="title">ใบลาหยุด</div>
+
+<div class="written-at">เขียนที่ <span class="dotline dotline-lg"></span></div>
+<div class="written-date">
+  วันที่ <span class="dotline" style="min-width:40px;">${writtenDateParts[0]||''}</span>
+  เดือน <span class="dotline" style="min-width:100px;">${writtenDateParts[1]||''}</span>
+  พ.ศ. <span class="dotline" style="min-width:60px;">${writtenDateParts[2]||''}</span>
+</div>
+
+<div class="row">เรื่อง &nbsp;&nbsp; ขอลาหยุด</div>
+<div class="row">เรียน &nbsp;&nbsp; ฝ่ายบุคคล</div>
+
+<div class="row" style="margin-top:10px;">
+  ข้าพเจ้า <span class="dotline dotline-lg">${r.employee_name||''}</span>
+  ตำแหน่ง <span class="dotline dotline-lg"></span>
+</div>
+<div class="row">
+  แผนก <span class="dotline" style="min-width:400px;">${r.department||''}</span>
+</div>
+
+<!-- ขอลา checkboxes -->
+<div class="section-title">ขอลา</div>
+<div class="chk-grid">
+  ${LEFT_TYPES.map(code=>`<div class="chk-item">${chk(code)}${TYPE_LABELS[code]||code}</div>`).join('')}
+  ${RIGHT_TYPES.map(code=>`<div class="chk-item">${chk(code)}${TYPE_LABELS[code]||code}</div>`).join('')}
+</div>
+${EXTRA_TYPES.map(code=>`<div class="chk-extra">${chk(code)}${TYPE_LABELS[code]||code}</div>`).join('')}
+
+<!-- ช่วงวันที่ -->
+<div class="date-row">
+  ตั้งแต่วันที่ <span class="dotline">${thDateShort(r.start_date)}</span>
+  ถึงวันที่ <span class="dotline">${thDateShort(r.end_date)}</span>
+  เป็นระยะเวลา <span class="dotline" style="min-width:60px;">${r.days}</span> วัน
+</div>
+
+<!-- เหตุผล -->
+<div class="reason-row">
+  เหตุผลที่ลา <span class="dotline" style="min-width:500px;">${r.reason||''}</span>
+</div>
+<div class="reason-row">
+  <span class="dotline" style="min-width:600px;"></span>
+</div>
+
+<!-- ลงชื่อ -->
+<div class="sign-section">
+  <div class="sign-box">
+    <div style="font-size:14pt;margin-bottom:4px;">จึงเรียนมาเพื่อพิจารณาอนุมัติ</div>
+    <div class="sign-line"></div>
+    <div class="sign-label">(ลงชื่อ) ......................................... หัวหน้างาน</div>
+    <div class="sign-label" style="margin-top:4px;">(................................................................................)</div>
+  </div>
+  <div class="sign-box">
+    <div style="font-size:14pt;margin-bottom:4px;">&nbsp;</div>
+    <div class="sign-line"></div>
+    <div class="sign-label">(ลงชื่อ) ......................................... พนักงาน</div>
+    <div class="sign-label" style="margin-top:4px;">(................................................................................)</div>
+  </div>
+</div>
+
+<!-- สถิติการลา -->
+<div class="status-section">
+  <div class="status-title">สถิติการลา</div>
+  <div class="status-row">
+    <div class="status-cell status-cell-hd">ประเภทลา</div>
+    <div class="status-cell status-cell-hd">โควต้า (วัน)</div>
+    <div class="status-cell status-cell-hd">ใช้ไปแล้ว (วัน)</div>
+    <div class="status-cell status-cell-hd">คงเหลือ (วัน)</div>
+  </div>
+  <div class="status-row"><div class="status-cell">ลาป่วย</div><div class="status-cell"></div><div class="status-cell"></div><div class="status-cell"></div></div>
+  <div class="status-row"><div class="status-cell">ลากิจ</div><div class="status-cell"></div><div class="status-cell"></div><div class="status-cell"></div></div>
+  <div class="status-row"><div class="status-cell">พักร้อน</div><div class="status-cell"></div><div class="status-cell"></div><div class="status-cell"></div></div>
+</div>
+
+<script>
+  window.onload = function() { window.print(); };
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=1200');
+  win.document.write(html);
+  win.document.close();
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 10 — Approvals (Supervisor)
+// ─────────────────────────────────────────────────────────────
+async function renderApprovals() {
+  if(!can('approve')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์เข้าถึงหน้านี้</div>'; return; }
+
+  // Admin sees all pending; supervisor sees their department
+  let q = sb.from('leave_requests').select('*').eq('status','pending').order('created_at');
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { data } = await q.limit(100);
+  const reqs = data||[];
+
+  // Update badge
+  const badge = document.getElementById('sb-badge-approve');
+  if(badge){ badge.textContent=reqs.length||''; badge.style.display=reqs.length>0?'':'none'; }
+
+  reqs.forEach(r => { _reqCache[r.request_id] = r; });
+
+  const rows = reqs.length ? reqs.map(r=>{
+    const isAuto = (r.reason||'').startsWith('[Auto จากบัตรตอก]');
+    const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;margin-left:4px;">🔄 บัตรตอก</span>` : '';
+    const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
+    const reasonDisplay = isAuto ? `<span style="color:#6d28d9;font-size:11px;">🔄 สร้างจากบัตรตอกอัตโนมัติ</span>` : (r.reason?`<span style="font-size:12px;color:#64748b;">${esc(r.reason).slice(0,40)}</span>`:'—');
+    return `
+    <tr>
+      <td>
+        <div style="font-weight:600;color:#0f172a;">${esc(r.employee_name)}</div>
+        <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+      </td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge}</td>
+      <td>${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}</td>
+      <td style="font-weight:700;">${r.days} วัน</td>
+      <td>${reasonDisplay}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-success btn-xs" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
+          <button class="btn btn-danger btn-xs" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
+          <button class="btn btn-xs btn-outline" onclick="printLeaveForm(${r.request_id})" title="พิมพ์ใบลา">🖨️</button>
+        </div>
+      </td>
+    </tr>`;}).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</td></tr>';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:1000px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">✅ คำขอรออนุมัติ (${reqs.length} รายการ)</div>
+        <button class="btn btn-outline btn-sm" onclick="renderApprovals()">🔄 รีเฟรช</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>พนักงาน</th><th>ประเภท</th><th>วันลา</th><th>จำนวน</th><th>เหตุผล</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function approveRequest(id) {
+  if(!confirm('ยืนยันการอนุมัติคำขอนี้?')) return;
+  const approverId   = currentUser?.id||'';
+  const approverName = currentUser?.full_name||'';
+  const { data, error } = await sb.from('leave_requests').update({
+    status:'approved', approver_id:approverId, approver_name:approverName,
+    approved_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  }).eq('request_id',id).select().single();
+
+  if(error) { showToast('อนุมัติไม่สำเร็จ','error'); return; }
+  await sendLineNotify(data, 'approved');
+  showToast('อนุมัติเรียบร้อย ✅','success');
+  renderApprovals();
+}
+
+function openRejectModal(id) {
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">❌ ปฏิเสธคำขอ</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="form-group">
+      <label class="form-label">เหตุผลที่ปฏิเสธ (จำเป็น)</label>
+      <textarea id="reject-note" class="form-control" rows="3" placeholder="ระบุเหตุผล..."></textarea>
+    </div>
+    <div id="rj-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-danger" onclick="rejectRequest(${id})" style="flex:1;justify-content:center;">ยืนยันปฏิเสธ</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function rejectRequest(id) {
+  const note = document.getElementById('reject-note').value.trim();
+  if(!note) { document.getElementById('rj-err').textContent='กรุณาระบุเหตุผล'; return; }
+  const approverId   = currentUser?.id||'';
+  const approverName = currentUser?.full_name||'';
+  const { data, error } = await sb.from('leave_requests').update({
+    status:'rejected', approver_id:approverId, approver_name:approverName,
+    reject_note:note, approved_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  }).eq('request_id',id).select().single();
+
+  if(error) { document.getElementById('rj-err').textContent='เกิดข้อผิดพลาด: '+(error.message||error); return; }
+  closeModal();
+  await sendLineNotify(data,'rejected');
+  showToast('ปฏิเสธคำขอเรียบร้อย','info');
+  renderApprovals();
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11 — All Requests (Admin/Supervisor)
+// ─────────────────────────────────────────────────────────────
+let _allFilter = { status:'', dept:'', month:'' };
+async function renderAllRequests() {
+  if(!can('viewAll')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
+
+  let q = sb.from('leave_requests').select('*').order('created_at',{ascending:false});
+  if(_allFilter.status) q=q.eq('status',_allFilter.status);
+  if(!can('admin')&&currentUser?.department) q=q.eq('department',currentUser.department);
+  const { data } = await q.limit(200);
+  const reqs = data||[];
+
+  // Stats
+  const stats = {total:reqs.length,pending:0,approved:0,rejected:0};
+  reqs.forEach(r=>{ if(stats[r.status]!==undefined) stats[r.status]++; });
+
+  reqs.forEach(r => { _reqCache[r.request_id] = r; });
+
+  const rows = reqs.length ? reqs.map(r=>{
+    const isAuto = (r.reason||'').startsWith('[Auto จากบัตรตอก]');
+    const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;margin-left:4px;">🔄 บัตรตอก</span>` : '';
+    const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
+    return `
+    <tr>
+      <td style="font-size:12px;color:#64748b;">${fmtDate(r.created_at)}</td>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge}</td>
+      <td>${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}</td>
+      <td style="font-weight:700;">${r.days}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td style="font-size:12px;color:#64748b;">${r.approver_name?esc(r.approver_name):'—'}</td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-xs btn-outline" onclick="openEditRequestModal(${r.request_id})" title="แก้ไข">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="adminDeleteRequest(${r.request_id})" title="ลบ">🗑️</button>
+        </div>
+      </td>
+    </tr>`;}).join('')
+    : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีข้อมูล</td></tr>';
+
+  const statFilter = ['','pending','approved','rejected'].map(s=>`
+    <button class="btn btn-sm ${_allFilter.status===s?'btn-primary':'btn-outline'}" onclick="_allFilter.status='${s}';renderAllRequests();">
+      ${{'':`ทั้งหมด (${stats.total})`,'pending':`รออนุมัติ (${stats.pending})`,'approved':`อนุมัติ (${stats.approved})`,'rejected':`ปฏิเสธ (${stats.rejected})`}[s]}
+    </button>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:1100px;">
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi" style="background:#f8fafc;border-color:#64748b;"><div class="kpi-val">${stats.total}</div><div class="kpi-lbl">ทั้งหมด</div></div>
+      <div class="kpi" style="background:#fef9c3;border-color:#f59e0b;"><div class="kpi-val" style="color:#b45309;">${stats.pending}</div><div class="kpi-lbl">รออนุมัติ</div></div>
+      <div class="kpi" style="background:#dcfce7;border-color:#22c55e;"><div class="kpi-val" style="color:#166534;">${stats.approved}</div><div class="kpi-lbl">อนุมัติ</div></div>
+      <div class="kpi" style="background:#fee2e2;border-color:#ef4444;"><div class="kpi-val" style="color:#991b1b;">${stats.rejected}</div><div class="kpi-lbl">ปฏิเสธ</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-title">📋 ทุกคำขอลา</div>
+        <button class="btn btn-outline btn-sm" onclick="renderAllRequests()">🔄 รีเฟรช</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">${statFilter}</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>วันที่ยื่น</th><th>พนักงาน</th><th>ประเภท</th><th>วันลา</th><th>วัน</th><th>สถานะ</th><th>ผู้อนุมัติ</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11B — Admin Edit / Delete Request
+// ─────────────────────────────────────────────────────────────
+function openEditRequestModal(requestId) {
+  const r = _reqCache[requestId];
+  if (!r) { showToast('ไม่พบข้อมูล', 'error'); return; }
+
+  const statusOpts = ['pending','approved','rejected','cancelled'].map(s =>
+    `<option value="${s}" ${r.status===s?'selected':''}>${{pending:'รออนุมัติ',approved:'อนุมัติ',rejected:'ปฏิเสธ',cancelled:'ยกเลิก'}[s]}</option>`
+  ).join('');
+
+  openModal(`
+    <div class="modal-hd">
+      <span class="modal-title">✏️ แก้ไขคำขอลา</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:12px;">
+      ${esc(r.employee_name)} · ${esc(r.type_name)} · ${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}
+    </div>
+    <div class="form-group">
+      <label class="form-label">จำนวนวัน</label>
+      <input id="edit-days" class="form-control" type="number" min="0" step="0.5" value="${r.days}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">วันที่เริ่มลา</label>
+      <input id="edit-start" class="form-control" type="date" value="${r.start_date}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">วันที่สิ้นสุด</label>
+      <input id="edit-end" class="form-control" type="date" value="${r.end_date}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">สถานะ</label>
+      <select id="edit-status" class="form-control">${statusOpts}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">เหตุผล</label>
+      <input id="edit-reason" class="form-control" value="${esc(r.reason||'')}">
+    </div>
+    <div id="edit-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveEditRequest(${requestId})" style="flex:1;justify-content:center;">💾 บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function saveEditRequest(requestId) {
+  const days   = parseFloat(document.getElementById('edit-days').value);
+  const start  = document.getElementById('edit-start').value;
+  const end    = document.getElementById('edit-end').value;
+  const status = document.getElementById('edit-status').value;
+  const reason = document.getElementById('edit-reason').value.trim();
+  const err    = document.getElementById('edit-err');
+
+  if (isNaN(days)||days<0) { err.textContent='จำนวนวันไม่ถูกต้อง'; return; }
+  if (!start||!end)        { err.textContent='กรุณาระบุวันที่'; return; }
+  if (end < start)         { err.textContent='วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น'; return; }
+
+  const payload = { days, start_date:start, end_date:end, status, reason:reason||null,
+                    updated_at: new Date().toISOString() };
+  // ถ้าเปลี่ยนเป็น approved ให้บันทึก approver ด้วย
+  if (status === 'approved') {
+    payload.approver_name = currentUser?.full_name || '';
+    payload.approver_id   = currentUser?.id || '';
+    payload.approved_at   = new Date().toISOString();
+  }
+
+  const { error } = await sb.from('leave_requests').update(payload).eq('request_id', requestId);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+
+  closeModal();
+  showToast('แก้ไขเรียบร้อย ✅', 'success');
+  renderAllRequests();
+}
+
+async function adminDeleteRequest(requestId) {
+  if (!confirm('ลบคำขอลานี้ถาวร? ไม่สามารถกู้คืนได้')) return;
+  const { error } = await sb.from('leave_requests').delete().eq('request_id', requestId);
+  if (error) { showToast('ลบไม่สำเร็จ: ' + error.message, 'error'); return; }
+  delete _reqCache[requestId];
+  showToast('ลบคำขอเรียบร้อย', 'info');
+  renderAllRequests();
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11C — Pass Request (ขอออกนอกบริเวณ)
+// ─────────────────────────────────────────────────────────────
+let _passReasons = [];      // cache จาก pass_reasons table
+let _passReasonSelected = null; // {reason_id, name, icon, max_minutes, requires_approval}
+
+async function loadPassReasons() {
+  if (_passReasons.length) return;
+  const { data } = await sb.from('pass_reasons').select('*').eq('is_active',true).order('sort_order');
+  _passReasons = data || [];
+}
+
+async function renderPassRequest() {
+  await loadPassReasons();
+  const empId   = currentUser?.id || currentEmp?.employee_id || '';
+  const empName = currentUser?.full_name || currentEmp?.name || '';
+  const dept    = currentUser?.department || currentEmp?.department || '';
+
+  const now = new Date();
+  const todayISO = now.toISOString().slice(0,10);
+  const timeNow  = now.toTimeString().slice(0,5);
+  const timeRet  = new Date(now.getTime() + 60*60*1000).toTimeString().slice(0,5);
+
+  const reasonCards = _passReasons.map(r=>`
+    <div class="type-card" id="pr-card-${r.reason_id}" onclick="selectPassReason(${r.reason_id})" style="cursor:pointer;">
+      <div class="tc-icon">${r.icon}</div>
+      <div class="tc-name">${esc(r.name)}</div>
+      <div class="tc-quota">${r.max_minutes} นาที${r.requires_approval ? '' : ' · ไม่ต้องอนุมัติ'}</div>
+    </div>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:600px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">🚪 ขอออกนอกบริเวณ</div>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-pass-hist')">ประวัติของฉัน →</button>
+      </div>
+
+      <!-- ข้อมูลผู้ขอ -->
+      <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#6d28d9;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">
+          ${empName.charAt(0)||'?'}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:14px;color:#0f172a;">${esc(empName)}</div>
+          <div style="font-size:12px;color:#64748b;">${esc(dept||'—')}</div>
+        </div>
+      </div>
+
+      <!-- เหตุผล -->
+      <div class="form-group">
+        <label class="form-label">เหตุผล <span style="color:#ef4444;">*</span></label>
+        <div class="type-cards" id="pass-reason-cards">${reasonCards}</div>
+      </div>
+
+      <!-- วัน-เวลา -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">วันที่</label>
+          <input type="date" id="pass-date" class="form-control" value="${todayISO}" min="${todayISO}">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">เวลาออก</label>
+          <input type="time" id="pass-out-time" class="form-control" value="${timeNow}">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">กลับประมาณ</label>
+          <input type="time" id="pass-return-time" class="form-control" value="${timeRet}">
+        </div>
+      </div>
+
+      <!-- หมายเหตุ -->
+      <div class="form-group">
+        <label class="form-label">หมายเหตุ (ถ้ามี)</label>
+        <textarea id="pass-note" class="form-control" rows="2" placeholder="รายละเอียดเพิ่มเติม..."></textarea>
+      </div>
+
+      <div id="pass-err" style="color:#ef4444;font-size:13px;margin-bottom:10px;"></div>
+
+      <div id="pass-submit-info" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1e40af;display:none;">
+        <strong>ℹ️ ทานข้าว/ออกรถ</strong> — ไม่ต้องรออนุมัติ บันทึกได้ทันที
+      </div>
+
+      <button class="btn btn-primary" onclick="submitPassRequest()" style="width:100%;">
+        🚪 ยื่นคำขอออก
+      </button>
+    </div>
+  </div>`;
+
+  _passReasonSelected = null;
+}
+
+function selectPassReason(reasonId) {
+  const r = _passReasons.find(x=>x.reason_id===reasonId);
+  if (!r) return;
+  _passReasonSelected = r;
+  // highlight
+  document.querySelectorAll('#pass-reason-cards .type-card').forEach(el=>{
+    el.style.borderColor = el.id===`pr-card-${reasonId}` ? '#6d28d9' : '#e2e8f0';
+    el.style.background  = el.id===`pr-card-${reasonId}` ? '#ede9fe' : '';
+  });
+  // แสดง info ถ้าไม่ต้องอนุมัติ
+  const info = document.getElementById('pass-submit-info');
+  if (info) info.style.display = r.requires_approval ? 'none' : '';
+}
+
+async function submitPassRequest() {
+  const err = document.getElementById('pass-err');
+  err.textContent = '';
+
+  if (!_passReasonSelected) { err.textContent = 'กรุณาเลือกเหตุผล'; return; }
+  const date    = document.getElementById('pass-date')?.value;
+  const outTime = document.getElementById('pass-out-time')?.value;
+  const retTime = document.getElementById('pass-return-time')?.value;
+  if (!date || !outTime || !retTime) { err.textContent = 'กรุณาระบุวันและเวลา'; return; }
+  if (retTime <= outTime) { err.textContent = 'เวลากลับต้องหลังเวลาออก'; return; }
+
+  const empId   = currentUser?.id || currentEmp?.employee_id || '';
+  const empName = currentUser?.full_name || currentEmp?.name || '';
+  const dept    = currentUser?.department || currentEmp?.department || '';
+  const note    = document.getElementById('pass-note')?.value.trim();
+
+  // ถ้าไม่ต้องอนุมัติ → approved ทันที + out ทันที (walk-in)
+  const isWalkIn = !_passReasonSelected.requires_approval;
+  const status   = isWalkIn ? 'approved' : 'pending';
+
+  const payload = {
+    employee_id: empId, employee_name: empName, department: dept,
+    reason_id: _passReasonSelected.reason_id, reason_name: _passReasonSelected.name,
+    request_date: date, out_time: outTime, expected_return: retTime,
+    note: note || null, status,
+    approver_name: isWalkIn ? 'Auto (ไม่ต้องอนุมัติ)' : null
+  };
+
+  const { data, error } = await sb.from('pass_requests').insert([payload]).select('pass_id').single();
+  if (error) { err.textContent = 'บันทึกไม่สำเร็จ: '+error.message; return; }
+
+  if (isWalkIn) {
+    showToast('✅ บันทึกสำเร็จ (ไม่ต้องรออนุมัติ)', 'success');
+  } else {
+    // แจ้ง LINE (ถ้ามี)
+    sendPassLineNotify(data.pass_id, payload, 'pending');
+    showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
+  }
+  navigateTo('lv-pass-hist');
+}
+
+// ─────────────────────────────────────────────────────────────
+// ประวัติ Pass ของฉัน
+// ─────────────────────────────────────────────────────────────
+async function renderMyPassHistory() {
+  const empId = currentUser?.id || currentEmp?.employee_id || '';
+  const { data } = await sb.from('pass_requests').select('*')
+    .eq('employee_id', empId).order('created_at',{ascending:false}).limit(50);
+  const reqs = data || [];
+
+  const PASS_STATUS = {
+    pending:'⏳ รออนุมัติ', approved:'✅ อนุมัติแล้ว', rejected:'❌ ปฏิเสธ',
+    out:'🚪 กำลังออก', returned:'🏭 กลับแล้ว', cancelled:'🚫 ยกเลิก'
+  };
+  const PASS_STATUS_COLOR = {
+    pending:'#f59e0b', approved:'#22c55e', rejected:'#ef4444',
+    out:'#3b82f6', returned:'#6d28d9', cancelled:'#94a3b8'
+  };
+
+  const rows = reqs.length ? reqs.map(r=>`
+    <tr>
+      <td style="font-size:12px;">${r.request_date}</td>
+      <td>${esc(r.reason_name)}</td>
+      <td style="font-size:12px;">${r.out_time?.slice(0,5)} → ${r.expected_return?.slice(0,5)}</td>
+      <td>
+        <span style="background:${PASS_STATUS_COLOR[r.status]}22;color:${PASS_STATUS_COLOR[r.status]};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">
+          ${PASS_STATUS[r.status]||r.status}
+        </span>
+      </td>
+      <td style="font-size:12px;color:#64748b;">${r.actual_out?new Date(r.actual_out).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' → '+(r.actual_return?new Date(r.actual_return).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'ยังไม่กลับ'):'-'}</td>
+      <td>${r.status==='pending'?`<button class="btn btn-xs btn-outline" onclick="cancelPassRequest(${r.pass_id})">ยกเลิก</button>`:''}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติ</td></tr>';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📋 ประวัติคำขอออกนอกบริเวณ</div>
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-pass')">+ คำขอใหม่</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>วันที่</th><th>เหตุผล</th><th>เวลา</th><th>สถานะ</th><th>เวลาจริง</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function cancelPassRequest(passId) {
+  if(!confirm('ยืนยันยกเลิกคำขอนี้?')) return;
+  const { error } = await sb.from('pass_requests')
+    .update({status:'cancelled',updated_at:new Date().toISOString()}).eq('pass_id',passId);
+  if(error) { showToast('ยกเลิกไม่สำเร็จ','error'); return; }
+  showToast('ยกเลิกคำขอแล้ว','info');
+  renderMyPassHistory();
+}
+
+// ─────────────────────────────────────────────────────────────
+// อนุมัติ Pass (Supervisor / Admin)
+// ─────────────────────────────────────────────────────────────
+async function renderPassApprovals() {
+  if(!can('approve')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;">ไม่มีสิทธิ์</div>'; return; }
+
+  const today = new Date().toISOString().slice(0,10);
+  let q = sb.from('pass_requests').select('*').in('status',['pending','approved','out'])
+    .gte('request_date', today).order('request_date').order('out_time');
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { data } = await q.limit(200);
+  const reqs = data||[];
+
+  // Update badge
+  const pendingCount = reqs.filter(r=>r.status==='pending').length;
+  const badge = document.getElementById('sb-badge-pass');
+  if(badge){ badge.textContent=pendingCount||''; badge.style.display=pendingCount>0?'':'none'; }
+
+  const PASS_COLOR = { pending:'#f59e0b', approved:'#22c55e', out:'#3b82f6', returned:'#6d28d9' };
+
+  const rows = reqs.length ? reqs.map(r=>`
+    <tr>
+      <td>
+        <div style="font-weight:600;">${esc(r.employee_name)}</div>
+        <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+      </td>
+      <td>${esc(r.reason_name)}</td>
+      <td style="font-size:12px;">${r.request_date} ${r.out_time?.slice(0,5)}</td>
+      <td style="font-size:12px;">~${r.expected_return?.slice(0,5)}</td>
+      <td style="font-size:12px;color:#64748b;">${r.note?esc(r.note).slice(0,30):'—'}</td>
+      <td>
+        <span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">
+          ${{pending:'⏳ รออนุมัติ',approved:'✅ อนุมัติ',out:'🚪 กำลังออก',returned:'🏭 กลับแล้ว'}[r.status]||r.status}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${r.status==='pending'?`
+            <button class="btn btn-success btn-xs" onclick="approvePass(${r.pass_id})">✅ อนุมัติ</button>
+            <button class="btn btn-danger btn-xs"  onclick="rejectPass(${r.pass_id})">❌</button>
+          `:''}
+        </div>
+      </td>
+    </tr>`).join('')
+    : '<tr><td colspan="7" style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</td></tr>';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:1100px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">🔑 อนุมัติคำขอออกนอกบริเวณ (วันนี้เป็นต้นไป)</div>
+        <button class="btn btn-outline btn-sm" onclick="renderPassApprovals()">🔄 รีเฟรช</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>พนักงาน</th><th>เหตุผล</th><th>วันเวลาออก</th><th>กลับประมาณ</th><th>หมายเหตุ</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function approvePass(passId) {
+  const approverName = currentUser?.full_name||'';
+  const approverId   = currentUser?.id||'';
+  const { data, error } = await sb.from('pass_requests').update({
+    status:'approved', approver_id:approverId, approver_name:approverName,
+    approved_at: new Date().toISOString(), updated_at: new Date().toISOString()
+  }).eq('pass_id',passId).select().single();
+  if(error){ showToast('อนุมัติไม่สำเร็จ','error'); return; }
+  sendPassLineNotify(passId, data, 'approved');
+  showToast('✅ อนุมัติคำขอเรียบร้อย','success');
+  renderPassApprovals();
+}
+
+async function rejectPass(passId) {
+  const note = prompt('ระบุเหตุผลที่ปฏิเสธ (ถ้ามี):');
+  const { error } = await sb.from('pass_requests').update({
+    status:'rejected', reject_note: note||null, updated_at: new Date().toISOString()
+  }).eq('pass_id',passId);
+  if(error){ showToast('ปฏิเสธไม่สำเร็จ','error'); return; }
+  showToast('❌ ปฏิเสธคำขอแล้ว','info');
+  renderPassApprovals();
+}
+
+// LINE Notify สำหรับ pass (fire-and-forget)
+async function sendPassLineNotify(passId, r, event) {
+  try {
+    await fetch(`${SUPA_URL}/functions/v1/line-notify`, {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({
+        type: 'pass_request', event,
+        pass_id: passId,
+        employee_name: r.employee_name,
+        department: r.department,
+        reason_name: r.reason_name,
+        request_date: r.request_date,
+        out_time: r.out_time,
+        expected_return: r.expected_return,
+        note: r.note,
+        approver_name: r.approver_name
+      })
+    });
+  } catch(e) { console.warn('pass LINE notify failed', e); }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 12 — Report
+// ─────────────────────────────────────────────────────────────
+let _reportData = []; // cache สำหรับ export
+let _reportYear = thisYear();
+
+async function renderReport() {
+  if(!can('viewAll')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
+
+  const year = _reportYear;
+  const { data } = await sb.from('leave_requests').select('*')
+    .eq('status','approved')
+    .gte('start_date',`${year}-01-01`).lte('start_date',`${year}-12-31`)
+    .order('department').order('employee_name');
+
+  _reportData = data||[];
+
+  // Group by department
+  const byDept = {};
+  _reportData.forEach(r=>{
+    const d=r.department||'ไม่ระบุแผนก';
+    if(!byDept[d]) byDept[d]={};
+    if(!byDept[d][r.employee_name]) byDept[d][r.employee_name]={sick:0,personal:0,annual:0,out:0,total:0};
+    byDept[d][r.employee_name][r.type_code||'other'] = (byDept[d][r.employee_name][r.type_code||'other']||0)+Number(r.days);
+    byDept[d][r.employee_name].total += Number(r.days);
+  });
+
+  const sections = Object.entries(byDept).map(([dept,emps])=>{
+    const rows = Object.entries(emps).map(([name,days])=>`
+      <tr>
+        <td>${esc(name)}</td>
+        <td style="color:#ef4444;font-weight:600;">${days.sick||0}</td>
+        <td style="color:#f59e0b;font-weight:600;">${days.personal||0}</td>
+        <td style="color:#22c55e;font-weight:600;">${days.annual||0}</td>
+        <td style="color:#3b82f6;font-weight:600;">${days.out||0}</td>
+        <td style="font-weight:700;">${days.total}</td>
+      </tr>`).join('');
+    return `
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>ชื่อ</th><th>🤒 ป่วย</th><th>📌 กิจ</th><th>🏖️ พักร้อน</th><th>🚗 ออกนอก</th><th>รวม (วัน)</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Year selector
+  const curYear = thisYear();
+  const yearOpts = [curYear, curYear-1, curYear-2].map(y=>
+    `<option value="${y}" ${y===year?'selected':''}>${y+543}</option>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+    <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin:0;">📊 รายงานการลา</h2>
+        <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">เฉพาะคำขอที่ได้รับการอนุมัติ</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select class="form-control" style="width:auto;" onchange="_reportYear=parseInt(this.value);renderReport();">
+          ${yearOpts}
+        </select>
+        <button class="btn btn-success btn-sm" onclick="exportReportCSV()">📥 Export CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportReportExcel()">📊 Export Excel</button>
+      </div>
+    </div>
+    ${sections||'<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลการลาที่อนุมัติในปีนี้</p></div>'}
+  </div>`;
+}
+
+function exportReportCSV() {
+  if(!_reportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
+  _reportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,r.days,r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
+  });
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const bom = '﻿';
+  const blob = new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`leave_report_${_reportYear}.csv`; a.click();
+}
+
+function exportReportExcel() {
+  if(!_reportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
+  const wsData = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
+  _reportData.forEach(r=>{
+    wsData.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,Number(r.days),r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:12},{wch:20},{wch:16},{wch:14},{wch:12},{wch:12},{wch:8},{wch:30},{wch:10},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,`ลา ${_reportYear+543}`);
+  XLSX.writeFile(wb,`leave_report_${_reportYear}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 13 — Settings (Admin)
+// ─────────────────────────────────────────────────────────────
+async function renderSettings() {
+  if(!can('admin')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">เฉพาะผู้ดูแลระบบเท่านั้น</div>'; return; }
+
+  const [typesRes, deptSupRes, settRes, deptListRes] = await Promise.all([
+    sb.from('leave_types').select('*').order('sort_order'),
+    sb.from('leave_dept_supervisors').select('*').order('department'),
+    sb.from('leave_settings').select('*'),
+    sb.from('checkin_employees').select('department').eq('status','active')
+  ]);
+
+  const types    = typesRes.data||[];
+  const deptSups = deptSupRes.data||[];
+  const settings = Object.fromEntries((settRes.data||[]).map(r=>[r.key,r.value]));
+  const depts    = [...new Set((deptListRes.data||[]).map(r=>r.department).filter(Boolean))].sort();
+
+  const typeRows = types.map(t=>`
+    <tr>
+      <td>${t.icon||'📋'} ${esc(t.name)}</td>
+      <td>${t.code}</td>
+      <td>${t.default_quota>0?t.default_quota+' วัน/ปี':'ไม่จำกัด'}</td>
+      <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${t.color};"></span></td>
+      <td>${t.is_active?'✅ เปิดใช้':'❌ ปิด'}</td>
+      <td><button class="btn btn-xs btn-outline" onclick="editLeaveType(${t.type_id})">แก้ไข</button></td>
+    </tr>`).join('');
+
+  const deptRows = deptSups.map(d=>`
+    <tr>
+      <td>${esc(d.department)}</td>
+      <td>${d.supervisor_name?esc(d.supervisor_name):'<span style="color:#94a3b8;">ยังไม่กำหนด</span>'}</td>
+      <td><button class="btn btn-xs btn-outline" onclick="editDeptSupervisor('${esc(d.department)}')">แก้ไข</button></td>
+    </tr>`).join('');
+
+  // Departments ที่ยังไม่ได้ตั้งหัวหน้า
+  const missingDepts = depts.filter(d=>!deptSups.find(s=>s.department===d));
+  const missingRows  = missingDepts.map(d=>`
+    <tr>
+      <td>${esc(d)}</td>
+      <td><span style="color:#94a3b8;">ยังไม่กำหนด</span></td>
+      <td><button class="btn btn-xs btn-primary" onclick="editDeptSupervisor('${esc(d)}')">+ กำหนด</button></td>
+    </tr>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+
+    <!-- LINE Token -->
+    <div class="card">
+      <div class="card-hd"><div class="card-title">🔔 LINE Notify Token</div></div>
+      <div class="form-group">
+        <label class="form-label">Token หลัก (ใช้เมื่อแผนกไม่มี token เฉพาะ)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="st-line-token" class="form-control" value="${esc(settings.line_token_default||'')}" placeholder="เว้นว่างถ้าไม่ใช้">
+          <button class="btn btn-primary btn-sm" onclick="saveSetting('line_token_default','st-line-token')">บันทึก</button>
+        </div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px;">รับ token จาก <a href="https://notify-bot.line.me" target="_blank" style="color:#3b82f6;">notify-bot.line.me</a></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">URL ของระบบ (ส่งใน LINE message)</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="st-app-url" class="form-control" value="${esc(settings.app_url||'')}">
+          <button class="btn btn-primary btn-sm" onclick="saveSetting('app_url','st-app-url')">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ประเภทการลา -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📋 ประเภทการลา</div>
+        <button class="btn btn-primary btn-sm" onclick="editLeaveType(null)">+ เพิ่มประเภท</button>
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>ชื่อ</th><th>Code</th><th>โควต้า</th><th>สี</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody>${typeRows||'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูล</td></tr>'}</tbody></table>
+      </div>
+    </div>
+
+    <!-- หัวหน้าแผนก -->
+    <div class="card">
+      <div class="card-hd"><div class="card-title">👔 หัวหน้าแต่ละแผนก</div></div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>แผนก</th><th>หัวหน้า</th><th></th></tr></thead>
+        <tbody>
+          ${deptRows}
+          ${missingRows||''}
+          ${!deptRows&&!missingRows?'<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูลแผนก</td></tr>':''}
+        </tbody></table>
+      </div>
+    </div>
+
+    <!-- โควต้าวันลารายคน -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">👤 โควต้าวันลารายคน</div>
+        <button class="btn btn-primary btn-sm" onclick="openQuotaModal()">+ ตั้งโควต้า</button>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px;">ตั้งโควต้าพิเศษรายบุคคล — หากไม่ตั้ง จะใช้ค่า default จากประเภทลา</p>
+      <div id="quota-list-area"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">กำลังโหลด...</div></div>
+    </div>
+
+    <!-- วันหยุดบริษัท — Calendar View -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">🏖️ กำหนดวันหยุดบริษัท</div>
+        <span style="font-size:11px;color:#94a3b8;">คลิกวันในปฏิทินเพื่อเพิ่ม/ลบวันหยุด</span>
+      </div>
+      <div id="holiday-cal-area"><div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">กำลังโหลด...</div></div>
+    </div>
+
+  </div>`;
+
+  // Load quota list and holiday calendar in background
+  loadQuotaList();
+  loadHolidayCalendar();
+}
+
+async function loadQuotaList() {
+  const year = thisYear();
+  const { data } = await sb.from('leave_balances').select('*,leave_types(name,color)').eq('year', year).order('employee_id');
+  const el = document.getElementById('quota-list-area');
+  if(!el) return;
+  if(!data||!data.length) { el.innerHTML='<p style="text-align:center;color:#94a3b8;font-size:13px;padding:12px;">ยังไม่มีโควต้าพิเศษ — ทุกคนใช้ค่า default</p>'; return; }
+
+  // Group by employee
+  const byEmp = {};
+  data.forEach(b=>{ if(!byEmp[b.employee_id]) byEmp[b.employee_id]=[]; byEmp[b.employee_id].push(b); });
+
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>รหัส</th><th>ชื่อ (จาก DB)</th><th>ประเภทลา</th><th>โควต้า (วัน)</th><th></th></tr></thead>
+    <tbody>${data.map(b=>`<tr>
+      <td style="font-size:12px;">${esc(b.employee_id)}</td>
+      <td>—</td>
+      <td><span style="color:${b.leave_types?.color||'#64748b'};font-weight:600;">${esc(b.leave_types?.name||b.type_id)}</span></td>
+      <td style="font-weight:700;">${b.quota} วัน</td>
+      <td><button class="btn btn-xs btn-danger" onclick="deleteQuota(${b.balance_id})">ลบ</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+async function openQuotaModal() {
+  // Load employees + leave types
+  const [empRes, typeRes] = await Promise.all([
+    sb.from('checkin_employees').select('employee_id,name').eq('status','active').order('employee_id').limit(200),
+    sb.from('leave_types').select('*').eq('is_active',true).order('sort_order')
+  ]);
+  const emps  = empRes.data||[];
+  const types = typeRes.data||[];
+  const year  = thisYear();
+
+  const empOpts  = emps.map(e=>`<option value="${esc(e.employee_id)}">${esc(e.name)} (${esc(e.employee_id)})</option>`).join('');
+  const typeOpts = types.map(t=>`<option value="${t.type_id}" data-name="${esc(t.name)}">${esc(t.name)}</option>`).join('');
+
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">👤 ตั้งโควต้าวันลารายคน</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:14px;">ปี ${year+543} — override ค่า default ของประเภทลา</p>
+    <div class="form-group"><label class="form-label">พนักงาน</label>
+      <select id="q-emp" class="form-control"><option value="">-- เลือกพนักงาน --</option>${empOpts}</select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">ประเภทลา</label>
+        <select id="q-type" class="form-control"><option value="">-- เลือก --</option>${typeOpts}</select>
+      </div>
+      <div class="form-group"><label class="form-label">โควต้า (วัน)</label>
+        <input id="q-quota" class="form-control" type="number" min="0" max="365" value="6">
+      </div>
+    </div>
+    <div id="q-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveQuota()" style="flex:1;justify-content:center;">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function saveQuota() {
+  const empId  = document.getElementById('q-emp').value;
+  const typeId = parseInt(document.getElementById('q-type').value);
+  const quota  = parseFloat(document.getElementById('q-quota').value);
+  const err    = document.getElementById('q-err');
+  if(!empId)        { err.textContent='กรุณาเลือกพนักงาน'; return; }
+  if(!typeId)       { err.textContent='กรุณาเลือกประเภทลา'; return; }
+  if(isNaN(quota))  { err.textContent='กรุณาระบุโควต้า'; return; }
+  const year = thisYear();
+  const { error } = await sb.from('leave_balances').upsert(
+    { employee_id:empId, type_id:typeId, year, quota },
+    { onConflict:'employee_id,type_id,year' }
+  );
+  if(error) { err.textContent='เกิดข้อผิดพลาด: '+error.message; return; }
+  closeModal();
+  showToast('บันทึกโควต้าเรียบร้อย','success');
+  loadQuotaList();
+}
+
+async function deleteQuota(id) {
+  if(!confirm('ลบโควต้าพิเศษนี้ออก? พนักงานจะกลับไปใช้ค่า default')) return;
+  await sb.from('leave_balances').delete().eq('balance_id',id);
+  showToast('ลบเรียบร้อย','info');
+  loadQuotaList();
+}
+
+// ─── Holiday Calendar ───
+const HOL_MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                       'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const HOL_DAYS_TH   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+
+async function loadHolidayCalendar() {
+  const { data } = await sb.from('leave_holidays')
+    .select('*').eq('year', _holCalYear).order('date');
+  _holAllData = data || [];
+  _holidays = _holAllData.map(h => h.date);
+  renderHolidayCal();
+}
+
+function renderHolidayCal() {
+  const el = document.getElementById('holiday-cal-area');
+  if (!el) return;
+
+  // Build holiday map: 'YYYY-MM-DD' → {holiday_id, name}
+  const holMap = {};
+  _holAllData.forEach(h => { holMap[h.date] = h; });
+
+  // Calendar grid
+  const y = _holCalYear, m = _holCalMonth;
+  const firstDay = new Date(y, m, 1).getDay();   // 0=Sun
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const todayStr = todayISO();
+
+  let cells = '';
+  // blank cells before 1st
+  for (let i = 0; i < firstDay; i++) cells += `<div class="hol-cell hol-empty"></div>`;
+  // day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const hol = holMap[ds];
+    const isToday = ds === todayStr;
+    const isSun   = new Date(y, m, d).getDay() === 0;
+    const isSat   = new Date(y, m, d).getDay() === 6;
+    let cls = 'hol-cell';
+    if (isToday) cls += ' hol-today';
+    if (isSun)   cls += ' hol-sun';
+    if (hol)     cls += ' hol-marked';
+    cells += `<div class="${cls}" onclick="holClickDay('${ds}')" title="${hol?hol.name:'คลิกเพื่อเพิ่มวันหยุด'}">
+      <span class="hol-num">${d}</span>
+      ${hol ? `<span class="hol-tag">${esc(hol.name)}</span>` : ''}
+    </div>`;
+  }
+
+  // List of holidays this month
+  const thisMonthHols = _holAllData.filter(h => h.date.startsWith(`${y}-${String(m+1).padStart(2,'0')}`));
+  const listHtml = thisMonthHols.length
+    ? thisMonthHols.map(h => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+          <div>
+            <span style="font-size:12px;color:#ef4444;margin-right:8px;">🏖️ ${fmtDate(h.date)}</span>
+            <span style="font-size:13px;font-weight:600;">${esc(h.name)}</span>
+          </div>
+          <button class="btn btn-xs btn-danger" onclick="holDeleteById(${h.holiday_id})">ลบ</button>
+        </div>`).join('')
+    : `<p style="text-align:center;color:#94a3b8;font-size:12px;padding:8px 0;">ไม่มีวันหยุดในเดือนนี้</p>`;
+
+  el.innerHTML = `
+    <style>
+      .hol-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+      .hol-nav-title{font-size:15px;font-weight:700;color:#1e293b;}
+      .hol-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px;}
+      .hol-hd{text-align:center;font-size:11px;font-weight:700;color:#64748b;padding:4px 0;}
+      .hol-hd:first-child{color:#ef4444;}
+      .hol-cell{min-height:58px;border-radius:8px;padding:4px;cursor:pointer;border:1px solid #f1f5f9;background:#fafafa;transition:all .15s;position:relative;}
+      .hol-cell:hover{background:#eff6ff;border-color:#93c5fd;}
+      .hol-empty{background:transparent;border:none;cursor:default;}
+      .hol-today .hol-num{background:#3b82f6;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+      .hol-sun .hol-num{color:#ef4444;}
+      .hol-marked{background:#fff1f2;border-color:#fca5a5;}
+      .hol-marked:hover{background:#ffe4e6;border-color:#f87171;}
+      .hol-num{font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;}
+      .hol-tag{display:block;font-size:9px;color:#be123c;font-weight:600;line-height:1.2;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .hol-year-sel{border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;font-size:13px;}
+    </style>
+    <!-- Navigation -->
+    <div class="hol-nav">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-sm btn-outline" onclick="holNavMonth(-1)">‹</button>
+        <span class="hol-nav-title">${HOL_MONTHS_TH[m]} ${y+543}</span>
+        <button class="btn btn-sm btn-outline" onclick="holNavMonth(1)">›</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select class="hol-year-sel" onchange="holSetYear(this.value)">
+          ${[-1,0,1].map(offset=>`<option value="${y+offset}" ${y+offset===_holCalYear?'selected':''}>${y+offset+543}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="holOpenAddModal()">+ เพิ่มวันหยุด</button>
+      </div>
+    </div>
+    <!-- Day headers -->
+    <div class="hol-grid">
+      ${HOL_DAYS_TH.map((d,i)=>`<div class="hol-hd" style="${i===0?'color:#ef4444':''}">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <!-- Legend -->
+    <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:#64748b;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#fff1f2;border:1px solid #fca5a5;border-radius:3px;margin-right:4px;"></span>วันหยุด</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:50%;margin-right:4px;"></span>วันนี้</span>
+    </div>
+    <!-- This month holiday list -->
+    <div style="border-top:1px solid #f1f5f9;padding-top:10px;">
+      <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;">วันหยุดในเดือน${HOL_MONTHS_TH[m]}</div>
+      ${listHtml}
+    </div>`;
+}
+
+function holNavMonth(delta) {
+  _holCalMonth += delta;
+  if (_holCalMonth < 0)  { _holCalMonth = 11; _holCalYear--; loadHolidayCalendar(); return; }
+  if (_holCalMonth > 11) { _holCalMonth = 0;  _holCalYear++; loadHolidayCalendar(); return; }
+  renderHolidayCal();
+}
+
+function holSetYear(y) {
+  _holCalYear = parseInt(y);
+  loadHolidayCalendar();
+}
+
+function holClickDay(dateStr) {
+  // ถ้าวันนี้เป็นวันหยุดอยู่แล้ว → แสดงตัวเลือกลบ
+  const hol = _holAllData.find(h => h.date === dateStr);
+  if (hol) {
+    openModal(`
+      <div class="modal-hd"><span class="modal-title">🏖️ ${esc(hol.name)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
+      <p style="font-size:13px;color:#374151;margin-bottom:16px;">${fmtDate(hol.date)}</p>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="holDeleteById(${hol.holiday_id});closeModal();" style="flex:1;justify-content:center;">🗑️ ลบวันหยุดนี้</button>
+        <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+      </div>`);
+  } else {
+    holOpenAddModal(dateStr);
+  }
+}
+
+function holOpenAddModal(preDate) {
+  const val = preDate || todayISO();
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">🏖️ เพิ่มวันหยุด</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="form-group"><label class="form-label">วันที่</label>
+      <input id="hol-date" class="form-control" type="date" value="${val}">
+    </div>
+    <div class="form-group"><label class="form-label">ชื่อวันหยุด</label>
+      <input id="hol-name" class="form-control" placeholder="เช่น วันสงกรานต์">
+    </div>
+    <div id="hol-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="holSave()" style="flex:1;justify-content:center;">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function holSave() {
+  const date = document.getElementById('hol-date').value;
+  const name = document.getElementById('hol-name').value.trim();
+  const err  = document.getElementById('hol-err');
+  if (!date) { err.textContent='กรุณาระบุวันที่'; return; }
+  if (!name) { err.textContent='กรุณาระบุชื่อวันหยุด'; return; }
+  const year = parseInt(date.slice(0,4));
+  const { error } = await sb.from('leave_holidays').upsert({date, name, year},{onConflict:'date'});
+  if (error) { err.textContent='เกิดข้อผิดพลาด: '+error.message; return; }
+  closeModal();
+  showToast('เพิ่มวันหยุดเรียบร้อย ✅','success');
+  // sync month to added date
+  _holCalYear  = year;
+  _holCalMonth = parseInt(date.slice(5,7)) - 1;
+  loadHolidayCalendar();
+}
+
+async function holDeleteById(id) {
+  if (!confirm('ลบวันหยุดนี้ออก?')) return;
+  await sb.from('leave_holidays').delete().eq('holiday_id', id);
+  showToast('ลบวันหยุดเรียบร้อย','info');
+  loadHolidayCalendar();
+}
+
+// backward compat aliases
+function loadHolidayList() { loadHolidayCalendar(); }
+function openHolidayModal() { holOpenAddModal(); }
+async function saveHoliday() { await holSave(); }
+async function deleteHoliday(id) { await holDeleteById(id); }
+
+async function saveSetting(key, inputId) {
+  const val = document.getElementById(inputId).value.trim();
+  await sb.from('leave_settings').upsert({key, value:val},{onConflict:'key'});
+  _leaveSettings[key]=val;
+  showToast('บันทึกเรียบร้อย','success');
+}
+
+async function editLeaveType(id) {
+  let t = { type_id:null, name:'', code:'', default_quota:0, color:'#64748b', icon:'📋', is_active:true };
+  if(id) {
+    const { data } = await sb.from('leave_types').select('*').eq('type_id',id).single();
+    if(data) t=data;
+  }
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">${id?'แก้ไข':'เพิ่ม'}ประเภทการลา</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="form-group"><label class="form-label">ชื่อ</label><input id="lt-name" class="form-control" value="${esc(t.name)}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">Code</label><input id="lt-code" class="form-control" value="${esc(t.code)}" ${id?'disabled':''}></div>
+      <div class="form-group"><label class="form-label">Icon</label><input id="lt-icon" class="form-control" value="${esc(t.icon||'📋')}"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group"><label class="form-label">โควต้า (วัน/ปี) 0=ไม่จำกัด</label><input id="lt-quota" class="form-control" type="number" min="0" value="${t.default_quota}"></div>
+      <div class="form-group"><label class="form-label">สี</label><input id="lt-color" class="form-control" type="color" value="${t.color||'#64748b'}" style="height:40px;padding:4px;"></div>
+    </div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="lt-active" ${t.is_active?'checked':''} style="width:16px;height:16px;"> เปิดใช้งาน</label></div>
+    <div id="lt-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveLeaveType(${id||'null'})" style="flex:1;justify-content:center;">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function saveLeaveType(id) {
+  const name   = document.getElementById('lt-name').value.trim();
+  const code   = document.getElementById('lt-code').value.trim();
+  const icon   = document.getElementById('lt-icon').value.trim();
+  const quota  = parseInt(document.getElementById('lt-quota').value)||0;
+  const color  = document.getElementById('lt-color').value;
+  const active = document.getElementById('lt-active').checked;
+  const err    = document.getElementById('lt-err');
+  if(!name||!code) { err.textContent='กรุณากรอกชื่อและ code'; return; }
+
+  const payload={name,code,icon,default_quota:quota,color,is_active:active};
+  let result;
+  if(id) result = await sb.from('leave_types').update(payload).eq('type_id',id);
+  else   result = await sb.from('leave_types').insert([payload]);
+
+  if(result.error) { err.textContent='เกิดข้อผิดพลาด: '+result.error.message; return; }
+  closeModal();
+  showToast('บันทึกเรียบร้อย','success');
+  _leaveTypes=[];
+  renderSettings();
+}
+
+async function editDeptSupervisor(dept) {
+  // Load supervisors from app_users (same as System 1/2/3)
+  const { data: supList } = await sb.from('app_users').select('id,username,full_name,department')
+    .in('role',['admin','supervisor']).eq('status','active');
+  const { data: cur } = await sb.from('leave_dept_supervisors').select('*').eq('department',dept).single();
+
+  const opts = (supList||[]).map(u=>`<option value="${u.id}" data-name="${esc(u.full_name||u.username)}" ${cur?.supervisor_id===u.id?'selected':''}>${esc(u.full_name||u.username)} (${u.username})</option>`).join('');
+
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">👔 กำหนดหัวหน้า: ${esc(dept)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="form-group">
+      <label class="form-label">หัวหน้าแผนก</label>
+      <select id="ds-sup" class="form-control"><option value="">-- เลือกหัวหน้า --</option>${opts}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">LINE Notify Token (เฉพาะแผนกนี้) — เว้นว่างใช้ token หลัก</label>
+      <input id="ds-token" class="form-control" type="text" value="${esc(cur?.line_token||'')}" placeholder="">
+    </div>
+    <div id="ds-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveDeptSupervisor('${esc(dept)}')" style="flex:1;justify-content:center;">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function saveDeptSupervisor(dept) {
+  const sel   = document.getElementById('ds-sup');
+  const supId = sel.value;
+  const supName = supId ? sel.options[sel.selectedIndex].dataset.name : '';
+  const token = document.getElementById('ds-token').value.trim();
+
+  await sb.from('leave_dept_supervisors').upsert({
+    department:dept, supervisor_id:supId||null, supervisor_name:supName||null, line_token:token||null
+  },{onConflict:'department'});
+
+  closeModal();
+  showToast('บันทึกเรียบร้อย','success');
+  renderSettings();
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 14 — LINE Notify
+// ─────────────────────────────────────────────────────────────
+async function sendLineNotify(req, event) {
+  try {
+    // Get token: try dept token first, fallback to default
+    const { data:deptData } = await sb.from('leave_dept_supervisors').select('line_token').eq('department',req.department||'').single();
+    const { data:settData } = await sb.from('leave_settings').select('value').eq('key','line_token_default').single();
+    const { data:urlData }  = await sb.from('leave_settings').select('value').eq('key','app_url').single();
+
+    const token   = deptData?.line_token || settData?.value || '';
+    const appUrl  = urlData?.value || 'https://sanon-saraburi.github.io/sanon-webapp/leave.html';
+
+    if(!token) return; // ไม่มี token → ข้าม
+
+    const typeColors = {sick:'🤒',personal:'📌',annual:'🏖️',out:'🚗'};
+    const icon = typeColors[req.type_code]||'📋';
+
+    let msg='';
+    if(event==='new') {
+      msg=`\n📋 คำขอลาใหม่\n──────────────\n👤 ${req.employee_name}\n🏭 ${req.department||'—'}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date} (${req.days} วัน)\n📝 ${req.reason||'ไม่ระบุเหตุผล'}\n──────────────\n⏳ รออนุมัติ\n🔗 ${appUrl}`;
+    } else if(event==='approved') {
+      msg=`\n✅ อนุมัติคำขอลา\n──────────────\n👤 ${req.employee_name}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date} (${req.days} วัน)\n👔 อนุมัติโดย: ${req.approver_name||'—'}\n🔗 ${appUrl}`;
+    } else if(event==='rejected') {
+      msg=`\n❌ ปฏิเสธคำขอลา\n──────────────\n👤 ${req.employee_name}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date}\n👔 ปฏิเสธโดย: ${req.approver_name||'—'}\n📝 เหตุผล: ${req.reject_note||'—'}`;
+    }
+
+    // Call LINE Notify via Edge Function (หลีกเลี่ยง CORS)
+    await sb.functions.invoke('line-notify', {
+      body: { type:'leave', token, message:msg, record:req }
+    });
+
+    // Mark as notified
+    await sb.from('leave_requests').update({line_notified:true}).eq('request_id',req.request_id);
+  } catch(e) {
+    console.warn('LINE notify failed:', e);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 15 — Bootstrap & Shell Setup
+// ─────────────────────────────────────────────────────────────
+async function _bootApp() {
+  // Pre-load settings + holidays parallel
+  const [settRes, holRes] = await Promise.all([
+    sb.from('leave_settings').select('*'),
+    sb.from('leave_holidays').select('date').eq('year', thisYear())
+  ]);
+  _leaveSettings = Object.fromEntries((settRes.data||[]).map(r=>[r.key,r.value]));
+  _holidays = (holRes.data||[]).map(h=>h.date);
+
+  // Show main app
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('main-app').style.display='flex';
+
+  // Update sidebar user info
+  const name = currentUser?.full_name||'';
+  const role = currentUser?.role||'employee';
+  document.getElementById('sb-name').textContent = name;
+  document.getElementById('sb-role').textContent = ROLE_LABELS[role]||role;
+  document.getElementById('sb-avatar').textContent = name.charAt(0)||'?';
+  document.getElementById('topbar-user-name').textContent = name;
+  document.getElementById('topbar-user-dept').textContent = currentUser?.department||'';
+  document.getElementById('topbar-user-info').style.display='';
+
+  // Show/hide sections based on role
+  if(can('approve')) {
+    document.getElementById('sb-sec-approve').style.display='';
+    document.getElementById('bn-lv-approvals').style.display='';
+    document.getElementById('sb-lv-pass-approve').style.display='';
+  }
+  if(can('admin')) {
+    document.getElementById('sb-sec-admin').style.display='';
+  }
+
+  // Mobile: show menu button
+  if(window.innerWidth<=768) {
+    document.getElementById('btn-menu').style.display='';
+  }
+
+  navigateTo('lv-dashboard');
+}
+
+async function _restoreSession() {
+  try {
+    // 1. ลอง SESSION_KEY ของ leave ก่อน
+    const raw = localStorage.getItem(SESSION_KEY);
+    if(raw) {
+      const sess = JSON.parse(raw);
+      const age  = Date.now() - (sess.t||0);
+      if(age <= 8*60*60*1000) {
+        if(sess.mode==='supervisor' && sess.user) {
+          currentUser = sess.user; currentMode = 'supervisor';
+          await _bootApp(); return true;
+        }
+        if(sess.mode==='employee' && sess.emp) {
+          currentEmp  = sess.emp; currentMode = 'employee';
+          currentUser = { id:sess.emp.employee_id, username:sess.emp.employee_id,
+            full_name:sess.emp.name, role:'employee', department:sess.emp.department||'' };
+          await _bootApp(); return true;
+        }
+      } else { localStorage.removeItem(SESSION_KEY); }
+    }
+
+    // 2. SSO — ถ้า login อยู่ใน System 1/2/3 แล้ว ใช้ session เดิมได้เลย
+    const sharedRaw = localStorage.getItem(SHARED_KEY);
+    if(sharedRaw) {
+      const shared = JSON.parse(sharedRaw);
+      const age = Date.now() - (shared._t||0);
+      if(age <= 8*60*60*1000 && shared.username) {
+        currentUser = {
+          id: shared.id, username: shared.username,
+          full_name: shared.full_name||shared.username,
+          role: shared.role||'viewer', department: shared.department||''
+        };
+        currentMode = 'supervisor';
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ user:currentUser, mode:'supervisor', t:Date.now() }));
+        await _bootApp(); return true;
+      }
+    }
+  } catch(_) {}
+  return false;
+}
+
+// Close mobile sidebar on nav
+document.querySelectorAll('.sb-link').forEach(el=>{
+  el.addEventListener('click',()=>{
+    if(window.innerWidth<=768) {
+      const sb=document.getElementById('sidebar');
+      sb.style.display='none';
+    }
+  });
+});
+
+// ─── Deep Link — อ่าน ?page= จาก URL ───────────────────────────────
+function _getUrlPage() {
+  try {
+    return new URLSearchParams(window.location.search).get('page') || '';
+  } catch { return ''; }
+}
+
+// Bootstrap
+(async function init() {
+  const restored = await _restoreSession();
+  if(!restored) {
+    document.getElementById('login-screen').style.display='';
+    loadRecentLvUsers();   // โหลด username ที่เคยใช้ → datalist autocomplete
+    // บันทึกหน้าปลายทางไว้ใน sessionStorage รอหลัง login
+    const targetPage = _getUrlPage();
+    if(targetPage) sessionStorage.setItem('_sn_lv_redirect', targetPage);
+  } else {
+    // restore session สำเร็จ → ตรวจ URL param แล้ว navigate ตรงไปเลย
+    const targetPage = _getUrlPage() || sessionStorage.getItem('_sn_lv_redirect') || '';
+    if(targetPage) {
+      sessionStorage.removeItem('_sn_lv_redirect');
+      navigateTo(targetPage);
+    }
+  }
+})();
+</script>
+</body>
+</html>

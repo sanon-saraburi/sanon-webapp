@@ -7,16 +7,17 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-13)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-15 เย็น)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
-| Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 5 ระบบ (รวมจองห้องประชุม)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns** | ไม่มี Loading Screen (ถูก revert) |
+| Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ (รวมจองห้องประชุม + ขอลา)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns** | ไม่มี Loading Screen (ถูก revert) |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
-| System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | จองห้องประชุม, RBAC 5 ระดับ, อนุมัติ/ปฏิเสธ, ปฏิทิน FullCalendar, pending badge, QR Share link, Print ตาราง, Remember-me, Guest mode, Mobile responsive | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
+| System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request (ขอออกนอกบริเวณ)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function** | ต้องรัน SQL 4 ชุด + Deploy Edge Function + ตั้งค่า LINE OA |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -27,6 +28,15 @@
 | เบิกวัสดุ (inventory_transactions) | JS fetch() ใน inventory.html | ✅ พร้อมใช้ | ส่ง item_name จาก dropdown ตรง — ต้อง Deploy Edge Function ล่าสุด |
 | บันทึกซ่อม (pm_repair_logs) | JS fetch() ใน pm.html | ✅ พร้อมใช้ | ส่งทันทีหลัง INSERT — ต้อง Deploy Edge Function ล่าสุด |
 | สต็อกต่ำกว่า min_stock | `inventory-alert` Edge Function | ✅ ทำงาน | Trigger + Weekly cron (ทุกวันจันทร์) |
+| คำขอลา (leave_requests) | JS fetch() ใน leave.html | ⏳ พร้อมใน Edge Function — รอ Deploy + LINE OA | ส่งเฉพาะ status=pending — buildLeaveRequestCard() |
+| ขอออกนอกบริเวณ (pass_requests) | JS fetch() ใน leave.html | ⏳ พร้อมใน Edge Function — รอ Deploy + LINE OA | pending→แจ้งหัวหน้า, approved(walk-in)→แจ้งยาม — buildPassRequestCard() |
+
+> **⚠️ LINE Notify ปิดบริการแล้ว (1 เม.ย. 2025)** — ระบบแจ้งเตือนทั้งหมดใช้ **LINE Messaging API** แทน (`api.line.me/v2/bot/message/push`)
+> ต้องตั้งค่า Supabase Secrets: `LINE_CHANNEL_TOKEN` + `LINE_GROUP_ID` + `LINE_GROUP_ID_HR` ก่อน Deploy
+
+> **🔒 กฎสำคัญ: ห้ามแก้ไข LINE notification ของ System 1-3 (ผลิต/คลัง/PM)**
+> ระบบแจ้งเตือน System 1-3 → กลุ่มผลิต (`LINE_GROUP_ID`) — **สมบูรณ์แล้ว ห้ามยุ่ง**
+> งานที่เหลือคือ System 6 (ลา/Pass) → กลุ่ม HR (`LINE_GROUP_ID_HR`) เท่านั้น
 
 ---
 
@@ -72,13 +82,16 @@
 > **กฎ:** ทุกครั้งที่มีการแก้ไขหรือทำระบบเพิ่ม ให้ copy ไฟล์ที่แก้ไปไว้ใน `GitHub/` ก่อนเสมอ
 > แล้วค่อย upload ทุกอย่างใน `GitHub/` ขึ้น GitHub — ป้องกันอัปไฟล์ไม่ครบ
 
-### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-08-13)
+### ไฟล์ที่ต้องอยู่ใน GitHub/ เสมอ (อัปเดตล่าสุด: 2026-08-15)
 
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
-| `portal.html` | Portal | 2026-08-13 (เพิ่ม System 5 จองห้องประชุม + meeting_access check) |
-| `index.html` | System 1 | 2026-08-13 (System Switcher 5 ระบบ — Desktop grid-cols-3 + Mobile sheet) |
-| `meeting.html` | System 5 | 2026-08-13 (ระบบจองห้องประชุม — RBAC 5 ระดับ, QR Share, Print, Guest mode) |
+| `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
+| `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
+| `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
+| `leave.html` | System 6 | 2026-08-15 (10 ประเภทลา, Working day จันทร์-เสาร์, พิมพ์ใบลาฟอร์มบริษัท, Calendar วันหยุด, Admin แก้ไข+ลบคำขอ, type-cards 3 คอลัมน์ mobile-friendly, fix emp login onclick) |
+| `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
+| `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
@@ -154,6 +167,7 @@
 - **Supabase Anon Key:** `sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq`
 - **app_users table ร่วมกัน** — login ครั้งเดียวใช้ได้ทุกระบบ (System 1/2/3 เท่านั้น)
 - **checkin_users แยกต่างหาก** — System 4 ใช้ตารางแยก, SESSION_KEY = `_sn_ck2_sess`
+- **System 6 (Leave) ใช้ checkin_users** — Supervisor/Admin login ด้วย checkin_users, Employee quick access ไม่ต้องใส่รหัสผ่าน, SESSION_KEY = `_sn_lv_sess`
 - **ไฟล์ล่าสุดที่แก้ไข:** `checkin.html` — ชื่อระบบ = "ระบบบันทึกเวลาพักพนักงาน"
 - **RBAC ร่วมกัน** — Admin กำหนดสิทธิ์แต่ละระบบผ่าน System 1
 - **แยกไฟล์ HTML** — ไม่ให้ระบบหนึ่งกระทบอีกระบบ
@@ -299,6 +313,96 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-15 (เย็น) — leave.html: Username Autocomplete + Pass/Leave LINE Notification
+
+**`leave.html` — การเปลี่ยนแปลง:**
+- เพิ่ม `<datalist id="lg-user-list">` + `list="lg-user-list"` ใน input username login
+- เพิ่ม `saveRecentLvUser(username)` — บันทึก username ใน `localStorage._sn_lv_recent_users` (max 10, dedup)
+- เพิ่ม `loadRecentLvUsers()` — โหลด datalist ตอนแสดงหน้า login
+- เรียก `saveRecentLvUser()` ใน `doLogin()` หลัง login สำเร็จ
+
+**`line-notify_index.txt` (Edge Function) — การเปลี่ยนแปลง:**
+- เพิ่ม `buildLeaveRequestCard()` — Flex Card สีตามประเภทลา (sick/personal/annual ฯลฯ) แสดงชื่อ/แผนก/วันที่/จำนวนวัน/เหตุผล — ส่งเฉพาะ `status=pending`
+- เพิ่ม `buildPassRequestCard(r, isPending)` — 2 โหมด: pending (🟠 แจ้งหัวหน้า) / approved walk-in (🔵 แจ้งยาม)
+- เพิ่ม handler `leave_requests` + `pass_requests` ใน main serve()
+- ยืนยัน: Edge Function ใช้ **LINE Messaging API** (`api.line.me/v2/bot/message/push`) แล้ว — ไม่ใช่ LINE Notify ที่ปิดไปแล้ว
+
+**⏳ สิ่งที่ต้องทำพรุ่งนี้ก่อน deploy:**
+1. รัน SQL ใน Supabase (ตามลำดับ):
+   - `leave_schema.sql`
+   - `leave_schema_v2_patch.sql`
+   - `leave_schema_v3_patch.sql`
+   - `pass_schema.sql` ← ใหม่
+   - `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` ← สำหรับ System 5
+2. ตั้งค่า LINE Official Account:
+   - สร้าง LINE OA → ได้ Channel Access Token
+   - เพิ่ม Bot เข้ากลุ่ม → ได้ Group ID
+   - ตั้ง Supabase Secrets: `LINE_CHANNEL_TOKEN` + `LINE_GROUP_ID`
+3. Deploy Edge Function `line-notify` (วาง code จาก `line-notify_index.txt`)
+4. Upload GitHub/ → GitHub Pages
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `line-notify_index.txt`, `CLAUDE.md`
+**Copy ไป GitHub/:** `leave.html` ✅ | `line-notify_index.txt` ✅ | `CLAUDE.md` ⏳
+
+---
+
+### 2026-08-14 — meeting.html: No-login Public Booking + Admin Login มุมขวาบน
+
+**`meeting.html` — การเปลี่ยนแปลงหลัก:**
+
+**1. ยกเลิก Login Screen — เปิดปฏิทินตรง:**
+- `DOMContentLoaded`: ซ่อน `#login-screen` ทันที แสดง `#main-app` + ปฏิทินโดยไม่ต้อง login
+- `CURRENT_ROLE = 'user'` เริ่มต้น — ซ่อน sidebar และ admin UI ทั้งหมด
+- ใครมีลิงก์ → เปิดระบบได้เลย จองห้องโดยพิมพ์ชื่อตัวเอง
+
+**2. Admin Login มุมขวาบน:**
+- เพิ่ม `#btn-admin-login` (ปุ่ม "เข้าสู่ระบบผู้ดูแล") ที่ top-bar ขวาสุด
+- เพิ่ม `#admin-login-modal` — modal ป้อน username+password สำหรับ admin เท่านั้น
+- เพิ่ม `#admin-badge` — แสดงชื่อ+avatar เมื่อ Admin logged in
+- `openAdminLoginModal()`, `closeAdminLoginModal()`, `doAdminLogin()`, `applyAdminUI()`
+- `applyAdminUI()`: แสดง sidebar+hamburger, เปลี่ยนป้าย admin, เรียก `applyRole()`
+- Try-restore admin session จาก localStorage ทุกครั้งที่โหลดหน้า
+
+**3. ยกเลิกระบบ Approval — ทุกการจองเป็น confirmed อัตโนมัติ:**
+- `saveBooking()`: เพิ่ม `status: 'confirmed'` ใน payload เสมอ
+- ไม่มีขั้นตอนรออนุมัติ — จองแล้วขึ้นปฏิทินทันที
+- Approval panel ยังมีอยู่ใน sidebar แต่ซ่อนสำหรับ public (`can('approve')` gated)
+
+**4. ต้องระบุชื่อผู้จอง (bk-by) — Validate:**
+- `saveBooking()`: validate `bk-by` เป็น required, focus field ถ้าว่าง
+- ลบ fallback `|| 'Admin'` เดิม
+
+**5. doLogout() → Public mode:**
+- ไม่ redirect ไป login-screen อีกต่อไป
+- Reset `CURRENT_USER` เป็น public user, ซ่อน sidebar+admin-badge, แสดง `#btn-admin-login`
+
+**6. Admin sections ใน sidebar คงอยู่:**
+- จัดการห้อง, จัดการผู้ใช้, ตั้งค่า ยังมีในระบบ
+- แสดงเฉพาะเมื่อ Admin login (`applyRole()` toggle via `can()`)
+- Public user ไม่เห็น management menus เลย
+
+**ไฟล์ที่แก้ไข:** `meeting.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `meeting.html` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-08-13 — meeting.html: Colorful Events + Conflict Detection + Soft Delete + Portal/Index Integration
+
+**`meeting.html` — การเปลี่ยนแปลงหลัก:**
+- Rename จาก `meeting_demo.html` → `meeting.html`
+- `buildEvents()`: custom `eventContent` HTML rendering, สีตามห้อง, filter cancelled
+- `deleteBooking()`: soft-delete (status='cancelled') + restore ด้วย `restoreBooking()`
+- `liveConflictCheck()`: real-time conflict detection ใน booking modal
+- แก้ Hamburger ไม่ทำงานบน mobile — เปลี่ยน `classList.replace` → `style.display+classList`
+- แก้ Login screen ไม่ scroll บน mobile — เปลี่ยน flex center → `overflow-y-auto items-start`
+- ปุ่มจองห้องประชุม: เปลี่ยนเป็น amber/yellow โดดเด่น
+
+**`portal.html` + `index.html`:** เพิ่ม System 5 card (จองห้องประชุม) ใน switcher ทุก platform
+
+**ไฟล์ที่แก้ไข:** `meeting.html`, `portal.html`, `index.html`, `CLAUDE.md`
+
+---
 
 ### 2026-08-08 — index.html: แก้ Export รายงานการผลิต + เปลี่ยน Export Excel → CSV
 

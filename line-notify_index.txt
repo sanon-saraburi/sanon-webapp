@@ -1,0 +1,488 @@
+// =====================================================================
+// line-notify/index.ts — Supabase Edge Function
+// แจ้งเตือน LINE กลุ่มเมื่อมีรายการรออนุมัติ (Real-time)
+//
+// รองรับ:
+//   System 1 — production_cde / propel / sanon1 / sanon2 (status=pending)
+//   System 2 — inventory_transactions (transaction_type=withdraw, status=pending)
+//   System 3 — pm_repair_logs (บันทึกซ่อมใหม่)
+//
+// Environment Variables (ตั้งใน Supabase Dashboard → Settings → Edge Functions):
+//   LINE_CHANNEL_TOKEN  — Channel Access Token (Long-lived) จาก LINE Developers
+//   LINE_GROUP_ID       — Group ID ของกลุ่ม LINE ที่ต้องการแจ้ง
+// =====================================================================
+
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+
+// ─── Config ─────────────────────────────────────────────────────────
+const LINE_TOKEN       = Deno.env.get("LINE_CHANNEL_TOKEN") ?? "";
+const LINE_GROUP_ID    = Deno.env.get("LINE_GROUP_ID") ?? "";       // กลุ่มผลิต/คลัง/PM (System 1-3)
+const LINE_GROUP_ID_HR = Deno.env.get("LINE_GROUP_ID_HR") ?? "";    // กลุ่ม HR (System 6: ลา/Pass)
+const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "https://pcmpwkcmvsxrvbximjgf.supabase.co";
+const SUPABASE_KEY     = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+const FACTORY_COLOR: Record<string, string> = {
+  production_cde:    "#1a56a4",
+  production_propel: "#166534",
+  production_sanon1: "#92400e",
+  production_sanon2: "#5b21b6",
+};
+
+const FACTORY_LABEL: Record<string, string> = {
+  production_cde:    "🔵 CDE",
+  production_propel: "🟢 Propel",
+  production_sanon1: "🟡 Sanon 1",
+  production_sanon2: "🟣 Sanon 2",
+};
+
+const PROD_TABLES = Object.keys(FACTORY_LABEL);
+
+// ─── Supabase REST Helpers ───────────────────────────────────────────
+async function fetchOne(table: string, id: string, select: string): Promise<Record<string, string>> {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=${select}&limit=1`,
+      { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } }
+    );
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? data[0] : {};
+  } catch {
+    return {};
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+function fmtNum(v: unknown, digits = 2) {
+  const n = Number(v);
+  return isNaN(n) ? "-" : n.toLocaleString("th-TH", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function fmtDate(v: unknown) {
+  if (!v) return "-";
+  const d = new Date(String(v));
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function row(icon: string, text: string) {
+  return {
+    type: "box", layout: "baseline", spacing: "sm",
+    contents: [
+      { type: "text", text: icon, size: "sm", flex: 0 },
+      { type: "text", text: text, size: "sm", color: "#333333", wrap: true },
+    ],
+  };
+}
+
+// ─── Flex Message Builders ───────────────────────────────────────────
+function buildProductionCard(table: string, r: Record<string, unknown>, recorderName: string) {
+  const color = FACTORY_COLOR[table] ?? "#0c1e40";
+  const label = FACTORY_LABEL[table] ?? table;
+  const rtH   = Number(r.runtime_hour ?? 0);
+  const rtM   = Number(r.runtime_minute ?? 0);
+
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: color, paddingAll: "14px",
+      contents: [
+        { type: "text", text: "⏳  รออนุมัติ · ระบบผลิต", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: label, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("📅", `วันที่: ${fmtDate(r.production_date)}`),
+        row("📊", `หินป้อน: ${fmtNum(r.feed_ton)} ตัน`),
+        row("⏱", `Runtime: ${rtH} ชม. ${rtM} น.`),
+        row("👤", `บันทึกโดย: ${recorderName}`),
+        { type: "separator", margin: "sm" },
+        { type: "text", text: "กรุณาเข้าระบบเพื่ออนุมัติ", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
+      ],
+    },
+  };
+}
+
+function buildInventoryCard(r: Record<string, unknown>, itemName: string, itemUnit: string) {
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: "#0f766e", paddingAll: "14px",
+      contents: [
+        { type: "text", text: "⏳  รออนุมัติ · ระบบคลังวัสดุ", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: "🗄️ คำขอเบิกวัสดุ", size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("📦", `วัสดุ: ${itemName}`),
+        row("🔢", `จำนวน: ${fmtNum(r.quantity, 0)} ${itemUnit}`),
+        row("📅", `วันที่เบิก: ${r.withdraw_date ? fmtDate(String(r.withdraw_date)) : fmtDate(String(r.created_at ?? ""))}`),
+        row("🏭", `แผนก/โรงงาน: ${[r.factory, r.department].filter(Boolean).join(" / ") || "-"}`),
+        row("👤", `ขอเบิกโดย: ${r.requested_by ?? "-"}`),
+        row("📋", `เลขที่: ${r.doc_no ?? "-"}`),
+        { type: "separator", margin: "sm" },
+        { type: "text", text: "กรุณาเข้าระบบเพื่ออนุมัติ", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
+      ],
+    },
+  };
+}
+
+function buildMeterLogCard(r: Record<string, unknown>) {
+  const hasMeter2  = r.has_meter_2 as boolean;
+  const engLabel   = String(r.meter_1_label ?? "ชม.เครื่องยนต์");
+  const hydLabel   = String(r.meter_2_label ?? "ชม.ไฮโดรลิค");
+  const engHours   = r.engine_hours  != null ? `${fmtNum(r.engine_hours, 2)} ชม.`  : "-";
+  const hydHours   = r.hydraulic_hours != null ? `${fmtNum(r.hydraulic_hours, 2)} ชม.` : "-";
+  const contents: unknown[] = [
+    row("📅", `วันที่: ${fmtDate(r.log_date)}`),
+    row("🏭", `โรงงาน: ${r.factory ?? "-"}`),
+    row("⚙️", `${engLabel}: ${r.engine_start ?? "-"} → ${r.engine_stop ?? "-"} (${engHours})`),
+  ];
+  if (hasMeter2) contents.push(row("🔧", `${hydLabel}: ${r.hydraulic_start ?? "-"} → ${r.hydraulic_stop ?? "-"} (${hydHours})`));
+  contents.push(row("👤", `บันทึกโดย: ${r.recorded_by ?? "-"}`));
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: "#334155", paddingAll: "14px",
+      contents: [
+        { type: "text", text: "📋  บันทึกรอบมิเตอร์ · ระบบ PM", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: `⚙️ ${r.machine_name ?? "-"}`, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: { type: "box", layout: "vertical", spacing: "sm", contents },
+  };
+}
+
+function buildPmAlertCard(r: Record<string, unknown>) {
+  const alerts = (r.alerts ?? []) as Array<{ name: string; status: string; remaining: number; interval: number }>;
+  const hasOverdue = alerts.some(a => a.status === "overdue");
+  const bgColor    = hasOverdue ? "#991b1b" : "#92400e";
+  const alertRows  = alerts.flatMap(a => {
+    const icon        = a.status === "overdue" ? "🔴" : "🟡";
+    const statusLabel = a.status === "overdue" ? "เกินกำหนด" : "ใกล้ถึงกำหนด";
+    return [
+      row(icon, `${a.name} — ${statusLabel}`),
+      { type: "box", layout: "baseline", spacing: "sm",
+        contents: [
+          { type: "text", text: " ", size: "xs", flex: 0 },
+          { type: "text", text: `คงเหลือ: ${a.remaining} ชม. (รอบ ${a.interval} ชม.)`, size: "xxs", color: "#e65c00", wrap: true },
+        ],
+      },
+    ];
+  });
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: bgColor, paddingAll: "14px",
+      contents: [
+        { type: "text", text: hasOverdue ? "🔴  PM เกินกำหนด · ระบบ PM" : "🟡  PM ใกล้ถึงกำหนด · ระบบ PM",
+          size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: `⚙️ ${r.machine_name ?? "-"}`, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: `🏭 ${r.factory ?? "-"} | มิเตอร์: ${fmtNum(r.current_meter, 0)} ชม.`, size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        { type: "text", text: `${alerts.length} รายการ PM ที่ต้องดำเนินการ`, size: "sm",
+          weight: "bold", color: hasOverdue ? "#b91c1c" : "#92400e" },
+        { type: "separator", margin: "sm" },
+        ...alertRows,
+        { type: "separator", margin: "sm" },
+        { type: "text", text: "กรุณาเข้าระบบเพื่อบันทึก PM", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
+      ],
+    },
+  };
+}
+
+function buildLowStockCard(r: Record<string, unknown>) {
+  const shortage = Math.max(0, Number(r.min_stock ?? 0) - Number(r.stock_qty ?? 0));
+  const unit     = String(r.unit ?? "");
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: "#b91c1c", paddingAll: "14px",
+      contents: [
+        { type: "text", text: "⚠️  สต็อกต่ำกว่าเกณฑ์ · คลังวัสดุ", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: `🏭 ${r.location ?? "-"}`, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("📦", `วัสดุ: ${r.item_name}${r.item_code ? ` [${r.item_code}]` : ""}`),
+        row("📉", `คงเหลือ: ${fmtNum(r.stock_qty, 2)} ${unit}`),
+        row("⛔", `ขั้นต่ำ: ${fmtNum(r.min_stock, 2)} ${unit}`),
+        row("📋", `ขาด: ${fmtNum(shortage, 2)} ${unit}`),
+        { type: "separator", margin: "sm" },
+        { type: "text", text: "กรุณาดำเนินการสั่งซื้อ/รับวัสดุเพิ่ม", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
+      ],
+    },
+  };
+}
+
+function buildRepairCard(r: Record<string, unknown>) {
+  const typeLabel: Record<string, string> = {
+    breakdown: "🔴 Breakdown", planned: "🟡 ซ่อมตามแผน", inspection: "🟢 ตรวจสอบ",
+  };
+  const repairType = typeLabel[String(r.type)] ?? String(r.type ?? "-");
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: "#b45309", paddingAll: "14px",
+      contents: [
+        { type: "text", text: "🔧  บันทึกซ่อมใหม่ · ระบบ PM", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: repairType, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("📅", `วันที่: ${fmtDate(r.repair_date)}`),
+        row("🔍", `อาการ: ${r.symptoms ?? "-"}`),
+        row("⏱", `ระยะเวลา: ${r.duration_hours ?? "-"} ชม.`),
+        row("💰", `ค่าใช้จ่าย: ${r.total_cost != null ? fmtNum(r.total_cost, 0) + " บาท" : "-"}`),
+        row("👤", `บันทึกโดย: ${r.created_by ?? "-"}`),
+      ],
+    },
+  };
+}
+
+const LEAVE_APP_URL = "https://sanon-saraburi.github.io/sanon-webapp/leave.html";
+
+function buildLeaveRequestCard(r: Record<string, unknown>) {
+  const TYPE_COLOR: Record<string, string> = {
+    sick: "#dc2626", personal: "#d97706", annual: "#16a34a",
+    out: "#2563eb", wedding: "#db2777", maternity: "#9333ea",
+    ordination: "#f59e0b", funeral: "#475569", training: "#0891b2", other: "#64748b",
+  };
+  const typeCode  = String(r.type_code ?? "other");
+  const bgColor   = TYPE_COLOR[typeCode] ?? "#64748b";
+  const typeName  = String(r.type_name ?? "ลา");
+  const days      = Number(r.days ?? 0);
+  const halfLabel = r.half_day === "am" ? " (ครึ่งเช้า)" : r.half_day === "pm" ? " (ครึ่งบ่าย)" : "";
+  const daysText  = days === 0.5 ? `ครึ่งวัน${halfLabel}` : `${days} วัน${halfLabel}`;
+  const startFmt  = fmtDate(r.start_date);
+  const endFmt    = r.start_date === r.end_date ? "" : ` – ${fmtDate(r.end_date)}`;
+
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: bgColor, paddingAll: "14px",
+      contents: [
+        { type: "text", text: "📋  คำขอลาใหม่ · ระบบขอลา", size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: typeName, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
+        row("🏢", `แผนก: ${r.department ?? "-"}`),
+        row("📅", `วันที่: ${startFmt}${endFmt}`),
+        row("🗓", `จำนวน: ${daysText}`),
+        ...(r.reason ? [row("📝", `เหตุผล: ${r.reason}`)] : []),
+      ],
+    },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: bgColor, height: "sm",
+        action: {
+          type: "uri", label: "👆 ไปหน้าอนุมัติ",
+          uri: `${LEAVE_APP_URL}?page=lv-approvals`,
+        },
+      }],
+    },
+  };
+}
+
+function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
+  const bgColor  = isPending ? "#ea580c" : "#0891b2";
+  const header1  = isPending ? "⏳  รออนุมัติ · ขอออกนอกบริเวณ" : "✅  ผ่านอัตโนมัติ · ขอออกนอกบริเวณ";
+  const btnLabel = isPending ? "👆 ไปหน้าอนุมัติ" : "👆 ดูรายละเอียด";
+  const targetPage = isPending ? "lv-pass-approve" : "lv-pass-hist";
+
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "vertical", backgroundColor: bgColor, paddingAll: "14px",
+      contents: [
+        { type: "text", text: header1, size: "xxs", color: "#ffffffaa" },
+        { type: "text", text: `🚪 ${r.reason_name ?? "ออกนอกบริเวณ"}`, size: "xl", weight: "bold", color: "#ffffff" },
+        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
+        row("🏢", `แผนก: ${r.department ?? "-"}`),
+        row("📅", `วันที่: ${fmtDate(r.request_date)}`),
+        row("🕐", `ออก: ${String(r.out_time ?? "-").slice(0,5)} น. — คาดกลับ: ${String(r.expected_return ?? "-").slice(0,5)} น.`),
+        ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
+      ],
+    },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: bgColor, height: "sm",
+        action: {
+          type: "uri", label: btnLabel,
+          uri: `${LEAVE_APP_URL}?page=${targetPage}`,
+        },
+      }],
+    },
+  };
+}
+
+// ─── Send LINE Push ──────────────────────────────────────────────────
+async function sendLine(flexBubble: unknown, groupId?: string) {
+  const toGroup = groupId || LINE_GROUP_ID;
+  if (!toGroup) throw new Error("LINE_GROUP_ID not configured");
+
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${LINE_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: toGroup,
+      messages: [{ type: "flex", altText: "มีรายการรออนุมัติ — สานนท์", contents: flexBubble }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("LINE API error:", res.status, err);
+    throw new Error(`LINE push failed: ${res.status}`);
+  }
+}
+
+// ─── CORS Headers ────────────────────────────────────────────────────
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// ─── Main Handler ────────────────────────────────────────────────────
+serve(async (req) => {
+  // รับ CORS Preflight (browser ส่งมาก่อน POST จริงเสมอเมื่อ Content-Type: application/json)
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: CORS });
+  }
+
+  if (!LINE_TOKEN || !LINE_GROUP_ID) {
+    console.error("Missing LINE_CHANNEL_TOKEN or LINE_GROUP_ID");
+    return new Response("config_missing", { status: 500, headers: CORS });
+  }
+
+  // ใช้ req.text() + JSON.parse() เพื่อกัน parse error และ log body จริงได้
+  let rawBody = "";
+  let body: { type: string; table: string; record: Record<string, unknown> };
+  try {
+    rawBody = await req.text();
+    console.log("raw body:", rawBody.slice(0, 300));
+    body = JSON.parse(rawBody);
+  } catch (e) {
+    console.error("parse error:", e, "raw:", rawBody.slice(0, 300));
+    return new Response("parse_error", { status: 400, headers: CORS });
+  }
+
+  const { type, table, record } = body;
+
+  if (type !== "INSERT") return new Response("skip:not_insert", { status: 200, headers: CORS });
+
+  try {
+    // ── System 1: Production ──────────────────────────────────────
+    if (PROD_TABLES.includes(table)) {
+      if (record.status !== "pending") return new Response("skip:not_pending", { status: 200, headers: CORS });
+      // ใช้ recorder_name จาก record ถ้ามี (frontend ส่งมา) หรือ lookup จาก DB
+      let recorderName = String(record.recorder_name ?? "");
+      if (!recorderName && record.created_by) {
+        const user = await fetchOne("app_users", String(record.created_by), "full_name");
+        recorderName = user.full_name ?? "-";
+      }
+      if (!recorderName) recorderName = "-";
+      await sendLine(buildProductionCard(table, record, recorderName));
+      return new Response("sent:production", { status: 200, headers: CORS });
+    }
+
+    // ── System 2: Inventory ───────────────────────────────────────
+    if (table === "inventory_transactions") {
+      if (record.transaction_type !== "withdraw" || record.status !== "pending") {
+        return new Response("skip:not_pending_withdraw", { status: 200, headers: CORS });
+      }
+      // ใช้ item_name/item_unit จาก record ถ้ามี (frontend ส่งมา) หรือ lookup จาก DB
+      let itemName = String(record.item_name ?? "");
+      let itemUnit = String(record.item_unit ?? "");
+      if (!itemName && record.item_id) {
+        const item = await fetchOne("inventory_items", String(record.item_id), "name,unit");
+        itemName = item.name ?? "-";
+        itemUnit = item.unit ?? "";
+      }
+      if (!itemName) itemName = "-";
+      await sendLine(buildInventoryCard(record, itemName, itemUnit));
+      return new Response("sent:inventory", { status: 200, headers: CORS });
+    }
+
+    // ── System 3: PM Repair ───────────────────────────────────────
+    if (table === "pm_repair_logs") {
+      await sendLine(buildRepairCard(record));
+      return new Response("sent:pm_repair", { status: 200, headers: CORS });
+    }
+
+    // ── System 3: PM Meter Log ────────────────────────────────────
+    if (table === "pm_meter_logs") {
+      await sendLine(buildMeterLogCard(record));
+      return new Response("sent:pm_meter", { status: 200, headers: CORS });
+    }
+
+    // ── System 3: PM Due Alert (overdue / near threshold) ─────────
+    if (table === "pm_alert") {
+      const alerts = record.alerts as unknown[];
+      if (!alerts || alerts.length === 0) return new Response("skip:no_alerts", { status: 200, headers: CORS });
+      await sendLine(buildPmAlertCard(record));
+      return new Response("sent:pm_alert", { status: 200, headers: CORS });
+    }
+
+    // ── System 2: Low Stock Alert (real-time, หลังอนุมัติ/เบิก) ──
+    if (table === "low_stock_alert") {
+      await sendLine(buildLowStockCard(record));
+      return new Response("sent:low_stock", { status: 200, headers: CORS });
+    }
+
+    // ── System 6: Leave Request → กลุ่ม HR ───────────────────────
+    if (table === "leave_requests") {
+      if (record.status !== "pending") return new Response("skip:not_pending", { status: 200, headers: CORS });
+      await sendLine(buildLeaveRequestCard(record), LINE_GROUP_ID_HR || LINE_GROUP_ID);
+      return new Response("sent:leave_request", { status: 200, headers: CORS });
+    }
+
+    // ── System 6: Pass Request → กลุ่ม HR ────────────────────────
+    if (table === "pass_requests") {
+      if (record.status === "pending") {
+        await sendLine(buildPassRequestCard(record, true), LINE_GROUP_ID_HR || LINE_GROUP_ID);
+        return new Response("sent:pass_pending", { status: 200, headers: CORS });
+      }
+      if (record.status === "approved") {
+        await sendLine(buildPassRequestCard(record, false), LINE_GROUP_ID_HR || LINE_GROUP_ID);
+        return new Response("sent:pass_walkin", { status: 200, headers: CORS });
+      }
+      return new Response("skip:pass_other_status", { status: 200, headers: CORS });
+    }
+
+    return new Response("skip:unknown_table", { status: 200, headers: CORS });
+
+  } catch (err) {
+    console.error("Error:", err);
+    return new Response(String(err), { status: 500, headers: CORS });
+  }
+});

@@ -209,6 +209,21 @@ const SYSTEMS = [
         d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
     </svg>`,
   },
+  {
+    id: 6,
+    name: 'ขอลา / อนุมัติลา',
+    sub: 'ลาป่วย / ลากิจ / พักร้อน',
+    url: '/sanon-webapp/leave.html',
+    prefixes: [],           // เปิดให้ทุก User ที่ login แล้วเข้าได้
+    usesMeetingAccess: false,
+    openAll: true,          // ทุกคนมีสิทธิ์เสมอ
+    grad: 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+    glow: 'rgba(124,58,237,0.3)',
+    icon: `<svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+    </svg>`,
+  },
 ];
 
 // ─── SECTION 2: State ──────────────────────────────────────────
@@ -310,6 +325,8 @@ async function getAllowedMenus(user) {
 }
 
 function hasSystemAccess(menus, sys) {
+  // System 6 — ขอลา: ทุกคนมีสิทธิ์เสมอ
+  if (sys.openAll) return true;
   // System 5 — จองห้องประชุม: ใช้ meeting_access column
   if (sys.usesMeetingAccess) {
     if (menus === 'all') return true;                // admin เห็นเสมอ
