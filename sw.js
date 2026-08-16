@@ -56,7 +56,8 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone()));
+          const clone = res.clone(); // clone ก่อน return เสมอ
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
           return res;
         })
         .catch(() => caches.match(e.request))
@@ -69,7 +70,10 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        if (res.ok) caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone()));
+        if (res.ok) {
+          const clone = res.clone(); // clone ก่อน return เสมอ
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        }
         return res;
       });
     })
