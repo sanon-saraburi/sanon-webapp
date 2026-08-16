@@ -294,14 +294,30 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
       ],
     },
     footer: {
-      type: "box", layout: "vertical", paddingAll: "12px",
-      contents: [{
-        type: "button", style: "primary", color: bgColor, height: "sm",
-        action: {
-          type: "uri", label: "👆 ไปหน้าอนุมัติ",
-          uri: `${LEAVE_APP_URL}?page=lv-approvals`,
+      type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px",
+      contents: [
+        {
+          type: "box", layout: "horizontal", spacing: "sm",
+          contents: [
+            {
+              type: "button", style: "primary", color: "#16a34a", height: "sm", flex: 1,
+              action: { type: "postback", label: "✅ อนุมัติ",
+                data: `lv_approve:${r.request_id}:${String(r.employee_name ?? "")}`,
+                displayText: "อนุมัติคำขอลา" },
+            },
+            {
+              type: "button", style: "primary", color: "#dc2626", height: "sm", flex: 1,
+              action: { type: "postback", label: "❌ ไม่อนุมัติ",
+                data: `lv_reject:${r.request_id}:${String(r.employee_name ?? "")}`,
+                displayText: "ไม่อนุมัติคำขอลา" },
+            },
+          ],
         },
-      }],
+        {
+          type: "button", style: "secondary", height: "sm",
+          action: { type: "uri", label: "🔗 ดูรายละเอียด", uri: `${LEAVE_APP_URL}?page=lv-approvals` },
+        },
+      ],
     },
   };
 }
@@ -404,10 +420,74 @@ serve(async (req) => {
       const src = ev?.source ?? {};
       if (src.type === "group") {
         console.log(`[LINE Webhook] groupId: ${src.groupId} | eventType: ${ev.type}`);
-      } else if (src.type === "room") {
-        console.log(`[LINE Webhook] roomId: ${src.roomId} | eventType: ${ev.type}`);
-      } else {
-        console.log(`[LINE Webhook] source: ${JSON.stringify(src)} | eventType: ${ev.type}`);
+      }
+
+      // ─── Postback: อนุมัติ / ไม่อนุมัติ ผ่าน LINE ──────────────────
+      if (ev.type === "postback") {
+        const data    = ev.postback?.data ?? "";
+        const parts   = data.split(":");
+        const action  = parts[0];
+        const reqId   = parts[1];
+        const empName = parts[2] ?? "";
+        const toGroup = LINE_GROUP_ID_HR || LINE_GROUP_ID;
+
+        if ((action === "lv_approve" || action === "lv_reject") && reqId) {
+          // ดึงชื่อ approver จาก LINE Profile
+          let approverName = "ผ่าน LINE";
+          try {
+            const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${src.userId}`, {
+              headers: { Authorization: `Bearer ${LINE_TOKEN}` }
+            });
+            if (profileRes.ok) {
+              const profile = await profileRes.json();
+              approverName = profile.displayName ?? approverName;
+            }
+          } catch (_) { /* ใช้ค่า default */ }
+
+          const newStatus = action === "lv_approve" ? "approved" : "rejected";
+          const rejectNote = action === "lv_reject" ? "ไม่อนุมัติผ่าน LINE" : null;
+
+          // อัปเดต Supabase
+          const patchBody: Record<string, unknown> = {
+            status: newStatus,
+            approver_name: approverName,
+            approved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          if (rejectNote) patchBody.reject_note = rejectNote;
+
+          const patchRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/leave_requests?request_id=eq.${reqId}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json", Prefer: "return=minimal",
+              },
+              body: JSON.stringify(patchBody),
+            }
+          );
+
+          // ส่งข้อความยืนยันกลับกลุ่ม HR
+          const emoji   = action === "lv_approve" ? "✅" : "❌";
+          const word    = action === "lv_approve" ? "อนุมัติ" : "ไม่อนุมัติ";
+          const confirm = {
+            type: "bubble", size: "kilo",
+            body: {
+              type: "box", layout: "vertical", spacing: "sm",
+              contents: [
+                { type: "text", text: `${emoji} ${word}คำขอลาแล้ว`, weight: "bold", size: "lg", color: action === "lv_approve" ? "#16a34a" : "#dc2626" },
+                { type: "text", text: `พนักงาน: ${empName}`, size: "sm", color: "#475569" },
+                { type: "text", text: `โดย: ${approverName}`, size: "sm", color: "#94a3b8" },
+              ],
+            },
+          };
+          if (patchRes.ok || patchRes.status === 204) {
+            await sendLine(confirm, toGroup);
+          } else {
+            console.error("PATCH failed:", patchRes.status, await patchRes.text());
+          }
+        }
       }
     }
     // ต้อง return 200 OK ให้ LINE เสมอ

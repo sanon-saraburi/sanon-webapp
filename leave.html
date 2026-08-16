@@ -653,8 +653,11 @@ async function renderDashboard() {
     sb.from('leave_types').select('*').eq('is_active',true).order('sort_order'),
     sb.from('leave_requests').select('*').eq('employee_id', empId)
       .order('created_at',{ascending:false}).limit(5),
-    can('approve') ? sb.from('leave_requests').select('request_id').eq('status','pending')
-      .eq('department', currentUser?.department||'') : Promise.resolve({data:[]}),
+    can('approve') ? (()=>{
+      let q = sb.from('leave_requests').select('request_id').eq('status','pending');
+      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      return q;
+    })() : Promise.resolve({data:[]}),
     sb.from('leave_balances').select('*').eq('employee_id', empId).eq('year', year)
   ]);
 
