@@ -386,7 +386,8 @@ serve(async (req) => {
 
   // ใช้ req.text() + JSON.parse() เพื่อกัน parse error และ log body จริงได้
   let rawBody = "";
-  let body: { type: string; table: string; record: Record<string, unknown> };
+  // deno-lint-ignore no-explicit-any
+  let body: any;
   try {
     rawBody = await req.text();
     console.log("raw body:", rawBody.slice(0, 300));
@@ -394,6 +395,23 @@ serve(async (req) => {
   } catch (e) {
     console.error("parse error:", e, "raw:", rawBody.slice(0, 300));
     return new Response("parse_error", { status: 400, headers: CORS });
+  }
+
+  // ─── LINE Webhook (incoming events จาก LINE Platform) ──────────────
+  // เมื่อมีข้อความเข้ากลุ่ม LINE → log groupId เพื่อใช้ตั้งค่า LINE_GROUP_ID_HR
+  if (body.destination && Array.isArray(body.events)) {
+    for (const ev of body.events) {
+      const src = ev?.source ?? {};
+      if (src.type === "group") {
+        console.log(`[LINE Webhook] groupId: ${src.groupId} | eventType: ${ev.type}`);
+      } else if (src.type === "room") {
+        console.log(`[LINE Webhook] roomId: ${src.roomId} | eventType: ${ev.type}`);
+      } else {
+        console.log(`[LINE Webhook] source: ${JSON.stringify(src)} | eventType: ${ev.type}`);
+      }
+    }
+    // ต้อง return 200 OK ให้ LINE เสมอ
+    return new Response(JSON.stringify({ status: "ok" }), { status: 200, headers: CORS });
   }
 
   const { type, table, record } = body;

@@ -2326,38 +2326,20 @@ async function saveDeptSupervisor(dept) {
 // SECTION 14 — LINE Notify
 // ─────────────────────────────────────────────────────────────
 async function sendLineNotify(req, event) {
+  // แจ้งเฉพาะคำขอใหม่ (pending) → กลุ่ม HR ผ่าน Edge Function
+  if (event !== 'new') return;
   try {
-    // Get token: try dept token first, fallback to default
-    const { data:deptData } = await sb.from('leave_dept_supervisors').select('line_token').eq('department',req.department||'').single();
-    const { data:settData } = await sb.from('leave_settings').select('value').eq('key','line_token_default').single();
-    const { data:urlData }  = await sb.from('leave_settings').select('value').eq('key','app_url').single();
-
-    const token   = deptData?.line_token || settData?.value || '';
-    const appUrl  = urlData?.value || 'https://sanon-saraburi.github.io/sanon-webapp/leave.html';
-
-    if(!token) return; // ไม่มี token → ข้าม
-
-    const typeColors = {sick:'🤒',personal:'📌',annual:'🏖️',out:'🚗'};
-    const icon = typeColors[req.type_code]||'📋';
-
-    let msg='';
-    if(event==='new') {
-      msg=`\n📋 คำขอลาใหม่\n──────────────\n👤 ${req.employee_name}\n🏭 ${req.department||'—'}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date} (${req.days} วัน)\n📝 ${req.reason||'ไม่ระบุเหตุผล'}\n──────────────\n⏳ รออนุมัติ\n🔗 ${appUrl}`;
-    } else if(event==='approved') {
-      msg=`\n✅ อนุมัติคำขอลา\n──────────────\n👤 ${req.employee_name}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date} (${req.days} วัน)\n👔 อนุมัติโดย: ${req.approver_name||'—'}\n🔗 ${appUrl}`;
-    } else if(event==='rejected') {
-      msg=`\n❌ ปฏิเสธคำขอลา\n──────────────\n👤 ${req.employee_name}\n${icon} ${req.type_name}\n📅 ${req.start_date} ถึง ${req.end_date}\n👔 ปฏิเสธโดย: ${req.approver_name||'—'}\n📝 เหตุผล: ${req.reject_note||'—'}`;
-    }
-
-    // Call LINE Notify via Edge Function (หลีกเลี่ยง CORS)
-    await sb.functions.invoke('line-notify', {
-      body: { type:'leave', token, message:msg, record:req }
-    });
-
-    // Mark as notified
-    await sb.from('leave_requests').update({line_notified:true}).eq('request_id',req.request_id);
+    fetch(`${SB_URL}/functions/v1/line-notify`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'INSERT',
+        table: 'leave_requests',
+        record: { ...req, status: 'pending' }
+      })
+    }).catch(e => console.warn('LINE notify failed:', e));
   } catch(e) {
-    console.warn('LINE notify failed:', e);
+    console.warn('LINE notify error:', e);
   }
 }
 
