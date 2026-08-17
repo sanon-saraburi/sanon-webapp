@@ -15,9 +15,12 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // ─── Config ─────────────────────────────────────────────────────────
-const LINE_TOKEN       = Deno.env.get("LINE_CHANNEL_TOKEN") ?? "";
-const LINE_GROUP_ID    = Deno.env.get("LINE_GROUP_ID") ?? "";       // กลุ่มผลิต/คลัง/PM (System 1-3)
-const LINE_GROUP_ID_HR = Deno.env.get("LINE_GROUP_ID_HR") ?? "";    // กลุ่ม HR (System 6: ลา/Pass)
+const LINE_TOKEN          = Deno.env.get("LINE_CHANNEL_TOKEN") ?? "";          // OA ผลิต (System 1-3)
+const LINE_TOKEN_HR       = Deno.env.get("LINE_CHANNEL_TOKEN_HR") ?? "";       // OA HR (ลา + Pass pending)
+const LINE_TOKEN_SEC      = Deno.env.get("LINE_CHANNEL_TOKEN_SECURITY") ?? ""; // OA รปภ. (Pass approved) — quota แยกต่างหาก
+const LINE_GROUP_ID       = Deno.env.get("LINE_GROUP_ID") ?? "";               // กลุ่มผลิต/คลัง/PM
+const LINE_GROUP_ID_HR    = Deno.env.get("LINE_GROUP_ID_HR") ?? "";            // กลุ่ม HR
+const LINE_GROUP_ID_SEC   = Deno.env.get("LINE_GROUP_ID_SECURITY") ?? "";      // กลุ่ม รปภ.
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "https://pcmpwkcmvsxrvbximjgf.supabase.co";
 const SUPABASE_KEY     = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
@@ -98,9 +101,14 @@ function buildProductionCard(table: string, r: Record<string, unknown>, recorder
         row("📊", `หินป้อน: ${fmtNum(r.feed_ton)} ตัน`),
         row("⏱", `Runtime: ${rtH} ชม. ${rtM} น.`),
         row("👤", `บันทึกโดย: ${recorderName}`),
-        { type: "separator", margin: "sm" },
-        { type: "text", text: "กรุณาเข้าระบบเพื่ออนุมัติ", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
       ],
+    },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: color, height: "sm",
+        action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${PROD_APP_URL}?page=manage-approvals` },
+      }],
     },
   };
 }
@@ -125,9 +133,14 @@ function buildInventoryCard(r: Record<string, unknown>, itemName: string, itemUn
         row("🏭", `แผนก/โรงงาน: ${[r.factory, r.department].filter(Boolean).join(" / ") || "-"}`),
         row("👤", `ขอเบิกโดย: ${r.requested_by ?? "-"}`),
         row("📋", `เลขที่: ${r.doc_no ?? "-"}`),
-        { type: "separator", margin: "sm" },
-        { type: "text", text: "กรุณาเข้าระบบเพื่ออนุมัติ", size: "xs", color: "#e65c00", align: "center", margin: "sm" },
       ],
+    },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: "#0f766e", height: "sm",
+        action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${INV_APP_URL}?page=inv-approvals` },
+      }],
     },
   };
 }
@@ -253,9 +266,19 @@ function buildRepairCard(r: Record<string, unknown>) {
         row("👤", `บันทึกโดย: ${r.created_by ?? "-"}`),
       ],
     },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: "#b45309", height: "sm",
+        action: { type: "uri", label: "👆 ดูบันทึกซ่อม", uri: `${PM_APP_URL}?page=pm-repair` },
+      }],
+    },
   };
 }
 
+const PROD_APP_URL  = "https://sanon-saraburi.github.io/sanon-webapp/index.html";
+const INV_APP_URL   = "https://sanon-saraburi.github.io/sanon-webapp/inventory.html";
+const PM_APP_URL    = "https://sanon-saraburi.github.io/sanon-webapp/pm.html";
 const LEAVE_APP_URL = "https://sanon-saraburi.github.io/sanon-webapp/leave.html";
 
 function buildLeaveRequestCard(r: Record<string, unknown>) {
@@ -272,15 +295,25 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
   const daysText  = days === 0.5 ? `ครึ่งวัน${halfLabel}` : `${days} วัน${halfLabel}`;
   const startFmt  = fmtDate(r.start_date);
   const endFmt    = r.start_date === r.end_date ? "" : ` – ${fmtDate(r.end_date)}`;
+  const photoUrl  = r.photo_url ? String(r.photo_url) : null;
 
   return {
     type: "bubble", size: "kilo",
     header: {
-      type: "box", layout: "vertical", backgroundColor: bgColor, paddingAll: "14px",
+      type: "box", layout: "horizontal", backgroundColor: bgColor, paddingAll: "14px",
       contents: [
-        { type: "text", text: "📋  คำขอลาใหม่ · ระบบขอลา", size: "xxs", color: "#ffffffaa" },
-        { type: "text", text: typeName, size: "xl", weight: "bold", color: "#ffffff" },
-        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+        {
+          type: "box", layout: "vertical", flex: 1,
+          contents: [
+            { type: "text", text: "📋  คำขอลาใหม่ · ระบบขอลา", size: "xxs", color: "#ffffffaa" },
+            { type: "text", text: typeName, size: "xl", weight: "bold", color: "#ffffff" },
+            { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+          ],
+        },
+        ...(photoUrl ? [{
+          type: "image", url: photoUrl, size: "60px", flex: 0,
+          aspectRatio: "1:1", aspectMode: "cover", cornerRadius: "100px", margin: "md",
+        }] : []),
       ],
     },
     body: {
@@ -323,52 +356,98 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
 }
 
 function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
-  const bgColor  = isPending ? "#ea580c" : "#0891b2";
-  const header1  = isPending ? "⏳  รออนุมัติ · ขอออกนอกบริเวณ" : "✅  ผ่านอัตโนมัติ · ขอออกนอกบริเวณ";
-  const btnLabel = isPending ? "👆 ไปหน้าอนุมัติ" : "👆 ดูรายละเอียด";
-  const targetPage = isPending ? "lv-pass-approve" : "lv-pass-hist";
+  const photoUrl = r.photo_url ? String(r.photo_url) : null;
+  const photoImg = photoUrl ? [{
+    type: "image", url: photoUrl, size: "60px", flex: 0,
+    aspectRatio: "1:1", aspectMode: "cover", cornerRadius: "100px", margin: "md",
+  }] : [];
 
-  return {
-    type: "bubble", size: "kilo",
-    header: {
-      type: "box", layout: "vertical", backgroundColor: bgColor, paddingAll: "14px",
-      contents: [
-        { type: "text", text: header1, size: "xxs", color: "#ffffffaa" },
-        { type: "text", text: `🚪 ${r.reason_name ?? "ออกนอกบริเวณ"}`, size: "xl", weight: "bold", color: "#ffffff" },
-        { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
-      ],
-    },
-    body: {
-      type: "box", layout: "vertical", spacing: "sm",
-      contents: [
-        row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
-        row("🏢", `แผนก: ${r.department ?? "-"}`),
-        row("📅", `วันที่: ${fmtDate(r.request_date)}`),
-        row("🕐", `ออก: ${String(r.out_time ?? "-").slice(0,5)} น. — คาดกลับ: ${String(r.expected_return ?? "-").slice(0,5)} น.`),
-        ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
-      ],
-    },
-    footer: {
-      type: "box", layout: "vertical", paddingAll: "12px",
-      contents: [{
-        type: "button", style: "primary", color: bgColor, height: "sm",
-        action: {
-          type: "uri", label: btnLabel,
-          uri: `${LEAVE_APP_URL}?page=${targetPage}`,
-        },
-      }],
-    },
-  };
+  if (isPending) {
+    // ── Pending → แจ้งกลุ่ม HR (หัวหน้ารออนุมัติ) ───────────────
+    return {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "horizontal", backgroundColor: "#ea580c", paddingAll: "14px",
+        contents: [
+          {
+            type: "box", layout: "vertical", flex: 1,
+            contents: [
+              { type: "text", text: "⏳  รออนุมัติ · ขอออกนอกบริเวณ", size: "xxs", color: "#ffffffaa" },
+              { type: "text", text: `🚪 ${r.reason_name ?? "ออกนอกบริเวณ"}`, size: "xl", weight: "bold", color: "#ffffff" },
+              { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+            ],
+          },
+          ...photoImg,
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm",
+        contents: [
+          row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
+          row("🏢", `แผนก: ${r.department ?? "-"}`),
+          row("📅", `วันที่: ${fmtDate(r.request_date)}`),
+          row("🕐", `ออก: ${String(r.out_time ?? "-").slice(0,5)} น. — คาดกลับ: ${String(r.expected_return ?? "-").slice(0,5)} น.`),
+          ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "12px",
+        contents: [{
+          type: "button", style: "primary", color: "#ea580c", height: "sm",
+          action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${LEAVE_APP_URL}?page=lv-pass-approve` },
+        }],
+      },
+    };
+  } else {
+    // ── Approved → แจ้งกลุ่ม รปภ. (พนักงานได้รับอนุมัติ กำลังออกนอก) ──
+    return {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "horizontal", backgroundColor: "#059669", paddingAll: "14px",
+        contents: [
+          {
+            type: "box", layout: "vertical", flex: 1,
+            contents: [
+              { type: "text", text: "✅  อนุมัติแล้ว · พนักงานออกนอกบริเวณ", size: "xxs", color: "#ffffffaa" },
+              { type: "text", text: `🚪 ${r.reason_name ?? "ออกนอกบริเวณ"}`, size: "xl", weight: "bold", color: "#ffffff" },
+              { type: "text", text: "กรุณาตรวจสอบบัตรพนักงาน", size: "xs", color: "#ffffff88" },
+            ],
+          },
+          ...photoImg,
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm",
+        contents: [
+          row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
+          row("🏢", `แผนก: ${r.department ?? "-"}`),
+          row("📅", `วันที่: ${fmtDate(r.request_date)}`),
+          row("🕐", `ออก: ${String(r.out_time ?? "-").slice(0,5)} น. — คาดกลับ: ${String(r.expected_return ?? "-").slice(0,5)} น.`),
+          ...(r.approved_by ? [row("✔️", `อนุมัติโดย: ${r.approved_by}`)] : []),
+          ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "12px",
+        contents: [{
+          type: "button", style: "primary", color: "#059669", height: "sm",
+          action: { type: "uri", label: "👆 ดูรายละเอียด", uri: `${LEAVE_APP_URL}?page=lv-pass-hist` },
+        }],
+      },
+    };
+  }
 }
 
 // ─── Send LINE Push ──────────────────────────────────────────────────
-async function sendLine(flexBubble: unknown, groupId?: string) {
+async function sendLine(flexBubble: unknown, groupId?: string, token?: string) {
   const toGroup = groupId || LINE_GROUP_ID;
+  const useToken = token || LINE_TOKEN;
   if (!toGroup) throw new Error("LINE_GROUP_ID not configured");
+  if (!useToken) throw new Error("LINE_CHANNEL_TOKEN not configured");
 
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
-    headers: { Authorization: `Bearer ${LINE_TOKEN}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${useToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       to: toGroup,
       messages: [{ type: "flex", altText: "มีรายการรออนุมัติ — สานนท์", contents: flexBubble }],
@@ -376,6 +455,11 @@ async function sendLine(flexBubble: unknown, groupId?: string) {
   });
   if (!res.ok) {
     const err = await res.text();
+    if (res.status === 429) {
+      // Quota เกิน — ตรวจสอบได้ที่ LINE OA Manager → Messaging API → Monthly quota
+      console.error("[LINE QUOTA EXCEEDED] status 429 — OA token เริ่มด้วย:", useToken.slice(0,10), "| ตรวจสอบที่ https://manager.line.biz → เลือก OA → Messaging API → จำนวนข้อความ");
+      throw new Error("LINE_QUOTA_EXCEEDED: ข้อความเกิน 200 msg/เดือน กรุณาตรวจสอบ LINE OA Manager");
+    }
     console.error("LINE API error:", res.status, err);
     throw new Error(`LINE push failed: ${res.status}`);
   }
@@ -389,10 +473,46 @@ const CORS = {
 };
 
 // ─── Main Handler ────────────────────────────────────────────────────
+// ─── LINE Quota Checker ─────────────────────────────────────────────
+async function getLineQuota(token: string): Promise<{ quota: number|null; usage: number; type: string; error?: string }> {
+  if (!token) return { quota: null, usage: 0, type: "not_configured" };
+  try {
+    const [qRes, uRes] = await Promise.all([
+      fetch("https://api.line.me/v2/bot/quota",             { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("https://api.line.me/v2/bot/quota/consumption", { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    const q = await qRes.json();
+    const u = await uRes.json();
+    return {
+      type:  q.type ?? "unknown",          // "limited" | "unlimited"
+      quota: q.type === "limited" ? (q.value ?? 200) : null,
+      usage: u.totalUsage ?? 0,
+    };
+  } catch (e) {
+    return { quota: null, usage: 0, type: "error", error: String(e) };
+  }
+}
+
 serve(async (req) => {
-  // รับ CORS Preflight (browser ส่งมาก่อน POST จริงเสมอเมื่อ Content-Type: application/json)
+  // รับ CORS Preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS });
+  }
+
+  // ── GET /line-notify → ดึง quota ทุก OA ───────────────────────
+  if (req.method === "GET") {
+    const oaList = [
+      { name: "OA ผลิต (System 1-3)", token: LINE_TOKEN },
+      { name: "OA HR (ลา/Pass pending)", token: LINE_TOKEN_HR },
+      { name: "OA รปภ. (Pass approved)", token: LINE_TOKEN_SEC },
+    ];
+    const results = await Promise.all(
+      oaList.map(async (oa) => ({ label: oa.name, ...(await getLineQuota(oa.token)) }))
+    );
+    return new Response(JSON.stringify(results), {
+      status: 200,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
   }
 
   if (!LINE_TOKEN || !LINE_GROUP_ID) {
@@ -436,7 +556,7 @@ serve(async (req) => {
           let approverName = "ผ่าน LINE";
           try {
             const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${src.userId}`, {
-              headers: { Authorization: `Bearer ${LINE_TOKEN}` }
+              headers: { Authorization: `Bearer ${LINE_TOKEN_HR || LINE_TOKEN}` }
             });
             if (profileRes.ok) {
               const profile = await profileRes.json();
@@ -557,22 +677,32 @@ serve(async (req) => {
       return new Response("sent:low_stock", { status: 200, headers: CORS });
     }
 
-    // ── System 6: Leave Request → กลุ่ม HR ───────────────────────
+    // ── System 6: Leave Request → OA HR (LINE_CHANNEL_TOKEN_HR) ──
     if (table === "leave_requests") {
       if (record.status !== "pending") return new Response("skip:not_pending", { status: 200, headers: CORS });
-      await sendLine(buildLeaveRequestCard(record), LINE_GROUP_ID_HR || LINE_GROUP_ID);
+      const hrGroup = LINE_GROUP_ID_HR || LINE_GROUP_ID;
+      const hrToken = LINE_TOKEN_HR || LINE_TOKEN;   // fallback ถ้ายังไม่ตั้ง HR token
+      await sendLine(buildLeaveRequestCard(record), hrGroup, hrToken);
       return new Response("sent:leave_request", { status: 200, headers: CORS });
     }
 
-    // ── System 6: Pass Request → กลุ่ม HR ────────────────────────
+    // ── System 6: Pass Request ────────────────────────────────────
+    //    pending  → กลุ่ม HR   (หัวหน้าอนุมัติ)
+    //    approved → กลุ่ม รปภ. (แจ้งยามว่าพนักงานได้รับอนุมัติแล้ว)
     if (table === "pass_requests") {
+      const hrToken = LINE_TOKEN_HR || LINE_TOKEN;
       if (record.status === "pending") {
-        await sendLine(buildPassRequestCard(record, true), LINE_GROUP_ID_HR || LINE_GROUP_ID);
+        const toGroup = LINE_GROUP_ID_HR || LINE_GROUP_ID;
+        await sendLine(buildPassRequestCard(record, true), toGroup, hrToken);
         return new Response("sent:pass_pending", { status: 200, headers: CORS });
       }
       if (record.status === "approved") {
-        await sendLine(buildPassRequestCard(record, false), LINE_GROUP_ID_HR || LINE_GROUP_ID);
-        return new Response("sent:pass_walkin", { status: 200, headers: CORS });
+        // ส่งไปกลุ่ม รปภ. ด้วย OA รปภ. (token แยก quota)
+        // fallback: ถ้ายังไม่ตั้ง TOKEN_SECURITY → ใช้ TOKEN_HR, ถ้าไม่มี GROUP_SEC → ใช้ GROUP_HR
+        const secToken = LINE_TOKEN_SEC || hrToken;
+        const toGroup  = LINE_GROUP_ID_SEC || LINE_GROUP_ID_HR || LINE_GROUP_ID;
+        await sendLine(buildPassRequestCard(record, false), toGroup, secToken);
+        return new Response("sent:pass_approved_security", { status: 200, headers: CORS });
       }
       return new Response("skip:pass_other_status", { status: 200, headers: CORS });
     }

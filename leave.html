@@ -2127,7 +2127,8 @@ async function sendPassLineNotify(passId, r, event) {
           out_time:      r.out_time,
           expected_return: r.expected_return,
           note:          r.note,
-          approver_name: r.approver_name || null
+          approver_name: r.approver_name || null,
+          photo_url:     currentEmp?.photo_url || null
         }
       })
     }).catch(e => console.warn('pass LINE notify failed:', e));
@@ -2412,6 +2413,60 @@ async function saveNewPin() {
 // ── รีเซ็ต PIN (Admin) ─────────────────────────────────────────
 let _resetPinEmpId = null;
 
+// ─── LINE Quota Monitor ──────────────────────────────────────────────
+async function loadLineQuota() {
+  const area = document.getElementById('line-quota-area');
+  const btn  = document.getElementById('btn-refresh-quota');
+  if (!area) return;
+  area.innerHTML = '<div style="text-align:center;color:#94a3b8;font-size:13px;padding:16px;">⏳ กำลังโหลด...</div>';
+  if (btn) btn.disabled = true;
+  try {
+    const res  = await fetch(`${SB_URL}/functions/v1/line-notify`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${SB_KEY}` }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json(); // [{label, type, quota, usage, error?}]
+    area.innerHTML = data.map(oa => {
+      if (oa.type === 'not_configured') {
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="font-size:13px;flex:1;color:#94a3b8;">${oa.label}</span>
+          <span style="font-size:11px;color:#cbd5e1;background:#f8fafc;padding:2px 8px;border-radius:4px;">ยังไม่ตั้งค่า Token</span>
+        </div>`;
+      }
+      if (oa.type === 'error') {
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9;">
+          <span style="font-size:13px;flex:1;">${oa.label}</span>
+          <span style="font-size:11px;color:#ef4444;">⚠ โหลดไม่ได้</span>
+        </div>`;
+      }
+      const used   = oa.usage || 0;
+      const limit  = oa.quota || 200;
+      const pct    = oa.type === 'unlimited' ? 0 : Math.min(100, Math.round(used / limit * 100));
+      const color  = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
+      const remain = oa.type === 'unlimited' ? '∞' : (limit - used);
+      return `<div style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:13px;font-weight:600;color:#1e293b;">${oa.label}</span>
+          <span style="font-size:12px;font-weight:700;color:${color};">${used}${oa.type==='unlimited'?'':'/' + limit} msg</span>
+        </div>
+        ${oa.type !== 'unlimited' ? `
+        <div style="height:6px;background:#e2e8f0;border-radius:4px;overflow:hidden;">
+          <div style="height:100%;background:${color};border-radius:4px;width:${pct}%;transition:width .4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:#94a3b8;">${pct}% ใช้ไปแล้ว</span>
+          <span style="font-size:10px;color:#64748b;">เหลือ ${remain} msg</span>
+        </div>` : '<span style="font-size:11px;color:#22c55e;">Unlimited plan</span>'}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    area.innerHTML = `<div style="color:#ef4444;font-size:12px;padding:8px;">โหลดไม่ได้: ${e.message}</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function searchResetPin(q) {
   const res = document.getElementById('reset-pin-result');
   _resetPinEmpId = null;
@@ -2451,6 +2506,24 @@ async function doResetPin() {
 
 async function renderSettings() {
   if(!can('admin')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">เฉพาะผู้ดูแลระบบเท่านั้น</div>'; return; }
+
+  // โหลด LINE quota ใน background — แสดง warning banner ถ้า OA ไหนใกล้เต็ม
+  fetch(`${SB_URL}/functions/v1/line-notify`, { method:'GET', headers:{ Authorization:`Bearer ${SB_KEY}` } })
+    .then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return;
+      const warn = data.filter(oa => oa.type==='limited' && oa.quota && (oa.usage/oa.quota) >= 0.8);
+      const exceeded = data.filter(oa => oa.type==='limited' && oa.quota && oa.usage >= oa.quota);
+      const banner = document.getElementById('line-quota-banner');
+      if (!banner) return;
+      if (exceeded.length) {
+        banner.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#b91c1c;">🚨 <b>LINE quota เต็มแล้ว!</b> OA ที่หมด: ${exceeded.map(o=>o.label).join(', ')} — ข้อความจะไม่ถูกส่งจนกว่าจะถึงเดือนถัดไป หรือ upgrade plan</div>`;
+      } else if (warn.length) {
+        banner.innerHTML = `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">⚠️ <b>LINE quota ใกล้เต็ม!</b> OA ที่ใกล้เต็ม: ${warn.map(o=>`${o.label} (${o.usage}/${o.quota})`).join(', ')} — ตรวจสอบที่ตั้งค่าระบบ</div>`;
+      } else { banner.innerHTML = ''; }
+      // โหลดผลใน quota area ด้วย
+      const area = document.getElementById('line-quota-area');
+      if (area) { area.innerHTML = ''; loadLineQuota(); }
+    }).catch(()=>{});
 
   const [typesRes, deptSupRes, settRes, deptListRes] = await Promise.all([
     sb.from('leave_types').select('*').order('sort_order'),
@@ -2495,6 +2568,9 @@ async function renderSettings() {
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:900px;">
+
+    <!-- LINE Quota Warning Banner (โหลด async หลัง render) -->
+    <div id="line-quota-banner"></div>
 
     <!-- LINE Token -->
     <div class="card">
@@ -2564,6 +2640,18 @@ async function renderSettings() {
         <button class="btn btn-outline btn-sm" onclick="addPassRule()">+ เพิ่มเหตุผล</button>
         <button class="btn btn-primary btn-sm" onclick="savePassTimeRules()">💾 บันทึกกฎเวลาพัก</button>
         <button class="btn btn-outline btn-sm" onclick="loadPassTimeRulesEditor()">↺ รีเฟรช</button>
+      </div>
+    </div>
+
+    <!-- LINE Quota Monitor -->
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📊 LINE Quota เดือนนี้</div>
+        <button class="btn btn-outline btn-sm" onclick="loadLineQuota()" id="btn-refresh-quota">🔄 รีเฟรช</button>
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:0 0 12px;">ตรวจสอบจำนวนข้อความที่ใช้ไปแล้วของแต่ละ LINE OA (free tier = 200 msg/เดือน)</p>
+      <div id="line-quota-area">
+        <div style="text-align:center;color:#94a3b8;font-size:13px;padding:16px;">กด รีเฟรช เพื่อโหลดข้อมูล</div>
       </div>
     </div>
 
@@ -3009,7 +3097,7 @@ async function sendLineNotify(req, event) {
       body: JSON.stringify({
         type: 'INSERT',
         table: 'leave_requests',
-        record: { ...req, status: 'pending' }
+        record: { ...req, status: 'pending', photo_url: currentEmp?.photo_url || null }
       })
     }).catch(e => console.warn('LINE notify failed:', e));
   } catch(e) {
