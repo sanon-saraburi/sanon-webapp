@@ -15,12 +15,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // ─── Config ─────────────────────────────────────────────────────────
-const LINE_TOKEN          = Deno.env.get("LINE_CHANNEL_TOKEN") ?? "";          // OA ผลิต (System 1-3)
-const LINE_TOKEN_HR       = Deno.env.get("LINE_CHANNEL_TOKEN_HR") ?? "";       // OA HR (ลา + Pass pending)
-const LINE_TOKEN_SEC      = Deno.env.get("LINE_CHANNEL_TOKEN_SECURITY") ?? ""; // OA รปภ. (Pass approved) — quota แยกต่างหาก
-const LINE_GROUP_ID       = Deno.env.get("LINE_GROUP_ID") ?? "";               // กลุ่มผลิต/คลัง/PM
-const LINE_GROUP_ID_HR    = Deno.env.get("LINE_GROUP_ID_HR") ?? "";            // กลุ่ม HR
-const LINE_GROUP_ID_SEC   = Deno.env.get("LINE_GROUP_ID_SECURITY") ?? "";      // กลุ่ม รปภ.
+const LINE_TOKEN          = Deno.env.get("LINE_CHANNEL_TOKEN") ?? "";           // OA ผลิต (System 1-3)
+const LINE_TOKEN_HR       = Deno.env.get("LINE_CHANNEL_TOKEN_HR") ?? "";        // OA HR primary
+const LINE_TOKEN_HR_2     = Deno.env.get("LINE_CHANNEL_TOKEN_HR_2") ?? "";      // OA HR backup (quota fallback)
+const LINE_TOKEN_SEC      = Deno.env.get("LINE_CHANNEL_TOKEN_SECURITY") ?? "";  // OA รปภ. primary
+const LINE_TOKEN_SEC_2    = Deno.env.get("LINE_CHANNEL_TOKEN_SECURITY_2") ?? "";// OA รปภ. backup (quota fallback)
+const LINE_GROUP_ID       = Deno.env.get("LINE_GROUP_ID") ?? "";                // กลุ่มผลิต/คลัง/PM
+const LINE_GROUP_ID_HR    = Deno.env.get("LINE_GROUP_ID_HR") ?? "";             // กลุ่ม HR
+const LINE_GROUP_ID_SEC   = Deno.env.get("LINE_GROUP_ID_SECURITY") ?? "";       // กลุ่ม รปภ.
 const SUPABASE_URL     = Deno.env.get("SUPABASE_URL") ?? "https://pcmpwkcmvsxrvbximjgf.supabase.co";
 const SUPABASE_KEY     = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
@@ -311,8 +313,12 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
           ],
         },
         ...(photoUrl ? [{
-          type: "image", url: photoUrl, size: "60px", flex: 0,
-          aspectRatio: "1:1", aspectMode: "cover", cornerRadius: "100px", margin: "md",
+          type: "box", layout: "vertical", width: "60px", height: "60px",
+          cornerRadius: "30px", margin: "md", flex: 0,
+          contents: [{
+            type: "image", url: photoUrl, size: "full",
+            aspectRatio: "1:1", aspectMode: "cover",
+          }],
         }] : []),
       ],
     },
@@ -358,8 +364,12 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
 function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
   const photoUrl = r.photo_url ? String(r.photo_url) : null;
   const photoImg = photoUrl ? [{
-    type: "image", url: photoUrl, size: "60px", flex: 0,
-    aspectRatio: "1:1", aspectMode: "cover", cornerRadius: "100px", margin: "md",
+    type: "box", layout: "vertical", width: "60px", height: "60px",
+    cornerRadius: "30px", margin: "md", flex: 0,
+    contents: [{
+      type: "image", url: photoUrl, size: "full",
+      aspectRatio: "1:1", aspectMode: "cover",
+    }],
   }] : [];
 
   if (isPending) {
@@ -439,7 +449,7 @@ function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
 }
 
 // ─── Send LINE Push ──────────────────────────────────────────────────
-async function sendLine(flexBubble: unknown, groupId?: string, token?: string) {
+async function sendLine(flexBubble: unknown, groupId?: string, token?: string, backupToken?: string) {
   const toGroup = groupId || LINE_GROUP_ID;
   const useToken = token || LINE_TOKEN;
   if (!toGroup) throw new Error("LINE_GROUP_ID not configured");
@@ -456,9 +466,13 @@ async function sendLine(flexBubble: unknown, groupId?: string, token?: string) {
   if (!res.ok) {
     const err = await res.text();
     if (res.status === 429) {
-      // Quota เกิน — ตรวจสอบได้ที่ LINE OA Manager → Messaging API → Monthly quota
-      console.error("[LINE QUOTA EXCEEDED] status 429 — OA token เริ่มด้วย:", useToken.slice(0,10), "| ตรวจสอบที่ https://manager.line.biz → เลือก OA → Messaging API → จำนวนข้อความ");
-      throw new Error("LINE_QUOTA_EXCEEDED: ข้อความเกิน 200 msg/เดือน กรุณาตรวจสอบ LINE OA Manager");
+      if (backupToken) {
+        // Quota เกิน → สลับไป backup token อัตโนมัติ
+        console.log("[LINE QUOTA] Primary token เต็ม → สลับ backup token");
+        return sendLine(flexBubble, toGroup, backupToken);
+      }
+      console.error("[LINE QUOTA EXCEEDED] status 429 — OA token เริ่มด้วย:", useToken.slice(0,10));
+      throw new Error("LINE_QUOTA_EXCEEDED: ข้อความเกิน 200 msg/เดือน");
     }
     console.error("LINE API error:", res.status, err);
     throw new Error(`LINE push failed: ${res.status}`);
@@ -680,9 +694,10 @@ serve(async (req) => {
     // ── System 6: Leave Request → OA HR (LINE_CHANNEL_TOKEN_HR) ──
     if (table === "leave_requests") {
       if (record.status !== "pending") return new Response("skip:not_pending", { status: 200, headers: CORS });
-      const hrGroup = LINE_GROUP_ID_HR || LINE_GROUP_ID;
-      const hrToken = LINE_TOKEN_HR || LINE_TOKEN;   // fallback ถ้ายังไม่ตั้ง HR token
-      await sendLine(buildLeaveRequestCard(record), hrGroup, hrToken);
+      const hrGroup   = LINE_GROUP_ID_HR || LINE_GROUP_ID;
+      const hrToken   = LINE_TOKEN_HR || LINE_TOKEN;
+      const hrBackup  = LINE_TOKEN_HR_2 || "";       // backup เมื่อ OA HR primary เต็ม quota
+      await sendLine(buildLeaveRequestCard(record), hrGroup, hrToken, hrBackup);
       return new Response("sent:leave_request", { status: 200, headers: CORS });
     }
 
@@ -690,18 +705,18 @@ serve(async (req) => {
     //    pending  → กลุ่ม HR   (หัวหน้าอนุมัติ)
     //    approved → กลุ่ม รปภ. (แจ้งยามว่าพนักงานได้รับอนุมัติแล้ว)
     if (table === "pass_requests") {
-      const hrToken = LINE_TOKEN_HR || LINE_TOKEN;
+      const hrToken  = LINE_TOKEN_HR || LINE_TOKEN;
+      const hrBackup = LINE_TOKEN_HR_2 || "";
       if (record.status === "pending") {
         const toGroup = LINE_GROUP_ID_HR || LINE_GROUP_ID;
-        await sendLine(buildPassRequestCard(record, true), toGroup, hrToken);
+        await sendLine(buildPassRequestCard(record, true), toGroup, hrToken, hrBackup);
         return new Response("sent:pass_pending", { status: 200, headers: CORS });
       }
       if (record.status === "approved") {
-        // ส่งไปกลุ่ม รปภ. ด้วย OA รปภ. (token แยก quota)
-        // fallback: ถ้ายังไม่ตั้ง TOKEN_SECURITY → ใช้ TOKEN_HR, ถ้าไม่มี GROUP_SEC → ใช้ GROUP_HR
-        const secToken = LINE_TOKEN_SEC || hrToken;
-        const toGroup  = LINE_GROUP_ID_SEC || LINE_GROUP_ID_HR || LINE_GROUP_ID;
-        await sendLine(buildPassRequestCard(record, false), toGroup, secToken);
+        const secToken  = LINE_TOKEN_SEC || hrToken;
+        const secBackup = LINE_TOKEN_SEC_2 || "";    // backup เมื่อ OA Security primary เต็ม quota
+        const toGroup   = LINE_GROUP_ID_SEC || LINE_GROUP_ID_HR || LINE_GROUP_ID;
+        await sendLine(buildPassRequestCard(record, false), toGroup, secToken, secBackup);
         return new Response("sent:pass_approved_security", { status: 200, headers: CORS });
       }
       return new Response("skip:pass_other_status", { status: 200, headers: CORS });

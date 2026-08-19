@@ -7,7 +7,7 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-16)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-17)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
@@ -28,15 +28,18 @@
 | เบิกวัสดุ (inventory_transactions) | JS fetch() ใน inventory.html | ✅ พร้อมใช้ | ส่ง item_name จาก dropdown ตรง — ต้อง Deploy Edge Function ล่าสุด |
 | บันทึกซ่อม (pm_repair_logs) | JS fetch() ใน pm.html | ✅ พร้อมใช้ | ส่งทันทีหลัง INSERT — ต้อง Deploy Edge Function ล่าสุด |
 | สต็อกต่ำกว่า min_stock | `inventory-alert` Edge Function | ✅ ทำงาน | Trigger + Weekly cron (ทุกวันจันทร์) |
-| คำขอลา (leave_requests) | JS fetch() ใน leave.html | ⏳ พร้อมใน Edge Function — รอ Deploy + LINE OA | ส่งเฉพาะ status=pending — buildLeaveRequestCard() |
-| ขอออกนอกบริเวณ (pass_requests) | JS fetch() ใน leave.html | ⏳ พร้อมใน Edge Function — รอ Deploy + LINE OA | pending→แจ้งหัวหน้า, approved(walk-in)→แจ้งยาม — buildPassRequestCard() |
+| คำขอลา (leave_requests) | JS fetch() ใน leave.html | ✅ ทำงานแล้ว | ส่งไปกลุ่ม HR (Sanon HR 2) — OA HR — มีรูปโปรไฟล์พนักงานในการ์ด |
+| ขอออกนอกบริเวณ (pass_requests) | JS fetch() ใน leave.html | ✅ ทำงานแล้ว | pending→กลุ่ม HR, approved→กลุ่ม รปภ. (Sanon Security) — มีรูปโปรไฟล์พนักงานในการ์ด |
 
 > **⚠️ LINE Notify ปิดบริการแล้ว (1 เม.ย. 2025)** — ระบบแจ้งเตือนทั้งหมดใช้ **LINE Messaging API** แทน (`api.line.me/v2/bot/message/push`)
-> ต้องตั้งค่า Supabase Secrets: `LINE_CHANNEL_TOKEN` + `LINE_GROUP_ID` + `LINE_GROUP_ID_HR` ก่อน Deploy
+
+> **3 LINE OA (แยก quota 200 msg/เดือนต่อ OA):**
+> - OA ผลิต (Sanon Production) → กลุ่มผลิต — System 1-3 — **Secrets: `LINE_CHANNEL_TOKEN` + `LINE_GROUP_ID`**
+> - OA HR (Sanon HR) → กลุ่ม Sanon HR 2 (`C35db76ecdc10af3e1fef08821131ffbf`) — Leave+Pass pending — **Secrets: `LINE_CHANNEL_TOKEN_HR` + `LINE_GROUP_ID_HR`**
+> - OA รปภ. (Sanon Security) → กลุ่ม รปภ สานนท์ (`Cb48b8d0469f371b84292eed2b1320959`) — Pass approved — **Secrets: `LINE_CHANNEL_TOKEN_SECURITY` + `LINE_GROUP_ID_SECURITY`**
 
 > **🔒 กฎสำคัญ: ห้ามแก้ไข LINE notification ของ System 1-3 (ผลิต/คลัง/PM)**
 > ระบบแจ้งเตือน System 1-3 → กลุ่มผลิต (`LINE_GROUP_ID`) — **สมบูรณ์แล้ว ห้ามยุ่ง**
-> งานที่เหลือคือ System 6 (ลา/Pass) → กลุ่ม HR (`LINE_GROUP_ID_HR`) เท่านั้น
 
 ---
 
@@ -89,13 +92,14 @@
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
 | `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
-| `leave.html` | System 6 | 2026-08-16 (PIN 4 หลัก + รูปโปรไฟล์พนักงานใน Dashboard) |
+| `leave.html` | System 6 | 2026-08-17 (เพิ่ม photo_url ใน sendLineNotify + sendPassLineNotify payload) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
-| `CLAUDE.md` | ทุกระบบ | 2026-08-16 |
+| `line-notify_index.txt` | Edge Function | 2026-08-17 (3 OA support + profile lookup ใช้ LINE_TOKEN_HR + photo_url ใน Leave/Pass card) |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-17 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
@@ -313,6 +317,46 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-17 — LINE 3 OA + รูปโปรไฟล์ใน LINE Card
+
+**เป้าหมาย:** แยก LINE OA 3 บัญชี เพื่อแบ่ง quota 200 msg/เดือน และแยกกลุ่มแจ้งเตือน
+
+**LINE OA ที่สร้างใหม่:**
+- **Sanon HR** → กลุ่ม "Sanon HR 2" — Leave requests (pending) + Pass requests (pending)
+- **Sanon Security** → กลุ่ม "รปภ สานนท์" — Pass requests (approved)
+
+**Supabase Secrets (ครบทั้ง 6):**
+- `LINE_CHANNEL_TOKEN` / `LINE_GROUP_ID` — OA ผลิต → กลุ่มผลิต (เดิม)
+- `LINE_CHANNEL_TOKEN_HR` / `LINE_GROUP_ID_HR` = `C35db76ecdc10af3e1fef08821131ffbf` — OA HR
+- `LINE_CHANNEL_TOKEN_SECURITY` / `LINE_GROUP_ID_SECURITY` = `Cb48b8d0469f371b84292eed2b1320959` — OA รปภ.
+
+**`line-notify_index.txt` — การเปลี่ยนแปลง:**
+- เพิ่มตัวแปร `LINE_TOKEN_HR`, `LINE_TOKEN_SEC`, `LINE_GROUP_ID_HR`, `LINE_GROUP_ID_SEC`
+- `buildLeaveRequestCard()`: header เปลี่ยนเป็น `layout: "horizontal"` — มีรูปโปรไฟล์ (`photo_url`) ขนาด 60px ทรงกลมมุมขวา
+- `buildPassRequestCard()`: เช่นเดียวกัน (ทั้ง pending และ approved mode)
+- Postback handler: เปลี่ยน profile lookup จาก `LINE_TOKEN` → `LINE_TOKEN_HR || LINE_TOKEN` (แสดงชื่อผู้อนุมัติถูกต้อง)
+- Leave routing: ใช้ `LINE_TOKEN_HR || LINE_TOKEN` + `LINE_GROUP_ID_HR || LINE_GROUP_ID`
+- Pass approved routing: ใช้ `LINE_TOKEN_SEC` → กลุ่ม รปภ.
+
+**`leave.html` — การเปลี่ยนแปลง:**
+- `sendLineNotify()`: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน payload
+- `sendPassLineNotify()`: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน payload
+
+**ทดสอบแล้ว ✅:**
+- Leave request → Sanon HR 2 ✅
+- Pass pending → Sanon HR 2 ✅
+- Pass approved → รปภ สานนท์ ✅
+- กด อนุมัติ/ไม่อนุมัติ ใน LINE → อัปเดต DB ทันที ✅
+
+**⏳ สิ่งที่ยังต้องทำ:**
+- Deploy `line-notify_index.txt` ล่าสุด (มีรูปโปรไฟล์) ใน Supabase
+- Upload `leave.html` ขึ้น GitHub Pages
+
+**ไฟล์ที่แก้ไข:** `line-notify_index.txt`, `leave.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `line-notify_index.txt` ✅ | `leave.html` ✅ | `CLAUDE.md` ✅
+
+---
 
 ### 2026-08-16 — leave.html: PIN 4 หลัก สำหรับ Employee Mode
 
