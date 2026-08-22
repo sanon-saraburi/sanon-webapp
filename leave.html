@@ -1982,6 +1982,7 @@ async function dashApprove(id) {
   }).eq('request_id',id).select().single();
   if(error) { showToast('อนุมัติไม่สำเร็จ','error'); return; }
   await sendLineNotify(data, 'approved');
+  _sendBroadcastNotif(data.employee_id, { icon:'📋', label:data.type_name||'คำขอลา', detail:`${data.start_date||''} · ${data.days||0} วัน`, status:'approved', note:'' });
   showToast('อนุมัติเรียบร้อย ✅','success');
   renderDashboard(); // reload dashboard
 }
@@ -1997,6 +1998,7 @@ async function approveRequest(id) {
 
   if(error) { showToast('อนุมัติไม่สำเร็จ','error'); return; }
   await sendLineNotify(data, 'approved');
+  _sendBroadcastNotif(data.employee_id, { icon:'📋', label:data.type_name||'คำขอลา', detail:`${data.start_date||''} · ${data.days||0} วัน`, status:'approved', note:'' });
   showToast('อนุมัติเรียบร้อย ✅','success');
   currentPage === 'lv-dashboard' ? renderDashboard() : renderApprovals();
 }
@@ -2028,6 +2030,7 @@ async function rejectRequest(id) {
   if(error) { document.getElementById('rj-err').textContent='เกิดข้อผิดพลาด: '+(error.message||error); return; }
   closeModal();
   await sendLineNotify(data,'rejected');
+  _sendBroadcastNotif(data.employee_id, { icon:'📋', label:data.type_name||'คำขอลา', detail:`${data.start_date||''} · ${data.days||0} วัน`, status:'rejected', note:data.reject_note||'' });
   showToast('ปฏิเสธคำขอเรียบร้อย','info');
   currentPage === 'lv-dashboard' ? renderDashboard() : renderApprovals();
 }
@@ -2514,16 +2517,18 @@ async function approvePass(passId) {
     if (emp?.photo_url) data.photo_url = emp.photo_url;
   }
   sendPassLineNotify(passId, data, 'approved');
+  _sendBroadcastNotif(data.employee_id, { icon:'🚪', label:data.reason_name||'ขอออกนอกบริเวณ', detail:`${data.request_date||''} · ${data.out_time||''} → ${data.expected_return||''}`, status:'approved', note:'' });
   showToast('✅ อนุมัติคำขอเรียบร้อย','success');
   renderPassApprovals();
 }
 
 async function rejectPass(passId) {
   const note = prompt('ระบุเหตุผลที่ปฏิเสธ (ถ้ามี):');
-  const { error } = await sb.from('pass_requests').update({
+  const { data, error } = await sb.from('pass_requests').update({
     status:'rejected', reject_note: note||null, updated_at: new Date().toISOString()
-  }).eq('pass_id',passId);
+  }).eq('pass_id',passId).select().single();
   if(error){ showToast('ปฏิเสธไม่สำเร็จ','error'); return; }
+  if(data) _sendBroadcastNotif(data.employee_id, { icon:'🚪', label:data.reason_name||'ขอออกนอกบริเวณ', detail:`${data.request_date||''} · ${data.out_time||''} → ${data.expected_return||''}`, status:'rejected', note:note||'' });
   showToast('❌ ปฏิเสธคำขอแล้ว','info');
   renderPassApprovals();
 }
@@ -3665,41 +3670,30 @@ async function checkLeaveStatusNotifications() {
 
 let _notifChannel = null;
 
+// พนักงาน — subscribe Broadcast channel รอรับแจ้งเตือนจากหัวหน้า
 function _startNotifRealtime() {
   if (!currentEmp?.employee_id) return;
   _stopNotifRealtime();
   const empId = currentEmp.employee_id;
-
-  _notifChannel = sb.channel(`notif-${empId}`)
-    .on('postgres_changes', {
-      event: 'UPDATE', schema: 'public', table: 'leave_requests',
-      filter: `employee_id=eq.${empId}`
-    }, (payload) => {
-      const r = payload.new;
-      if (!['approved','rejected'].includes(r.status)) return;
-      _showSingleNotifPopup({
-        icon: '📋', label: r.type_name||'คำขอลา',
-        detail: `${r.start_date||''} · ${r.days||0} วัน`,
-        status: r.status, note: r.reject_note||''
-      });
-    })
-    .on('postgres_changes', {
-      event: 'UPDATE', schema: 'public', table: 'pass_requests',
-      filter: `employee_id=eq.${empId}`
-    }, (payload) => {
-      const r = payload.new;
-      if (!['approved','rejected'].includes(r.status)) return;
-      _showSingleNotifPopup({
-        icon: '🚪', label: r.reason_name||'ขอออกนอกบริเวณ',
-        detail: `${r.request_date||''} · ${r.out_time||''} → ${r.expected_return||''}`,
-        status: r.status, note: ''
-      });
+  _notifChannel = sb.channel(`emp-notif-${empId}`)
+    .on('broadcast', { event: 'status_update' }, ({ payload }) => {
+      _showSingleNotifPopup(payload);
     })
     .subscribe();
 }
 
 function _stopNotifRealtime() {
   if (_notifChannel) { sb.removeChannel(_notifChannel); _notifChannel = null; }
+}
+
+// หัวหน้า — ส่ง Broadcast ไปหาพนักงานทันทีหลังอนุมัติ/ปฏิเสธ
+function _sendBroadcastNotif(employeeId, payload) {
+  if (!employeeId) return;
+  try {
+    sb.channel(`emp-notif-${employeeId}`).send({
+      type: 'broadcast', event: 'status_update', payload
+    });
+  } catch(_) {}
 }
 
 function _showSingleNotifPopup({ icon, label, detail, status, note }) {
