@@ -333,30 +333,11 @@ function buildLeaveRequestCard(r: Record<string, unknown>) {
       ],
     },
     footer: {
-      type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px",
-      contents: [
-        {
-          type: "box", layout: "horizontal", spacing: "sm",
-          contents: [
-            {
-              type: "button", style: "primary", color: "#16a34a", height: "sm", flex: 1,
-              action: { type: "postback", label: "✅ อนุมัติ",
-                data: `lv_approve:${r.request_id}:${String(r.employee_name ?? "")}`,
-                displayText: "อนุมัติคำขอลา" },
-            },
-            {
-              type: "button", style: "primary", color: "#dc2626", height: "sm", flex: 1,
-              action: { type: "postback", label: "❌ ไม่อนุมัติ",
-                data: `lv_reject:${r.request_id}:${String(r.employee_name ?? "")}`,
-                displayText: "ไม่อนุมัติคำขอลา" },
-            },
-          ],
-        },
-        {
-          type: "button", style: "secondary", height: "sm",
-          action: { type: "uri", label: "🔗 ดูรายละเอียด", uri: `${LEAVE_APP_URL}?page=lv-approvals` },
-        },
-      ],
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: "#1d4ed8", height: "sm",
+        action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${LEAVE_APP_URL}?page=lv-approvals` },
+      }],
     },
   };
 }
@@ -437,13 +418,6 @@ function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
           ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
         ],
       },
-      footer: {
-        type: "box", layout: "vertical", paddingAll: "12px",
-        contents: [{
-          type: "button", style: "primary", color: "#059669", height: "sm",
-          action: { type: "uri", label: "👆 ดูรายละเอียด", uri: `${LEAVE_APP_URL}?page=lv-pass-hist` },
-        }],
-      },
     };
   }
 }
@@ -455,14 +429,25 @@ async function sendLine(flexBubble: unknown, groupId?: string, token?: string, b
   if (!toGroup) throw new Error("LINE_GROUP_ID not configured");
   if (!useToken) throw new Error("LINE_CHANNEL_TOKEN not configured");
 
-  const res = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${useToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      to: toGroup,
-      messages: [{ type: "flex", altText: "มีรายการรออนุมัติ — สานนท์", contents: flexBubble }],
-    }),
-  });
+  console.log("[sendLine] to:", toGroup.slice(0,8), "token:", useToken.slice(0,10));
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000); // timeout 10 วิ
+
+  let res: Response;
+  try {
+    res = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${useToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: toGroup,
+        messages: [{ type: "flex", altText: "มีรายการรออนุมัติ — สานนท์", contents: flexBubble }],
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const err = await res.text();
     if (res.status === 429) {
@@ -617,7 +602,7 @@ serve(async (req) => {
             },
           };
           if (patchRes.ok || patchRes.status === 204) {
-            await sendLine(confirm, toGroup);
+            await sendLine(confirm, toGroup, LINE_TOKEN_HR || LINE_TOKEN);
           } else {
             console.error("PATCH failed:", patchRes.status, await patchRes.text());
           }

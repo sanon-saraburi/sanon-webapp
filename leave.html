@@ -92,8 +92,14 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
 .btn-xs{padding:3px 8px;font-size:11px;border-radius:6px;}
 
 /* ─── Login Screen ─── */
-#login-screen{min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);display:flex;align-items:center;justify-content:center;padding:20px;}
+#login-screen{min-height:100vh;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;}
 .login-box{background:#fff;border-radius:20px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+@media(max-width:480px){
+  #login-screen{align-items:flex-start;padding:16px 12px;}
+  .login-box{padding:24px 18px;border-radius:16px;}
+  #sup-avatar-top,#emp-avatar-top{width:72px;height:72px;}
+  #sup-name-top,#emp-name-top{font-size:15px;}
+}
 .login-logo{text-align:center;margin-bottom:24px;}
 .login-logo h1{font-size:22px;font-weight:700;color:#0f172a;margin:8px 0 2px;}
 .login-logo p{font-size:13px;color:#64748b;margin:0;}
@@ -186,47 +192,115 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
       <div class="login-tab" id="tab-employee" onclick="switchLoginTab('employee')">👤 พนักงาน</div>
     </div>
 
-    <!-- Supervisor Login -->
+    <!-- Supervisor Login (PIN flow) -->
     <div id="pane-supervisor">
-      <div class="form-group">
-        <label class="form-label">ชื่อผู้ใช้</label>
-        <input id="lg-user" class="form-control" type="text" placeholder="username" autocomplete="username" list="lg-user-list">
-        <datalist id="lg-user-list"></datalist>
+
+      <!-- Profile display — อยู่บนสุดเสมอ (ว่างก่อน เติมหลังเลือก) -->
+      <div id="sup-profile-top" style="text-align:center;padding:4px 0 18px;">
+        <div id="sup-avatar-top" style="width:84px;height:84px;border-radius:50%;overflow:hidden;background:#e0e7ff;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;border:3px solid #c7d2fe;">
+          <span style="font-size:36px;">👔</span>
+        </div>
+        <div id="sup-name-top" style="font-size:16px;font-weight:700;color:#1e293b;min-height:22px;"></div>
+        <div id="sup-id-top" style="font-size:12px;color:#94a3b8;margin-top:3px;min-height:16px;"></div>
+        <div id="sup-dept-top" style="font-size:12px;color:#64748b;margin-top:2px;min-height:16px;"></div>
       </div>
-      <div class="form-group">
-        <label class="form-label">รหัสผ่าน</label>
-        <input id="lg-pass" class="form-control" type="password" placeholder="password" autocomplete="current-password"
-          onkeydown="if(event.key==='Enter')doLogin()">
+
+      <!-- Search area (hidden after ถัดไป) -->
+      <div id="sup-search-wrap">
+        <div class="form-group" style="position:relative;">
+          <label class="form-label">ค้นหาพนักงาน</label>
+          <input id="sup-search" class="form-control" type="text" placeholder="พิมพ์รหัสหรือชื่อ"
+            oninput="_supSearchInput(this)" autocomplete="off">
+          <div id="sup-search-dd" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:200px;overflow-y:auto;margin-top:4px;"></div>
+        </div>
+        <div id="sup-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;min-height:16px;"></div>
+        <button id="btn-sup-access" class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doSupAccess()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          ถัดไป
+        </button>
       </div>
-      <div id="lg-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-        เข้าสู่ระบบ
-      </button>
+
+      <!-- Supervisor PIN step (profile อยู่ด้านบนแล้ว — แสดงแค่ PIN boxes) -->
+      <div id="sup-pin-step" style="display:none;">
+        <div style="text-align:center;margin-bottom:12px;">
+          <div id="sup-pin-title" style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px;">🔐 ใส่ PIN 4 หลัก</div>
+          <div id="sup-pin-sub" style="font-size:12px;color:#64748b;"></div>
+        </div>
+        <div class="pin-boxes">
+          <input class="pin-box" id="sp1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spIn(this,0)" onkeydown="_spKd(event,this,0)">
+          <input class="pin-box" id="sp2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spIn(this,1)" onkeydown="_spKd(event,this,1)">
+          <input class="pin-box" id="sp3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spIn(this,2)" onkeydown="_spKd(event,this,2)">
+          <input class="pin-box" id="sp4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spIn(this,3)" onkeydown="_spKd(event,this,3)">
+        </div>
+        <div id="sup-pin-confirm-wrap">
+          <div style="font-size:12px;color:#64748b;text-align:center;margin:8px 0 6px;">ยืนยัน PIN</div>
+          <div class="pin-boxes">
+            <input class="pin-box" id="spc1" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spcIn(this,0)" onkeydown="_spcKd(event,this,0)">
+            <input class="pin-box" id="spc2" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spcIn(this,1)" onkeydown="_spcKd(event,this,1)">
+            <input class="pin-box" id="spc3" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spcIn(this,2)" onkeydown="_spcKd(event,this,2)">
+            <input class="pin-box" id="spc4" maxlength="1" type="password" inputmode="numeric" pattern="[0-9]*" oninput="_spcIn(this,3)" onkeydown="_spcKd(event,this,3)">
+          </div>
+        </div>
+        <div id="sup-pin-err" style="color:#ef4444;font-size:12px;text-align:center;margin:8px 0;min-height:18px;"></div>
+        <button onclick="_backToSupSelect()" style="background:none;border:none;color:#64748b;font-size:12px;cursor:pointer;width:100%;text-align:center;padding:4px;">← เลือกชื่อใหม่</button>
+      </div>
+
+      <!-- hidden legacy elements (ไม่ใช้แล้ว แต่ไม่ลบ เผื่อ JS อ้างอิง) -->
+      <div id="sup-remembered" style="display:none;"></div>
+      <div id="sup-selected" style="display:none;"></div>
+
+      <!-- Password fallback (สำรอง) -->
+      <div style="text-align:center;margin-top:14px;">
+        <button onclick="toggleSupPassFallback()" style="background:none;border:none;color:#94a3b8;font-size:11px;cursor:pointer;text-decoration:underline;">🔑 เข้าด้วย password สำรอง</button>
+      </div>
+      <div id="sup-pass-fallback" style="display:none;margin-top:10px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+        <div class="form-group">
+          <label class="form-label" style="font-size:12px;">ชื่อผู้ใช้</label>
+          <input id="lg-user" class="form-control" type="text" placeholder="username" autocomplete="username" list="lg-user-list">
+          <datalist id="lg-user-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-size:12px;">รหัสผ่าน</label>
+          <input id="lg-pass" class="form-control" type="password" placeholder="password" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div id="lg-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
+        <button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;" onclick="doLogin()">เข้าสู่ระบบด้วย Password</button>
+      </div>
     </div>
 
     <!-- Employee Access -->
     <div id="pane-employee" style="display:none;">
-      <p style="font-size:12px;color:#64748b;margin-bottom:12px;text-align:center;">ค้นหาชื่อหรือรหัสพนักงานของคุณ</p>
-      <div class="form-group" style="position:relative;">
-        <label class="form-label">ค้นหาพนักงาน</label>
-        <input id="emp-search" class="form-control" type="text" placeholder="พิมพ์ชื่อหรือรหัส เช่น EM001"
-          oninput="_empSearchInput(this)" autocomplete="off">
-        <div id="emp-search-dd" style="display:none;"></div>
-      </div>
-      <div id="emp-selected" style="display:none;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:12px;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div id="emp-sel-avatar" style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
-          <div>
-            <div id="emp-sel-name" style="font-size:14px;font-weight:700;color:#1e40af;"></div>
-            <div id="emp-sel-dept" style="font-size:12px;color:#64748b;"></div>
-          </div>
+
+      <!-- Profile display — อยู่บนสุดเสมอ (ว่างก่อน เติมหลังเลือก) -->
+      <div id="emp-profile-top" style="text-align:center;padding:4px 0 18px;">
+        <div id="emp-avatar-top" style="width:84px;height:84px;border-radius:50%;overflow:hidden;background:#dbeafe;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;border:3px solid #bfdbfe;">
+          <span style="font-size:36px;">👤</span>
         </div>
+        <div id="emp-name-top" style="font-size:16px;font-weight:700;color:#1e293b;min-height:22px;"></div>
+        <div id="emp-id-top" style="font-size:12px;color:#94a3b8;margin-top:3px;min-height:16px;"></div>
+        <div id="emp-dept-top" style="font-size:12px;color:#64748b;margin-top:2px;min-height:16px;"></div>
       </div>
-      <!-- PIN step (แสดงหลังเลือกพนักงาน) -->
+
+      <!-- Search area (hidden after ถัดไป) -->
+      <div id="emp-search-wrap">
+        <div class="form-group" style="position:relative;">
+          <label class="form-label">ค้นหาพนักงาน</label>
+          <input id="emp-search" class="form-control" type="text" placeholder="พิมพ์ชื่อหรือรหัส เช่น EM001"
+            oninput="_empSearchInput(this)" autocomplete="off">
+          <div id="emp-search-dd" style="display:none;"></div>
+        </div>
+        <div id="emp-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;min-height:16px;"></div>
+        <button id="btn-emp-access" class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doEmpAccess()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          ถัดไป
+        </button>
+      </div>
+
+      <!-- PIN step (profile อยู่ด้านบนแล้ว — แสดงแค่ PIN boxes) -->
       <div id="pin-step" style="display:none;">
-        <div style="text-align:center;margin-bottom:10px;">
-          <div id="pin-step-title" style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px;">🔐 ใส่ PIN 4 หลัก</div>
+        <div style="text-align:center;margin-bottom:12px;">
+          <div id="pin-step-title" style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px;">🔐 ใส่ PIN 4 หลัก</div>
           <div id="pin-step-sub" style="font-size:12px;color:#64748b;"></div>
         </div>
         <div class="pin-boxes">
@@ -246,13 +320,15 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
         </div>
         <div id="pin-err" style="color:#ef4444;font-size:12px;text-align:center;margin:6px 0;min-height:16px;"></div>
         <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="_submitPin()">✅ ยืนยัน PIN</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;justify-content:center;margin-top:6px;font-size:12px;" onclick="_backToEmpSelect()">← เปลี่ยนพนักงาน</button>
+        <button onclick="_backToEmpSelect()" style="background:none;border:none;color:#64748b;font-size:12px;cursor:pointer;width:100%;text-align:center;padding:4px;margin-top:4px;">← เลือกชื่อใหม่</button>
       </div>
 
-      <div id="emp-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
-      <button id="btn-emp-access" class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doEmpAccess()">
-        ดูข้อมูลการลาของฉัน
-      </button>
+      <!-- hidden legacy elements -->
+      <div id="emp-remembered" style="display:none;"></div>
+      <div id="emp-selected" style="display:none;"></div>
+      <div id="emp-sel-avatar" style="display:none;"></div>
+      <div id="emp-sel-name" style="display:none;"></div>
+      <div id="emp-sel-dept" style="display:none;"></div>
     </div>
   </div>
 </div>
@@ -465,6 +541,8 @@ function switchLoginTab(tab) {
   document.getElementById('tab-employee').classList.toggle('active', tab==='employee');
   document.getElementById('pane-supervisor').style.display = tab==='supervisor'?'':'none';
   document.getElementById('pane-employee').style.display   = tab==='employee'?'':'none';
+  if (tab==='supervisor') _loadSupRemembered();
+  if (tab==='employee')   _loadEmpRemembered();
 }
 
 async function doLogin() {
@@ -503,7 +581,7 @@ async function doLogin() {
 async function doEmpAccess() {
   const err = document.getElementById('emp-err');
   err.textContent = '';
-  if (!_empSelected) { err.textContent = 'กรุณาเลือกพนักงานก่อน'; return; }
+  if (!_empSelected) { err.textContent = 'กรุณาค้นหาและเลือกชื่อจากรายการก่อน'; return; }
 
   // ดึง pin_code จาก DB (ไม่ใช้ที่เก็บใน search cache เพื่อความปลอดภัย)
   const { data, error } = await sb.from('checkin_employees')
@@ -516,12 +594,35 @@ async function doEmpAccess() {
 }
 
 // ── แสดงขั้นตอน PIN ────────────────────────────────────────────
+function _empFillProfile(e) {
+  if (!e) return;
+  const aw = document.getElementById('emp-avatar-top');
+  aw.innerHTML = e.photo_url
+    ? `<img src="${e.photo_url}" style="width:100%;height:100%;object-fit:cover;"
+         onerror="this.parentElement.innerHTML='<span style=\\'font-size:36px;\\'>👤</span>'">`
+    : `<span style="font-size:36px;">👤</span>`;
+  aw.style.borderColor = '#60a5fa';
+  document.getElementById('emp-name-top').textContent = e.name||'';
+  document.getElementById('emp-id-top').textContent   = e.employee_id||'';
+  document.getElementById('emp-dept-top').textContent = e.department||'';
+}
+
+function _empResetProfile() {
+  const aw = document.getElementById('emp-avatar-top');
+  aw.innerHTML = '<span style="font-size:36px;">👤</span>';
+  aw.style.borderColor = '#bfdbfe';
+  document.getElementById('emp-name-top').textContent = '';
+  document.getElementById('emp-id-top').textContent   = '';
+  document.getElementById('emp-dept-top').textContent = '';
+}
+
 function _showPinStep(pinCode) {
   _empPinHash = pinCode;
-  document.getElementById('emp-search').disabled  = true;
-  document.getElementById('btn-emp-access').style.display = 'none';
+  document.getElementById('emp-search-wrap').style.display = 'none';
   document.getElementById('emp-err').textContent  = '';
   document.getElementById('pin-step').style.display = '';
+  // เติม profile card บนสุด
+  _empFillProfile(_empSelected);
 
   const title = document.getElementById('pin-step-title');
   const sub   = document.getElementById('pin-step-sub');
@@ -529,7 +630,7 @@ function _showPinStep(pinCode) {
 
   if (pinCode) {
     title.textContent = '🔐 ใส่ PIN 4 หลัก';
-    sub.textContent   = `สวัสดี, ${_empSelected.name}`;
+    sub.textContent   = '';
     confirmWrap.style.display = 'none';
   } else {
     title.textContent = '🔑 ตั้ง PIN ครั้งแรก';
@@ -644,15 +745,330 @@ async function _proceedEmpLogin() {
     department: currentEmp.department||''
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify({ emp: currentEmp, mode: currentMode, t: Date.now() }));
+  _saveEmpRemember(currentEmp); // จำพนักงานไว้
   await _bootApp();
 }
 
 function _backToEmpSelect() {
   _empPinHash = null;
-  document.getElementById('pin-step').style.display    = 'none';
-  document.getElementById('emp-search').disabled        = false;
-  document.getElementById('btn-emp-access').style.display = '';
-  document.getElementById('pin-err').textContent        = '';
+  _empSelected = null;
+  document.getElementById('pin-step').style.display = 'none';
+  document.getElementById('emp-search-wrap').style.display = '';
+  document.getElementById('emp-err').textContent = '';
+  document.getElementById('pin-err').textContent = '';
+  _empResetProfile();
+  const s = document.getElementById('emp-search');
+  if (s) { s.value = ''; s.disabled = false; setTimeout(()=>s.focus(), 100); }
+}
+
+const EMP_REMEMBER_KEY = '_sn_lv_emp_rem';
+
+function _saveEmpRemember(emp) {
+  try {
+    localStorage.setItem(EMP_REMEMBER_KEY, JSON.stringify({
+      employee_id: emp.employee_id, name: emp.name,
+      department: emp.department||'', position: emp.position||'', photo_url: emp.photo_url||null
+    }));
+  } catch(_) {}
+}
+
+function _loadEmpRemembered() {
+  try {
+    const raw = localStorage.getItem(EMP_REMEMBER_KEY);
+    if (!raw) return;
+    const e = JSON.parse(raw);
+    if (!e?.employee_id) return;
+    _empSelected = e;
+    const ava = e.photo_url
+      ? `<img src="${e.photo_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">👤</div>`;
+    const rem = document.getElementById('emp-remembered');
+    rem.innerHTML = `
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${ava}
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;color:#1e293b;">${e.name}</div>
+            <div style="font-size:11px;color:#64748b;">${e.employee_id} · ${e.department||''}</div>
+          </div>
+          <button onclick="_clearEmpRemembered()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:11px;">เปลี่ยน</button>
+        </div>
+      </div>`;
+    rem.style.display = '';
+    _empFillProfile(e);
+    document.getElementById('emp-search-wrap').style.display = 'none';
+    // ดึง pin_code จาก DB
+    sb.from('checkin_employees').select('pin_code').eq('employee_id', e.employee_id).single()
+      .then(({ data }) => _showPinStep(data?.pin_code || null));
+  } catch(_) {}
+}
+
+function _clearEmpRemembered() {
+  localStorage.removeItem(EMP_REMEMBER_KEY);
+  _empSelected = null; _empPinHash = null;
+  document.getElementById('pin-step').style.display = 'none';
+  document.getElementById('emp-search-wrap').style.display = '';
+  _empResetProfile();
+  const s = document.getElementById('emp-search');
+  if (s) { s.value = ''; s.disabled = false; }
+  document.getElementById('emp-err').textContent = '';
+  setTimeout(()=>document.getElementById('emp-search')?.focus(), 100);
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 2B — Supervisor PIN Flow
+// ─────────────────────────────────────────────────────────────
+let _supSelected       = null;   // user จาก app_users ที่เลือก
+let _supPinHash        = null;   // pin_code ใน DB (null = ยังไม่ตั้ง)
+let _supSearchTimer    = null;
+let _supSearchResults  = [];
+const _SP_IDS  = ['sp1','sp2','sp3','sp4'];
+const _SPC_IDS = ['spc1','spc2','spc3','spc4'];
+
+const SUP_REMEMBER_KEY = '_sn_lv_sup_rem';
+
+// โหลดผู้ใช้ที่จำไว้ — เรียกตอน DOMContentLoaded หรือ switchLoginTab
+function _loadSupRemembered() {
+  try {
+    const raw = localStorage.getItem(SUP_REMEMBER_KEY);
+    if (!raw) return;
+    const u = JSON.parse(raw);
+    if (!u?.employee_id) return;
+    _supSelected = u;
+    // แสดงรูป+ชื่อในส่วนบนสุดทันที
+    _supFillProfile(u);
+    // ซ่อน search wrap
+    document.getElementById('sup-search-wrap').style.display = 'none';
+    // ดึง pin_code → แสดง PIN step
+    sb.from('checkin_employees').select('pin_code').eq('employee_id', u.employee_id).single().then(({ data }) => {
+      _showSupPinStep(data?.pin_code || null);
+    });
+  } catch(_) {}
+}
+
+function _clearSupRemembered() {
+  localStorage.removeItem(SUP_REMEMBER_KEY);
+  _supSelected = null; _supPinHash = null;
+  document.getElementById('sup-pin-step').style.display = 'none';
+  document.getElementById('sup-search-wrap').style.display = '';
+  document.getElementById('sup-err').textContent = '';
+  _supResetProfile();
+  const s = document.getElementById('sup-search');
+  if (s) { s.value = ''; s.disabled = false; setTimeout(()=>s.focus(), 100); }
+}
+
+async function _supSearchInput(inp) {
+  const q = inp.value.trim();
+  const dd = document.getElementById('sup-search-dd');
+  clearTimeout(_supSearchTimer);
+  if (!q) { dd.style.display='none'; return; }
+  _supSearchTimer = setTimeout(async () => {
+    const { data } = await sb.from('checkin_employees')
+      .select('employee_id,name,department,position,photo_url,status')
+      .eq('status','active')
+      .or(`name.ilike.%${q}%,employee_id.ilike.%${q}%`)
+      .order('employee_id').limit(8);
+    if (!data||!data.length) {
+      dd.innerHTML='<div style="padding:12px;text-align:center;color:#94a3b8;font-size:13px;">ไม่พบพนักงาน</div>';
+      dd.style.display='block'; return;
+    }
+    _supSearchResults = data;
+    dd.innerHTML = data.map((u,i)=>{
+      const ava = u.photo_url
+        ? `<img src="${u.photo_url}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;flex-shrink:0;">👔</div>`;
+      return `<div onclick="_supSearchSelect(${i})" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        ${ava}
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#0f172a;">${u.name}</div>
+          <div style="font-size:11px;color:#64748b;">${u.employee_id} · ${u.department||''}</div>
+        </div>
+      </div>`;
+    }).join('');
+    dd.style.display='block';
+  }, 300);
+}
+
+async function _supSearchSelect(i) {
+  const u = _supSearchResults[i];
+  if (!u) return;
+  _supSelected = u;
+  document.getElementById('sup-search').value = '';
+  document.getElementById('sup-search-dd').style.display = 'none';
+  // เติมรูปและชื่อในส่วนบนสุดทันที (ก่อนกด ถัดไป)
+  _supFillProfile(u);
+  document.getElementById('sup-err').textContent = '';
+  // ดึง pin_code จาก checkin_employees
+  const { data } = await sb.from('checkin_employees').select('pin_code').eq('employee_id', u.employee_id).single();
+  // เก็บ pin_code ไว้ใช้ตอนกด ถัดไป
+  _supPinHash = data?.pin_code || null;
+}
+
+async function doSupAccess() {
+  const err = document.getElementById('sup-err');
+  if (!_supSelected) { err.textContent = 'กรุณาค้นหาและเลือกชื่อจากรายการก่อน'; return; }
+  err.textContent = '';
+  _showSupPinStep(_supPinHash);
+}
+
+function _supFillProfile(u) {
+  if (!u) return;
+  const aw = document.getElementById('sup-avatar-top');
+  aw.innerHTML = u.photo_url
+    ? `<img src="${u.photo_url}" style="width:100%;height:100%;object-fit:cover;"
+         onerror="this.parentElement.innerHTML='<span style=\\'font-size:36px;\\'>👔</span>'">`
+    : `<span style="font-size:36px;">👔</span>`;
+  // เปลี่ยนสีขอบเมื่อเลือกแล้ว
+  aw.style.borderColor = '#818cf8';
+  aw.style.background  = '#e0e7ff';
+  document.getElementById('sup-name-top').textContent = u.name||u.full_name||'';
+  document.getElementById('sup-id-top').textContent   = u.employee_id||'';
+  document.getElementById('sup-dept-top').textContent = u.department||'';
+}
+
+function _supResetProfile() {
+  const aw = document.getElementById('sup-avatar-top');
+  aw.innerHTML = '<span style="font-size:36px;">👔</span>';
+  aw.style.borderColor = '#c7d2fe';
+  document.getElementById('sup-name-top').textContent = '';
+  document.getElementById('sup-id-top').textContent   = '';
+  document.getElementById('sup-dept-top').textContent = '';
+}
+
+function _showSupPinStep(pinCode) {
+  _supPinHash = pinCode;
+  document.getElementById('sup-search-wrap').style.display = 'none';
+  document.getElementById('sup-err').textContent = '';
+  document.getElementById('sup-pin-step').style.display = '';
+  // เติม profile card บนสุด
+  _supFillProfile(_supSelected);
+  const title = document.getElementById('sup-pin-title');
+  const sub   = document.getElementById('sup-pin-sub');
+  const cWrap = document.getElementById('sup-pin-confirm-wrap');
+  if (pinCode) {
+    title.textContent = '🔐 ใส่ PIN 4 หลัก';
+    sub.textContent   = '';
+    cWrap.style.display = 'none';
+  } else {
+    title.textContent = '🔑 ตั้ง PIN ครั้งแรก';
+    sub.textContent   = 'กรุณาตั้ง PIN 4 หลักเพื่อความปลอดภัย';
+    cWrap.style.display = '';
+  }
+  [..._SP_IDS,..._SPC_IDS].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.value='';el.classList.remove('filled','pin-err-shake');}
+  });
+  document.getElementById('sup-pin-err').textContent = '';
+  setTimeout(()=>document.getElementById('sp1')?.focus(), 120);
+}
+
+function _spIn(el, i) {
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  el.classList.toggle('filled', el.value.length > 0);
+  if (el.value && i < 3) document.getElementById(_SP_IDS[i+1])?.focus();
+  if (_supPinHash && i===3 && _SP_IDS.every(id=>document.getElementById(id)?.value)) {
+    setTimeout(_submitSupPin, 80);
+  }
+}
+function _spKd(e, el, i) {
+  if (e.key==='Backspace' && !el.value && i>0) {
+    const p=document.getElementById(_SP_IDS[i-1]);
+    if(p){p.value='';p.classList.remove('filled');p.focus();}
+  }
+  if (e.key==='Enter') _submitSupPin();
+}
+function _spcIn(el, i) {
+  el.value = el.value.replace(/\D/g,'').slice(-1);
+  el.classList.toggle('filled', el.value.length > 0);
+  if (el.value && i < 3) document.getElementById(_SPC_IDS[i+1])?.focus();
+}
+function _spcKd(e, el, i) {
+  if (e.key==='Backspace' && !el.value && i>0) {
+    const p=document.getElementById(_SPC_IDS[i-1]);
+    if(p){p.value='';p.classList.remove('filled');p.focus();}
+  }
+  if (e.key==='Enter') _submitSupPin();
+}
+
+function _shakeSupPins() {
+  _SP_IDS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('pin-err-shake');
+    void el.offsetWidth;
+    el.classList.add('pin-err-shake');
+  });
+  setTimeout(()=>document.getElementById('sp1')?.focus(), 50);
+}
+
+async function _submitSupPin() {
+  const err = document.getElementById('sup-pin-err');
+  err.textContent = '';
+  const pin = _SP_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+  if (!/^\d{4}$/.test(pin)) {
+    err.textContent = 'กรุณาใส่ตัวเลข 4 หลัก'; _shakeSupPins(); return;
+  }
+  if (!_supPinHash) {
+    // ตั้ง PIN ครั้งแรก — ต้องยืนยัน
+    const pinc = _SPC_IDS.map(id=>document.getElementById(id)?.value||'').join('');
+    if (!/^\d{4}$/.test(pinc)) {
+      err.textContent = 'กรุณายืนยัน PIN ครบ 4 หลัก';
+      document.getElementById('spc1')?.focus(); return;
+    }
+    if (pin !== pinc) {
+      err.textContent = '❌ PIN ไม่ตรงกัน';
+      _SPC_IDS.forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('filled');}});
+      document.getElementById('spc1')?.focus(); return;
+    }
+    const { error } = await sb.from('checkin_employees').update({ pin_code: pin }).eq('employee_id', _supSelected.employee_id);
+    if (error) { err.textContent = 'บันทึก PIN ไม่สำเร็จ'; return; }
+  } else {
+    if (pin !== _supPinHash) {
+      err.textContent = '❌ PIN ไม่ถูกต้อง กรุณาลองใหม่';
+      _SP_IDS.forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('filled');}});
+      _shakeSupPins(); return;
+    }
+  }
+  await _proceedSupLogin();
+}
+
+async function _proceedSupLogin() {
+  const u = _supSelected;
+  currentUser = {
+    id: u.employee_id, username: u.employee_id,
+    full_name: u.name, role: 'supervisor',
+    department: u.department||'', factory: u.factory||''
+  };
+  currentMode = 'supervisor';
+  currentEmp  = u; // เก็บไว้ใช้ photo_url ใน LINE notify
+  const sessData = { user: currentUser, mode: currentMode, t: Date.now() };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(sessData));
+  // จำผู้ใช้ไว้ (ไม่เก็บ pin_code)
+  localStorage.setItem(SUP_REMEMBER_KEY, JSON.stringify({
+    employee_id: u.employee_id, name: u.name,
+    department: u.department||'', position: u.position||'', photo_url: u.photo_url||null
+  }));
+  await _bootApp();
+  const _rp = _getUrlPage() || sessionStorage.getItem('_sn_lv_redirect') || '';
+  if(_rp) { sessionStorage.removeItem('_sn_lv_redirect'); navigateTo(_rp); }
+}
+
+function _backToSupSelect() {
+  _supPinHash = null;
+  _supSelected = null;
+  document.getElementById('sup-pin-step').style.display = 'none';
+  document.getElementById('sup-search-wrap').style.display = '';
+  document.getElementById('sup-err').textContent = '';
+  _supResetProfile();
+  const s = document.getElementById('sup-search');
+  s.value = ''; s.disabled = false;
+  setTimeout(()=>s.focus(), 100);
+}
+
+function toggleSupPassFallback() {
+  const fb = document.getElementById('sup-pass-fallback');
+  fb.style.display = fb.style.display==='none' ? '' : 'none';
+  if (fb.style.display!=='none') setTimeout(()=>document.getElementById('lg-user')?.focus(), 100);
 }
 
 function doLogout() {
@@ -661,15 +1077,29 @@ function doLogout() {
   document.getElementById('main-app').style.display    = 'none';
   document.getElementById('login-screen').style.display = '';
   document.getElementById('bottom-nav').style.display   = 'none';
-  document.getElementById('lg-user').value = '';
-  document.getElementById('lg-pass').value = '';
+  // reset supervisor PIN state
+  _supSelected = null; _supPinHash = null; _supSearchResults = [];
+  const supSearch = document.getElementById('sup-search');
+  if(supSearch) { supSearch.value=''; supSearch.disabled=false; }
+  document.getElementById('sup-pin-step')?.style && (document.getElementById('sup-pin-step').style.display='none');
+  document.getElementById('sup-search-wrap')?.style && (document.getElementById('sup-search-wrap').style.display='');
+  document.getElementById('sup-pass-fallback')?.style && (document.getElementById('sup-pass-fallback').style.display='none');
+  if(typeof _supResetProfile==='function') _supResetProfile();
+  // reset employee PIN state
+  const lgUser = document.getElementById('lg-user');
+  const lgPass = document.getElementById('lg-pass');
+  if(lgUser) lgUser.value = '';
+  if(lgPass) lgPass.value = '';
   _empSelected = null;
   _empPinHash  = null;
   document.getElementById('emp-search').value = '';
   document.getElementById('emp-search').disabled = false;
-  document.getElementById('emp-selected').style.display = 'none';
   document.getElementById('pin-step').style.display = 'none';
-  document.getElementById('btn-emp-access').style.display = '';
+  document.getElementById('emp-search-wrap').style.display = '';
+  if(typeof _empResetProfile==='function') _empResetProfile();
+  // ตอน logout ไม่ clear remember — ให้ PIN ขึ้นอัตโนมัติครั้งต่อไป
+  // เรียก _loadEmpRemembered()/_loadSupRemembered() ใหม่ผ่าน switchLoginTab
+  switchLoginTab('supervisor');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -710,15 +1140,10 @@ function _empSearchSelect(idx) {
   if (!e) return;
   _empSelected = e;
   document.getElementById('emp-search-dd').style.display='none';
-  document.getElementById('emp-search').value = e.name;
-  const sel = document.getElementById('emp-selected');
-  sel.style.display='';
-  document.getElementById('emp-sel-name').textContent = `${e.name} (${e.employee_id})`;
-  document.getElementById('emp-sel-dept').textContent = `${e.department||''} · ${e.position||''}`;
-  const ava = document.getElementById('emp-sel-avatar');
-  ava.innerHTML = e.photo_url
-    ? `<img src="${e.photo_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">`
-    : '👤';
+  document.getElementById('emp-search').value = '';
+  document.getElementById('emp-err').textContent = '';
+  // เติมรูปและชื่อในส่วนบนสุดทันที
+  _empFillProfile(e);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2081,6 +2506,12 @@ async function approvePass(passId) {
     approved_at: new Date().toISOString(), updated_at: new Date().toISOString()
   }).eq('pass_id',passId).select().single();
   if(error){ showToast('อนุมัติไม่สำเร็จ','error'); return; }
+  // ดึง photo_url จาก checkin_employees (supervisor ไม่มี currentEmp)
+  if (data?.employee_id && !data.photo_url) {
+    const { data: emp } = await sb.from('checkin_employees')
+      .select('photo_url').eq('employee_id', data.employee_id).single();
+    if (emp?.photo_url) data.photo_url = emp.photo_url;
+  }
   sendPassLineNotify(passId, data, 'approved');
   showToast('✅ อนุมัติคำขอเรียบร้อย','success');
   renderPassApprovals();
@@ -2119,7 +2550,7 @@ async function sendPassLineNotify(passId, r, event) {
           expected_return: r.expected_return,
           note:          r.note,
           approver_name: r.approver_name || null,
-          photo_url:     currentEmp?.photo_url || null
+          photo_url:     r.photo_url || currentEmp?.photo_url || null
         }
       })
     }).catch(e => console.warn('pass LINE notify failed:', e));
@@ -3161,7 +3592,7 @@ async function checkLeaveStatusNotifications() {
     localStorage.setItem(lastKey, new Date().toISOString());
 
     const { data } = await sb.from('leave_requests')
-      .select('request_id,leave_type_name,start_date,end_date,days_count,status,reject_note,updated_at')
+      .select('request_id,type_name,start_date,end_date,days,status,reject_note,updated_at')
       .eq('employee_id', currentEmp.employee_id)
       .in('status', ['approved','rejected'])
       .gt('updated_at', lastCheck)
@@ -3178,9 +3609,9 @@ async function checkLeaveStatusNotifications() {
       const note = (!isApv && r.reject_note) ? `<div style="color:#dc2626;font-size:12px;margin-top:4px;">เหตุผล: ${r.reject_note}</div>` : '';
       return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <strong style="font-size:14px;">${r.leave_type_name||'คำขอลา'}</strong>${badge}
+          <strong style="font-size:14px;">${r.type_name||'คำขอลา'}</strong>${badge}
         </div>
-        <div style="color:#64748b;font-size:13px;">${r.start_date||''} — ${r.days_count||0} วัน</div>
+        <div style="color:#64748b;font-size:13px;">${r.start_date||''} — ${r.days||0} วัน</div>
         ${note}
       </div>`;
     }).join('');

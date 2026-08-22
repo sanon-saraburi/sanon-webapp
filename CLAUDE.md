@@ -7,7 +7,7 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-17)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-22)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
@@ -17,7 +17,7 @@
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
-| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request (ขอออกนอกบริเวณ)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard (ซิ้งจาก checkin_employees.photo_url)** | ต้องรัน SQL 5 ชุด (รวม v5_patch pin_code) + Deploy Edge Function + ตั้งค่า LINE OA |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานเมื่อลาได้รับการอนุมัติ/ปฏิเสธ** | ต้องรัน SQL 5 ชุด (รวม v5_patch pin_code) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -92,13 +92,13 @@
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
 | `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
-| `leave.html` | System 6 | 2026-08-17 (เพิ่ม photo_url ใน sendLineNotify + sendPassLineNotify payload) |
+| `leave.html` | System 6 | 2026-08-22 (Pass ทุกประเภทต้องอนุมัติ, popup แจ้งพนักงานเมื่อลาอนุมัติ/ปฏิเสธ) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
-| `line-notify_index.txt` | Edge Function | 2026-08-17 (3 OA support + profile lookup ใช้ LINE_TOKEN_HR + photo_url ใน Leave/Pass card) |
+| `line-notify_index.txt` | Edge Function | 2026-08-22 (URI button footer แทน postback, cornerRadius fix, AbortController timeout 10s, postback token fix) |
 | `CLAUDE.md` | ทุกระบบ | 2026-08-17 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
