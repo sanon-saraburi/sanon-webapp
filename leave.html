@@ -1812,7 +1812,7 @@ async function renderPassRequest() {
     <div class="type-card" id="pr-card-${r.reason_id}" onclick="selectPassReason(${r.reason_id})" style="cursor:pointer;">
       <div class="tc-icon">${r.icon}</div>
       <div class="tc-name">${esc(r.name)}</div>
-      <div class="tc-quota">${r.max_minutes} นาที${r.requires_approval ? '' : ' · ⚡ ทันที'}</div>
+      <div class="tc-quota">${r.max_minutes} นาที</div>
       ${r.name==='อื่นๆ' ? `<div style="font-size:9px;color:#f59e0b;font-weight:600;margin-top:2px;">* ต้องระบุหมายเหตุ</div>` : ''}
     </div>`).join('');
 
@@ -1896,7 +1896,7 @@ function selectPassReason(reasonId) {
   }
   // แสดง info banner เฉพาะพักทานข้าว
   const info = document.getElementById('pass-submit-info');
-  if (info) info.style.display = r.requires_approval ? 'none' : '';
+  if (info) info.style.display = 'none'; // ทุกประเภทต้องอนุมัติ ไม่แสดง banner
 }
 
 async function submitPassRequest() {
@@ -1922,30 +1922,21 @@ async function submitPassRequest() {
     return;
   }
 
-  // พักทานข้าว → approved ทันที, อื่นๆ → รออนุมัติ
-  const isWalkIn = !_passReasonSelected.requires_approval;
-  const status   = isWalkIn ? 'approved' : 'pending';
-
+  // ทุกประเภท → รออนุมัติจากหัวหน้าเสมอ
   const payload = {
     employee_id: empId, employee_name: empName, department: dept,
     reason_id: _passReasonSelected.reason_id, reason_name: _passReasonSelected.name,
     request_date: date, out_time: outTime, expected_return: retTime,
-    note: note || null, status,
-    approver_name: isWalkIn ? 'Auto (พักทานข้าว)' : null
+    note: note || null, status: 'pending',
+    approver_name: null
   };
 
   const { data, error } = await sb.from('pass_requests').insert([payload]).select('pass_id').single();
   if (error) { err.textContent = 'บันทึกไม่สำเร็จ: '+error.message; return; }
 
-  if (isWalkIn) {
-    // พักทานข้าว — แจ้ง LINE ทันที (event = 'walkin')
-    sendPassLineNotify(data.pass_id, payload, 'walkin');
-    showToast('✅ บันทึกสำเร็จ — แจ้ง LINE เรียบร้อย', 'success');
-  } else {
-    // ธุระ / พบแพทย์ / ออกรถ / อื่นๆ — รออนุมัติ แจ้ง LINE หัวหน้า
-    sendPassLineNotify(data.pass_id, payload, 'pending');
-    showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
-  }
+  // แจ้ง LINE หัวหน้า — ทุกประเภทรออนุมัติ
+  sendPassLineNotify(data.pass_id, payload, 'pending');
+  showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
   navigateTo('lv-pass-hist');
 }
 
