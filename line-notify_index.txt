@@ -382,11 +382,17 @@ function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
         ],
       },
       footer: {
-        type: "box", layout: "vertical", paddingAll: "12px",
-        contents: [{
-          type: "button", style: "primary", color: "#ea580c", height: "sm",
-          action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${LEAVE_APP_URL}?page=lv-pass-approve` },
-        }],
+        type: "box", layout: "vertical", paddingAll: "12px", spacing: "sm",
+        contents: [
+          {
+            type: "button", style: "primary", color: "#ea580c", height: "sm",
+            action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${LEAVE_APP_URL}?page=lv-pass-approve` },
+          },
+          {
+            type: "button", style: "secondary", height: "sm",
+            action: { type: "share", label: "📤 แชร์การ์ดนี้" },
+          },
+        ],
       },
     };
   } else {
@@ -417,6 +423,13 @@ function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
           ...(r.approved_by ? [row("✔️", `อนุมัติโดย: ${r.approved_by}`)] : []),
           ...(r.note ? [row("📝", `หมายเหตุ: ${r.note}`)] : []),
         ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "12px",
+        contents: [{
+          type: "button", style: "secondary", height: "sm",
+          action: { type: "share", label: "📤 แชร์การ์ดนี้" },
+        }],
       },
     };
   }

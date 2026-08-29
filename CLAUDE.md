@@ -7,7 +7,7 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-22)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-08-22 เย็น)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
@@ -17,7 +17,7 @@
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
-| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานเมื่อลาได้รับการอนุมัติ/ปฏิเสธ** | ต้องรัน SQL 5 ชุด (รวม v5_patch pin_code) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานทันทีผ่าน Supabase Realtime Broadcast**, **หน้า login ใหม่ — avatar วงกลมด้านบน + ชื่อ/รหัส/แผนก ก่อน PIN**, **LINE Security การ์ดมีรูปพนักงาน (เก็บ photo_url ใน pass_requests)** | ต้องรัน SQL 6 ชุด (รวม pass_requests_photo patch) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages + เปิด Realtime ใน Supabase Dashboard |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
 
 ### LINE Notification Status
@@ -92,14 +92,14 @@
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
 | `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
-| `leave.html` | System 6 | 2026-08-22 (Pass ทุกประเภทต้องอนุมัติ, popup แจ้งพนักงานเมื่อลาอนุมัติ/ปฏิเสธ) |
+| `leave.html` | System 6 | 2026-08-22 (หน้า login ใหม่ avatar+profile, Realtime Broadcast popup, LINE Security มีรูป, photo_url ใน pass_requests) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
 | `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
 | `line-notify_index.txt` | Edge Function | 2026-08-22 (URI button footer แทน postback, cornerRadius fix, AbortController timeout 10s, postback token fix) |
-| `CLAUDE.md` | ทุกระบบ | 2026-08-17 |
+| `CLAUDE.md` | ทุกระบบ | 2026-08-22 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
@@ -317,6 +317,48 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-08-22 — leave.html: หน้า Login ใหม่ + Realtime Popup + LINE Security มีรูป
+
+**`leave.html` — การเปลี่ยนแปลงหลัก:**
+
+**1. หน้า Login ออกแบบใหม่ (Supervisor + Employee):**
+- แสดง avatar วงกลม 84px (รูปภาพหรือ emoji placeholder) ด้านบน ก่อน login
+- ใต้วงกลม: ชื่อ / รหัสพนักงาน / แผนก — อัปเดตทันทีเมื่อเลือกจาก dropdown ค้นหา
+- ปุ่ม "ถัดไป" → ซ่อน search wrap → แสดง PIN step (profile ยังอยู่ด้านบน)
+- Helper functions: `_supFillProfile()`, `_supResetProfile()`, `_empFillProfile()`, `_empResetProfile()`
+- Mobile CSS: avatar เล็กลง (72px), padding ลดลง, responsive บน 480px
+
+**2. Realtime Popup แจ้งพนักงานทันที (Supabase Broadcast):**
+- `_startNotifRealtime()` — subscribe channel `emp-notif-{employee_id}` เมื่อพนักงาน login
+- `_stopNotifRealtime()` — unsubscribe เมื่อ logout
+- `_sendBroadcastNotif(employeeId, payload)` — supervisor ส่ง broadcast หลัง approve/reject
+- `_showSingleNotifPopup({icon, label, detail, status, note})` — modal popup แสดงทันที
+- เรียก broadcast จาก: `dashApprove()`, `approveRequest()`, `rejectRequest()`, `approvePass()`, `rejectPass()`
+- `checkLeaveStatusNotifications()` — ตรวจ leave_requests + pass_requests ที่ missed ตอน login
+- ใช้ Supabase Broadcast (ไม่ใช่ postgres_changes) — ไม่ต้องการ RLS auth
+
+> **⚠️ ต้องเปิด Realtime ใน Supabase Dashboard:**
+> Table Editor → เลือกตาราง → Disable Realtime → เปิดเป็น Enable (หรือตรวจว่าเปิดอยู่แล้ว)
+
+**3. LINE Security การ์ดมีรูปพนักงาน:**
+- Root cause: `sendPassLineNotify('approved')` ถูกเรียกจาก supervisor → `currentEmp = null` → `photo_url` ว่าง
+- Fix: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน `submitPassRequest()` payload → เก็บลง `pass_requests` ตั้งแต่แรก
+- `approvePass()`: ลบ DB lookup แยก (`checkin_employees`) ออก — ใช้ `data.photo_url` จาก SELECT ได้เลย
+
+> **⚠️ ต้องรัน SQL:**
+> ```sql
+> ALTER TABLE pass_requests ADD COLUMN IF NOT EXISTS photo_url TEXT;
+> ```
+
+**`_loadSupRemembered()` — Bug fix:**
+- แก้ไข: ใช้ `u?.employee_id` แทน `u?.id` (หลังจาก supervisor ย้ายมาใช้ `checkin_employees`)
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
+**ยังต้องทำ:** รัน SQL (photo_url patch) + Deploy Edge Function + Upload GitHub Pages
+
+---
 
 ### 2026-08-17 — LINE 3 OA + รูปโปรไฟล์ใน LINE Card
 
