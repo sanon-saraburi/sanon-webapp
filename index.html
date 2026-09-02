@@ -2674,18 +2674,21 @@ async function loadCdePropelData(type, cfg, rangeState) {
     const { from, to } = rangeToDates(rangeState);
     const [{ data, error }, { data: factoryRows, error: factoryErr }] = await Promise.all([
       db.from(cfg.table).select('*').eq('status', 'approved').gte('production_date', from).lte('production_date', to).order('production_date', { ascending: true }),
-      db.from('factories').select('id, name, target_throughput').eq('name', cfg.factoryName)
+      db.from('factories').select('id, name, target_throughput, target_month').eq('name', cfg.factoryName)
     ]);
     if (error) throw error;
-    if (factoryErr) throw factoryErr;
+    // factoryErr ไม่ throw — ถ้า column ยังไม่มีให้ fallback ค่า hardcode แทน
     const rows = data || [];
-    const targetThroughputDB = (factoryRows && factoryRows[0]) ? Number(factoryRows[0].target_throughput) || 0 : 0;
+    const factoryRow = (!factoryErr && factoryRows) ? factoryRows[0] : null;
+    const targetThroughputDB = factoryRow ? Number(factoryRow.target_throughput) || 0 : 0;
+    const targetMonthDB = factoryRow ? Number(factoryRow.target_month) || 0 : 0;
+    const effectiveTargetMonth = targetMonthDB > 0 ? targetMonthDB : cfg.targetMonth;
     // fallback: ถ้า DB ไม่มีค่า ให้คำนวณจาก targetMonth / (22 วัน × 9 ชม.) = ค่าประมาณ
-    const targetThroughput = targetThroughputDB > 0 ? targetThroughputDB : (cfg.targetMonth > 0 ? Math.round(cfg.targetMonth / (22 * 9) * 10) / 10 : 0);
+    const targetThroughput = targetThroughputDB > 0 ? targetThroughputDB : (effectiveTargetMonth > 0 ? Math.round(effectiveTargetMonth / (22 * 9) * 10) / 10 : 0);
 
     renderCdePropelStats(type, cfg, rows);
     renderOeeGaugeBlock(type, rows, targetThroughput);
-    renderKpiGapBlock(type, cfg, rows, rangeState);
+    renderKpiGapBlock(type, { ...cfg, targetMonth: effectiveTargetMonth, targetYear: effectiveTargetMonth * 12 }, rows, rangeState);
     renderCdePropelYieldChart(type, cfg, rows);
     renderParetoBlock(type, rows);
     renderFeedThroughputComboBlock(type, rows, rangeState);
@@ -2766,7 +2769,7 @@ function renderDashboardSanon(container, type) {
   const cfg = type === 'sanon1'
     ? { table: 'production_sanon1', title: 'Dashboard Sanon 1',       targetMonth: 100000, targetYear: 1200000, hasExtra: false, factoryName: 'Sanon 1' }
     : type === 'mobile'
-    ? { table: 'production_mobile', title: 'Dashboard Mobile Plant',   targetMonth: 0,      targetYear: 0,       hasExtra: false, factoryName: 'Mobile Plant' }
+    ? { table: 'production_mobile', title: 'Dashboard Mobile Plant',   targetMonth: 84000,  targetYear: 1008000, hasExtra: false, factoryName: 'Mobile Plant' }
     : { table: 'production_sanon2', title: 'Dashboard Sanon 2',       targetMonth: 100000, targetYear: 1200000, hasExtra: true,  factoryName: 'Sanon 2' };
   const rangeState = _sanonRangeState[type];
 
@@ -2810,17 +2813,20 @@ async function loadSanonData(type, cfg, rangeState) {
     const { from, to } = rangeToDates(rangeState);
     const [{ data, error }, { data: factoryRows, error: factoryErr }] = await Promise.all([
       db.from(cfg.table).select('*').eq('status', 'approved').gte('production_date', from).lte('production_date', to).order('production_date', { ascending: true }),
-      db.from('factories').select('id, name, target_throughput').eq('name', cfg.factoryName)
+      db.from('factories').select('id, name, target_throughput, target_month').eq('name', cfg.factoryName)
     ]);
     if (error) throw error;
-    if (factoryErr) throw factoryErr;
+    // factoryErr ไม่ throw — ถ้า column ยังไม่มีให้ fallback ค่า hardcode แทน
     const rows = data || [];
-    const targetThroughputDB = (factoryRows && factoryRows[0]) ? Number(factoryRows[0].target_throughput) || 0 : 0;
-    const targetThroughput = targetThroughputDB > 0 ? targetThroughputDB : (cfg.targetMonth > 0 ? Math.round(cfg.targetMonth / (22 * 9) * 10) / 10 : 0);
+    const factoryRow = (!factoryErr && factoryRows) ? factoryRows[0] : null;
+    const targetThroughputDB = factoryRow ? Number(factoryRow.target_throughput) || 0 : 0;
+    const targetMonthDB = factoryRow ? Number(factoryRow.target_month) || 0 : 0;
+    const effectiveTargetMonth = targetMonthDB > 0 ? targetMonthDB : cfg.targetMonth;
+    const targetThroughput = targetThroughputDB > 0 ? targetThroughputDB : (effectiveTargetMonth > 0 ? Math.round(effectiveTargetMonth / (22 * 9) * 10) / 10 : 0);
 
     renderSanonStats(type, rows);
     renderOeeGaugeBlock(type, rows, targetThroughput);
-    renderKpiGapBlock(type, cfg, rows, rangeState);
+    renderKpiGapBlock(type, { ...cfg, targetMonth: effectiveTargetMonth, targetYear: effectiveTargetMonth * 12 }, rows, rangeState);
     renderSanonYieldChart(type, cfg, rows);
     renderParetoBlock(type, rows);
     renderFeedThroughputComboBlock(type, rows, rangeState);
@@ -4210,8 +4216,12 @@ function openFactoryForm(id) {
           <input id="ff-name" required type="text" value="${editing ? escapeHtml(editing.name) : ''}" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
+          <label class="block text-xs font-medium text-secondary-500 mb-1">เป้าผลิต (ตัน/เดือน) <span class="text-secondary-400">— ใช้คำนวณ KPI Gap</span></label>
+          <input id="ff-target-month" type="number" step="any" min="0" value="${editing && editing.target_month ? editing.target_month : ''}" placeholder="เช่น 84000 (ตัน/เดือน)" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
           <label class="block text-xs font-medium text-secondary-500 mb-1">Target Throughput (ตัน/ชม.) <span class="text-secondary-400">— ใช้คำนวณ Performance OEE</span></label>
-          <input id="ff-target-tp" type="number" step="any" min="0" value="${editing && editing.target_throughput ? editing.target_throughput : ''}" placeholder="เช่น 150 (ตัน/ชม.)" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
+          <input id="ff-target-tp" type="number" step="any" min="0" value="${editing && editing.target_throughput ? editing.target_throughput : ''}" placeholder="เช่น 350 (ตัน/ชม.)" class="w-full border border-secondary-200 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
           <label class="block text-xs font-medium text-secondary-500 mb-1">สถานะ</label>
@@ -4227,9 +4237,11 @@ function openFactoryForm(id) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ffTp = parseFloat(document.getElementById('ff-target-tp').value);
+    const ffTm = parseFloat(document.getElementById('ff-target-month').value);
     const payload = {
       name: document.getElementById('ff-name').value.trim(),
       status: document.getElementById('ff-status').value,
+      target_month: isNaN(ffTm) ? null : ffTm,
       target_throughput: isNaN(ffTp) ? null : ffTp,
     };
     try {
