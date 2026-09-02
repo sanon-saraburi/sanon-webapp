@@ -183,6 +183,7 @@ const DASHBOARD_MENUS = [
   { key: 'dash-propel',  label: 'Dashboard Propel',      icon: 'waves',          group: 'core' },
   { key: 'dash-sanon1',  label: 'Dashboard Sanon 1',     icon: 'mountain',       group: 'core' },
   { key: 'dash-sanon2',  label: 'Dashboard Sanon 2',     icon: 'mountain',       group: 'core' },
+  { key: 'dash-mobile',      label: 'Dashboard Mobile Plant', icon: 'truck',      group: 'core' },
   { key: 'dash-drone',   label: 'สต็อคหินบินโดรน',        icon: 'plane',          group: 'extra' },
   { key: 'dash-sales',   label: 'ยอดขาย',                icon: 'banknote',       group: 'extra' },
   { key: 'dash-loader',      label: 'รถตักไฟฟ้า',        icon: 'truck',          group: 'extra' },
@@ -205,6 +206,7 @@ const MANAGE_MENUS = [
   { key: 'manage-prod-propel',    label: 'ยอดผลิต Propel',          icon: 'edit-3' },
   { key: 'manage-prod-sanon1',    label: 'ยอดผลิต Sanon1',          icon: 'edit-3' },
   { key: 'manage-prod-sanon2',    label: 'ยอดผลิต Sanon2',          icon: 'edit-3' },
+  { key: 'manage-prod-mobile',    label: 'ยอดผลิต Mobile Plant',     icon: 'edit-3' },
   { key: 'manage-electric-loader',label: 'รถตักไฟฟ้า',               icon: 'truck' },
   { key: 'manage-sales',          label: 'ยอดขาย',                  icon: 'banknote' },
   { key: 'manage-groundwater',    label: 'น้ำบาดาล',                 icon: 'droplets' },
@@ -214,8 +216,9 @@ const MANAGE_MENUS = [
   { key: 'approve-cde',    label: 'อนุมัติ CDE',       icon: 'check-circle', approvalOnly: true },
   { key: 'approve-propel', label: 'อนุมัติ Propel',    icon: 'check-circle', approvalOnly: true },
   { key: 'approve-sanon1', label: 'อนุมัติ Sanon1',    icon: 'check-circle', approvalOnly: true },
-  { key: 'approve-sanon2', label: 'อนุมัติ Sanon2',    icon: 'check-circle', approvalOnly: true },
-  { key: 'approve-loader', label: 'อนุมัติรถตักไฟฟ้า', icon: 'check-circle', approvalOnly: true },
+  { key: 'approve-sanon2', label: 'อนุมัติ Sanon2',       icon: 'check-circle', approvalOnly: true },
+  { key: 'approve-mobile', label: 'อนุมัติ Mobile Plant', icon: 'check-circle', approvalOnly: true },
+  { key: 'approve-loader', label: 'อนุมัติรถตักไฟฟ้า',    icon: 'check-circle', approvalOnly: true },
   { key: 'approve-water',  label: 'อนุมัติน้ำบาดาล',   icon: 'check-circle', approvalOnly: true },
 ];
 
@@ -314,6 +317,24 @@ const PERM_TEMPLATES = [
     label: 'Operator Sanon2',
     dash: ['dash-sanon2'],
     manage: ['manage-prod-sanon2'],
+  },
+  {
+    id: 'manager-mobile',
+    label: 'Manager Mobile Plant',
+    dash: ['dash-mobile','dash-drone','dash-sales','dash-loader','dash-water','dash-electricity'],
+    manage: ['manage-reports','manage-prod-mobile','manage-groundwater','manage-electricity','manage-machines','manage-water-sources','manage-approvals','approve-mobile','approve-loader','approve-water'],
+  },
+  {
+    id: 'supervisor-mobile',
+    label: 'Supervisor Mobile Plant',
+    dash: ['dash-mobile'],
+    manage: ['manage-prod-mobile','manage-approvals','manage-reports','approve-mobile'],
+  },
+  {
+    id: 'op-mobile',
+    label: 'Operator Mobile Plant',
+    dash: ['dash-mobile'],
+    manage: ['manage-prod-mobile'],
   },
   // ─── Clerk (เสมียน) ────────────────────────────────────────────────────
   {
@@ -818,6 +839,7 @@ function approvalDepartmentsForUser(user) {
   if (manage.includes('approve-propel')) depts.push('Propel');
   if (manage.includes('approve-sanon1')) depts.push('Sanon1');
   if (manage.includes('approve-sanon2')) depts.push('Sanon2');
+  if (manage.includes('approve-mobile')) depts.push('Mobile');
   return depts.length ? depts : []; // [] = ไม่เห็นรายการอนุมัติโรงงานใดเลย
 }
 
@@ -844,6 +866,7 @@ async function fetchPendingApprovalCount() {
       { table: 'production_propel', dept: 'Propel' },
       { table: 'production_sanon1', dept: 'Sanon1' },
       { table: 'production_sanon2', dept: 'Sanon2' },
+      { table: 'production_mobile', dept: 'Mobile' },
     ].filter(t => !depts || depts.includes(t.dept));
     const prodCounts = await Promise.all(prodTables.map(t =>
       db.from(t.table).select('id', { count: 'exact', head: true }).eq('status', 'pending')
@@ -1004,6 +1027,9 @@ function renderPageContent(pageKey) {
     case 'dash-sanon2':
       renderDashboardSanon(container, 'sanon2');
       break;
+    case 'dash-mobile':
+      renderDashboardSanon(container, 'mobile');
+      break;
     case 'dash-drone':
       renderDashboardDrone(container);
       break;
@@ -1057,6 +1083,9 @@ function renderPageContent(pageKey) {
       break;
     case 'manage-prod-sanon2':
       renderManageProduction(container, 'sanon2');
+      break;
+    case 'manage-prod-mobile':
+      renderManageProduction(container, 'mobile');
       break;
     case 'manage-electric-loader':
       renderManageElectricLoader(container);
@@ -1522,6 +1551,7 @@ async function loadLandingPublicStats() {
       { name: 'production_propel', field: 'feed_ton' },
       { name: 'production_sanon1', field: 'feed_ton' },
       { name: 'production_sanon2', field: 'feed_ton' },
+      { name: 'production_mobile', field: 'feed_ton' },
     ];
     const results = await Promise.all(tables.map(t =>
       db.from(t.name).select('production_date, feed_ton').eq('status', 'approved')
@@ -2704,7 +2734,7 @@ async function renderDashboardStatusBanner(type, rows, from, to) {
   const el = document.getElementById(`${type}-data-status-block`);
   if (!el) return;
   try {
-    const fc = { cde:'CDE', propel:'Propel', sanon1:'Sanon1', sanon2:'Sanon2' }[type];
+    const fc = { cde:'CDE', propel:'Propel', sanon1:'Sanon1', sanon2:'Sanon2', mobile:'Mobile' }[type];
     if (!fc) return;
     const uniqueDates = [...new Set(rows.map(r => r.production_date))];
     if (!uniqueDates.length) { el.innerHTML = `<span class="text-xs text-slate-400">ไม่มีข้อมูลในช่วงนี้</span>`; return; }
@@ -2730,12 +2760,14 @@ async function renderDashboardStatusBanner(type, rows, from, to) {
 // =====================================================================
 // SECTION 14: DASHBOARD SANON 1 / SANON 2 (component ใช้ร่วมกัน)
 // =====================================================================
-const _sanonRangeState = { sanon1: defaultRangeState(), sanon2: defaultRangeState() };
+const _sanonRangeState = { sanon1: defaultRangeState(), sanon2: defaultRangeState(), mobile: defaultRangeState() };
 
 function renderDashboardSanon(container, type) {
   const cfg = type === 'sanon1'
-    ? { table: 'production_sanon1', title: 'Dashboard Sanon 1', targetMonth: 100000, targetYear: 1200000, hasExtra: false, factoryName: 'Sanon 1' }
-    : { table: 'production_sanon2', title: 'Dashboard Sanon 2', targetMonth: 100000, targetYear: 1200000, hasExtra: true, factoryName: 'Sanon 2' };
+    ? { table: 'production_sanon1', title: 'Dashboard Sanon 1',       targetMonth: 100000, targetYear: 1200000, hasExtra: false, factoryName: 'Sanon 1' }
+    : type === 'mobile'
+    ? { table: 'production_mobile', title: 'Dashboard Mobile Plant',   targetMonth: 0,      targetYear: 0,       hasExtra: false, factoryName: 'Mobile Plant' }
+    : { table: 'production_sanon2', title: 'Dashboard Sanon 2',       targetMonth: 100000, targetYear: 1200000, hasExtra: true,  factoryName: 'Sanon 2' };
   const rangeState = _sanonRangeState[type];
 
   container.innerHTML = `
@@ -2820,15 +2852,27 @@ function renderSanonStats(type, rows) {
 }
 
 function renderSanonYieldChart(type, cfg, rows) {
-  const sums = {
-    'หิน 6/8': rows.reduce((s,r)=>s+(Number(r.stone_6_8_ton)||0),0),
-    'หิน 3/4': rows.reduce((s,r)=>s+(Number(r.stone_3_4_ton)||0),0),
-    'หินคลุก': rows.reduce((s,r)=>s+(Number(r.stone_kluk_ton)||0),0),
-    'หินฝุ่น': rows.reduce((s,r)=>s+(Number(r.stone_dust_ton)||0),0),
-  };
-  if (cfg.hasExtra) {
-    sums['หิน 3/8'] = rows.reduce((s,r)=>s+(Number(r.stone_3_8_ton)||0),0);
-    sums['หิน 2 พิเศษ'] = rows.reduce((s,r)=>s+(Number(r.stone_special2_ton)||0),0);
+  let sums;
+  if (type === 'mobile') {
+    sums = {
+      'UH312 หิน 3/4':  rows.reduce((s,r)=>s+(Number(r.uh312_stone_3_4_ton)||0),0),
+      'UH312 หินฝุ่น':  rows.reduce((s,r)=>s+(Number(r.uh312_stone_dust_ton)||0),0),
+      'QA451 หิน 3/4':  rows.reduce((s,r)=>s+(Number(r.qa451_stone_3_4_ton)||0),0),
+      'QA451 หิน 3/8':  rows.reduce((s,r)=>s+(Number(r.qa451_stone_3_8_ton)||0),0),
+      'QA451 หินฝุ่น':  rows.reduce((s,r)=>s+(Number(r.qa451_stone_dust_ton)||0),0),
+      'หินคลุก':        rows.reduce((s,r)=>s+(Number(r.stone_kluk_ton)||0),0),
+    };
+  } else {
+    sums = {
+      'หิน 6/8': rows.reduce((s,r)=>s+(Number(r.stone_6_8_ton)||0),0),
+      'หิน 3/4': rows.reduce((s,r)=>s+(Number(r.stone_3_4_ton)||0),0),
+      'หินคลุก': rows.reduce((s,r)=>s+(Number(r.stone_kluk_ton)||0),0),
+      'หินฝุ่น': rows.reduce((s,r)=>s+(Number(r.stone_dust_ton)||0),0),
+    };
+    if (cfg.hasExtra) {
+      sums['หิน 3/8']    = rows.reduce((s,r)=>s+(Number(r.stone_3_8_ton)||0),0);
+      sums['หิน 2 พิเศษ'] = rows.reduce((s,r)=>s+(Number(r.stone_special2_ton)||0),0);
+    }
   }
   renderYieldDonutBlock(type, sums);
   renderProdTonsBlock(type, sums);
@@ -5258,7 +5302,7 @@ async function importDroneStockExcel(e) {
 // SECTION 24: MANAGE — ยอดผลิต CDE/Propel/Sanon1/Sanon2 (component ใช้ร่วมกัน)
 // =====================================================================
 // plantKey → factory_code ใน production_daily_status
-const PLANT_FACTORY_CODE = { cde:'CDE', propel:'Propel', sanon1:'Sanon1', sanon2:'Sanon2' };
+const PLANT_FACTORY_CODE = { cde:'CDE', propel:'Propel', sanon1:'Sanon1', sanon2:'Sanon2', mobile:'Mobile' };
 
 const PRODUCTION_PLANT_CONFIG = {
   cde: {
@@ -5300,6 +5344,17 @@ const PRODUCTION_PLANT_CONFIG = {
       { key: 'stone_dust_ton', label: 'หินฝุ่น' },
       { key: 'stone_3_8_ton', label: 'หิน 3/8' },
       { key: 'stone_special2_ton', label: 'หิน 2 พิเศษ' },
+    ],
+  },
+  mobile: {
+    table: 'production_mobile', title: 'ยอดผลิต Mobile Plant', hourMeterMode: true,
+    productColumns: [
+      { key: 'uh312_stone_3_4_ton',  label: 'UH312 หิน 3/4' },
+      { key: 'uh312_stone_dust_ton', label: 'UH312 หินฝุ่น' },
+      { key: 'qa451_stone_3_4_ton',  label: 'QA451 หิน 3/4' },
+      { key: 'qa451_stone_3_8_ton',  label: 'QA451 หิน 3/8' },
+      { key: 'qa451_stone_dust_ton', label: 'QA451 หินฝุ่น' },
+      { key: 'stone_kluk_ton',       label: 'หินคลุก' },
     ],
   },
 };
@@ -7611,7 +7666,7 @@ async function importGroundwaterExcel(e) {
 // =====================================================================
 // SECTION 27: MANAGE — รออนุมัติ (production_cde/propel/sanon1/sanon2 pending + approval_log)
 // =====================================================================
-const APPROVAL_PLANT_LABELS = { cde: 'CDE', propel: 'Propel', sanon1: 'Sanon1', sanon2: 'Sanon2', loader: 'รถตักไฟฟ้า', water: 'น้ำบาดาล' };
+const APPROVAL_PLANT_LABELS = { cde: 'CDE', propel: 'Propel', sanon1: 'Sanon1', sanon2: 'Sanon2', mobile: 'Mobile Plant', loader: 'รถตักไฟฟ้า', water: 'น้ำบาดาล' };
 let _approvalsData = {}; // plantKey -> rows[]
 let _approvalLogHistory = [];
 let _approvalUsersLookup = {}; // userId -> full_name (โหลดครั้งเดียว ใช้แสดงผู้กรอก)
@@ -7623,16 +7678,16 @@ function getApprovalPlantKeysForUser() {
   if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','loader','water'];
   // สิทธิ์อนุมัติกำหนดรายคนจาก approve-* permissions (admin set ผ่าน permission matrix)
   const allowed = getAllowedMenus(currentUser);
-  const APPROVE_KEY_MAP = { 'approve-cde':'cde', 'approve-propel':'propel', 'approve-sanon1':'sanon1', 'approve-sanon2':'sanon2', 'approve-loader':'loader', 'approve-water':'water' };
+  const APPROVE_KEY_MAP = { 'approve-cde':'cde', 'approve-propel':'propel', 'approve-sanon1':'sanon1', 'approve-sanon2':'sanon2', 'approve-mobile':'mobile', 'approve-loader':'loader', 'approve-water':'water' };
   return Object.entries(APPROVE_KEY_MAP).filter(([perm]) => allowed.manage.includes(perm)).map(([, plant]) => plant);
 }
 
 // ตารางจริงในฐานข้อมูลของแต่ละ plantKey (production_* ใช้ key ตรงชื่อ, ส่วน loader/water ชี้ไปตารางอื่น)
 const APPROVAL_TABLE_MAP = {
-  cde: 'production_cde', propel: 'production_propel', sanon1: 'production_sanon1', sanon2: 'production_sanon2',
+  cde: 'production_cde', propel: 'production_propel', sanon1: 'production_sanon1', sanon2: 'production_sanon2', mobile: 'production_mobile',
   loader: 'electric_loader', water: 'groundwater_usage',
 };
-function isProductionApprovalKey(k) { return k === 'cde' || k === 'propel' || k === 'sanon1' || k === 'sanon2'; }
+function isProductionApprovalKey(k) { return k === 'cde' || k === 'propel' || k === 'sanon1' || k === 'sanon2' || k === 'mobile'; }
 
 function renderManageApprovals(container) {
   // defensive guard: ต้องมีสิทธิ์ approve อย่างน้อย 1 รายการ (กำหนดโดยแอดมินผ่าน user_permissions)

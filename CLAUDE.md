@@ -7,12 +7,12 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-08-22 เย็น)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-09-02)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ (รวมจองห้องประชุม + ขอลา)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns** | ไม่มี Loading Screen (ถูก revert) |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ (รวมจองห้องประชุม + ขอลา)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ** | ต้องรัน `production_mobile_schema.sql` ใน Supabase ก่อนใช้งาน Mobile Plant |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
@@ -90,7 +90,8 @@
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
-| `index.html` | System 1 | 2026-08-15 (System Switcher 6 ระบบ — เพิ่ม leave.html Desktop+Mobile) |
+| `index.html` | System 1 | 2026-09-02 (เพิ่ม Mobile Plant — dash-mobile, manage-prod-mobile, approve-mobile, PRODUCTION_PLANT_CONFIG, Dashboard, Approval) |
+| `production_mobile_schema.sql` | System 1 | 2026-09-02 (ตาราง production_mobile — UH312/QA451 columns, RLS) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
 | `leave.html` | System 6 | 2026-08-22 (หน้า login ใหม่ avatar+profile, Realtime Broadcast popup, LINE Security มีรูป, photo_url ใน pass_requests) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
@@ -317,6 +318,57 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-09-02 — index.html: เพิ่ม Mobile Plant (โรงงานที่ 5)
+
+**เป้าหมาย:** เพิ่ม Mobile Plant เป็นโรงงานที่ 5 ครบทุก feature เหมือน Sanon1/Sanon2
+
+**`index.html` — การเปลี่ยนแปลง (15+ จุด):**
+
+**เมนู:**
+- `DASHBOARD_MENUS`: เพิ่ม `dash-mobile` (Dashboard Mobile Plant)
+- `MANAGE_MENUS`: เพิ่ม `manage-prod-mobile` (ยอดผลิต Mobile Plant)
+- `MANAGE_MENUS` approval: เพิ่ม `approve-mobile`
+- `renderPageContent()`: เพิ่ม case `dash-mobile` → `renderDashboardSanon(container, 'mobile')` และ `manage-prod-mobile` → `renderManageProduction(container, 'mobile')`
+
+**Config:**
+- `PLANT_FACTORY_CODE`: เพิ่ม `mobile: 'Mobile'`
+- `PRODUCTION_PLANT_CONFIG`: เพิ่ม `mobile` config พร้อม productColumns: UH312 หิน 3/4, UH312 หินฝุ่น, QA451 หิน 3/4, QA451 หิน 3/8, QA451 หินฝุ่น, หินคลุก — `hourMeterMode: true`, ไม่มี Flowmeter
+
+**Dashboard (ใช้ Sanon style):**
+- `_sanonRangeState`: เพิ่ม `mobile: defaultRangeState()`
+- `renderDashboardSanon()`: เพิ่ม branch `mobile` → `production_mobile`, title `Dashboard Mobile Plant`
+- `renderSanonYieldChart()`: เพิ่ม branch `mobile` — แสดง sums ตาม UH312/QA451 columns
+- `renderDashboardStatusBanner()`: เพิ่ม `mobile: 'Mobile'` ใน fc map
+
+**Approval:**
+- `APPROVAL_PLANT_LABELS`: เพิ่ม `mobile: 'Mobile Plant'`
+- `APPROVE_KEY_MAP`: เพิ่ม `'approve-mobile': 'mobile'`
+- `APPROVAL_TABLE_MAP`: เพิ่ม `mobile: 'production_mobile'`
+- `isProductionApprovalKey()`: เพิ่ม `|| k === 'mobile'`
+- `approvalDepartmentsForUser()`: เพิ่ม mobile dept
+- `fetchPendingApprovalCount()`: เพิ่ม `production_mobile` ใน prodTables
+
+**Landing Stats:**
+- `loadLandingPublicStats()`: เพิ่ม `production_mobile` ใน tables
+
+**Permission Templates:**
+- เพิ่ม `manager-mobile`, `supervisor-mobile`, `op-mobile`
+
+**`production_mobile_schema.sql` — ใหม่:**
+- ตาราง `production_mobile` — columns: feed_ton, uh312_stone_3_4_ton, uh312_stone_dust_ton, qa451_stone_3_4_ton, qa451_stone_3_8_ton, qa451_stone_dust_ton, stone_kluk_ton
+- RLS policy `anon_all`
+- Index: production_date, status
+
+**⏳ สิ่งที่ต้องทำก่อนใช้งาน:**
+1. รัน `production_mobile_schema.sql` ใน Supabase SQL Editor
+2. Upload `index.html` ขึ้น GitHub Pages
+3. Admin → Permission Matrix → ตั้งสิทธิ์ให้ User ที่ดูแล Mobile Plant
+
+**ไฟล์ที่แก้ไข:** `index.html`, `production_mobile_schema.sql`, `CLAUDE.md`
+**Copy ไป GitHub/:** `index.html` ✅ | `production_mobile_schema.sql` ✅ | `CLAUDE.md` ⏳
+
+---
 
 ### 2026-08-22 — leave.html: หน้า Login ใหม่ + Realtime Popup + LINE Security มีรูป
 

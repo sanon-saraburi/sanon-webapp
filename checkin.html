@@ -543,6 +543,7 @@ let currentUser = null;
 let currentGate = 'GATE_1';
 let scanEmp     = null;
 let csvRows     = [];
+let _guardNotifChannel = null;
 
 // Gate names (โหลดจาก DB, fallback = ประตู 1-4)
 let gateNames = {GATE_1:'ประตู 1',GATE_2:'ประตู 2',GATE_3:'ประตู 3',GATE_4:'ประตู 4'};
@@ -592,6 +593,7 @@ async function doLogin() {
 }
 
 function doLogout() {
+  _stopGuardRealtime();
   currentUser = null;
   sessionStorage.removeItem(SESSION_KEY);
   document.getElementById('app').style.display         = 'none';
@@ -4258,6 +4260,57 @@ function startClock() {
   setInterval(()=>{ if(el) el.textContent=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); },1000);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Guard Realtime — รับแจ้งเตือน Pass อนุมัติจาก leave.html
+// ─────────────────────────────────────────────────────────────
+function _startGuardRealtime() {
+  if (_guardNotifChannel) { sb.removeChannel(_guardNotifChannel); }
+  _guardNotifChannel = sb.channel('guard-screen')
+    .on('broadcast', { event: 'pass_approved' }, ({ payload }) => {
+      _showGuardPassPopup(payload);
+    })
+    .subscribe();
+}
+function _stopGuardRealtime() {
+  if (_guardNotifChannel) { sb.removeChannel(_guardNotifChannel); _guardNotifChannel = null; }
+}
+function _showGuardPassPopup(p) {
+  document.getElementById('guard-pass-popup')?.remove();
+  const photoHtml = p.photo_url
+    ? `<img src="${p.photo_url}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #059669;" onerror="this.parentElement.innerHTML='<span style=\\'font-size:36px;\\'>👤</span>'">`
+    : `<span style="font-size:40px;">👤</span>`;
+  const d = document.createElement('div');
+  d.id = 'guard-pass-popup';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  d.innerHTML = `
+    <div style="background:#fff;border-radius:20px;max-width:340px;width:92%;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.3);animation:fadeInUp .25s ease;">
+      <div style="background:#059669;color:#fff;padding:14px 18px;font-weight:700;font-size:14px;text-align:center;">
+        ✅ อนุมัติแล้ว — พนักงานออกนอกบริเวณ
+      </div>
+      <div style="padding:20px 20px 0;text-align:center;">
+        <div style="width:80px;height:80px;border-radius:50%;background:#d1fae5;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;overflow:hidden;border:3px solid #059669;">
+          ${photoHtml}
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#1e293b;">${p.employee_name||'-'}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:2px;">${p.department||''}</div>
+      </div>
+      <div style="margin:14px 20px;background:#f0fdf4;border-radius:10px;padding:12px;font-size:13px;line-height:2;">
+        <div>🚪 <b>เหตุผล:</b> ${p.reason_name||'-'}</div>
+        <div>📅 <b>วันที่:</b> ${p.request_date||'-'}</div>
+        <div>🕐 <b>ออก:</b> ${p.out_time||'-'} น. &nbsp;→&nbsp; <b>คาดกลับ:</b> ${p.expected_return||'-'} น.</div>
+        ${p.note ? `<div>📝 <b>หมายเหตุ:</b> ${p.note}</div>` : ''}
+      </div>
+      <div style="font-size:11px;color:#94a3b8;text-align:center;margin-bottom:6px;">กรุณาตรวจสอบบัตรพนักงาน</div>
+      <div style="padding:0 20px 20px;">
+        <button onclick="document.getElementById('guard-pass-popup').remove()"
+          style="width:100%;padding:13px;background:#059669;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+          ✓ รับทราบ
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+}
+
 async function bootApp() {
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
@@ -4279,6 +4332,7 @@ async function bootApp() {
     // ตรวจ currentGate ว่ายังอยู่ใน gateNames ไหม
     if (!gateNames[currentGate]) currentGate = Object.keys(gateNames).sort()[0];
   } catch(e) {}
+  _startGuardRealtime();
   nav('ck-guard');
 }
 
