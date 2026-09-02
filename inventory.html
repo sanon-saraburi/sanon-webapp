@@ -3704,7 +3704,7 @@ function renderBalanceTable() {
       <td class="px-3 py-2 font-medium">${escapeHtml(i.name)}</td>
       <td class="px-3 py-2 text-right font-semibold ${isOut?'text-red-600':isLow?'text-amber-600':'text-gray-800'}">${fmtNum(qty)}</td>
       <td class="px-3 py-2 text-xs text-gray-500 hide-mobile">${escapeHtml(i.unit||'-')}</td>
-      <td class="px-3 py-2 text-right text-xs hide-mobile">${i.unit_price?fmtMoney(i.unit_price):'-'}</td>
+      ${(()=>{const ls=(_lotsMap[i.id]||[]).filter(l=>l.remaining_qty>0);const tq=ls.reduce((s,l)=>s+Number(l.remaining_qty||0),0);const tc=ls.reduce((s,l)=>s+Number(l.remaining_qty||0)*Number(l.unit_cost||0),0);const avgP=tq>0?tc/tq:(i.unit_price||0);return`<td class="px-3 py-2 text-right text-xs hide-mobile" title="${ls.length>0?'ราคาเฉลี่ย FIFO lot ปัจจุบัน':'ราคา master'}">${avgP>0?fmtMoney(avgP):'-'}</td>`;})()}
       <td class="px-3 py-2 text-right text-xs text-gray-400 hide-mobile">${fmtNum(i.min_stock||0)}</td>
       <td class="px-3 py-2 text-center">${statusBadge}</td>
       <td class="px-3 py-2 text-center sticky right-0 bg-white">
