@@ -2,7 +2,7 @@
 // sw.js — Sanon PWA Service Worker (GitHub Pages: /sanon-webapp/)
 // =====================================================================
 
-const CACHE_NAME   = 'sanon-pwa-v5';
+const CACHE_NAME   = 'sanon-pwa-v6';
 const BASE         = '/sanon-webapp';
 const SUPABASE_URL = 'https://pcmpwkcmvsxrvbximjgf.supabase.co';
 
@@ -51,8 +51,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // HTML → Network First (ได้ version ใหม่เสมอ), fallback cache
-  if (url.endsWith('.html')) {
+  // HTML หรือ root path → Network First (ได้ version ใหม่เสมอ), fallback cache
+  const pathname = new URL(url).pathname;
+  if (url.endsWith('.html') || pathname.endsWith('/') || pathname === BASE) {
     e.respondWith(
       fetch(e.request)
         .then(res => {
