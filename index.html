@@ -18,6 +18,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS/dist/pptxgen.bundled.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
   tailwind.config = {
     theme: {
@@ -190,6 +191,7 @@ const DASHBOARD_MENUS = [
   { key: 'dash-water',       label: 'น้ำบาดาล',          icon: 'droplets',       group: 'extra' },
   { key: 'dash-electricity', label: 'ค่าไฟฟ้า',          icon: 'zap',            group: 'extra' },
   { key: 'dash-executive',   label: 'Executive Summary',  icon: 'layout-dashboard', group: 'extra' },
+  { key: 'dash-annual',      label: 'รายงานรายปี',        icon: 'calendar-range',   group: 'extra' },
 ];
 
 // หมวดหมู่ 2: เมนูจัดการข้อมูล (13 เมนู — รอบ 2 implement ครบแล้ว)
@@ -1047,6 +1049,9 @@ function renderPageContent(pageKey) {
       break;
     case 'dash-executive':
       renderDashboardExecutive(container);
+      break;
+    case 'dash-annual':
+      renderDashboardAnnual(container);
       break;
     // ===========================================================
     // หมวดหมู่ 2: จัดการข้อมูล (13 เมนู)
@@ -10858,6 +10863,549 @@ async function renderDashboardExecutive(container) {
     container.innerHTML = `<div class="bg-red-50 rounded-2xl p-6 text-red-600 text-sm">โหลดข้อมูลไม่สำเร็จ: ${err.message}</div>`;
   }
   refreshIcons();
+}
+
+// =====================================================================
+// SECTION 29B: ANNUAL REPORT DASHBOARD (dash-annual)
+// =====================================================================
+const ANNUAL_PLANT_LABELS = { cde:'CDE', propel:'Propel', sanon1:'Sanon 1', sanon2:'Sanon 2', mobile:'Mobile Plant' };
+const ANNUAL_FACTORY_NAMES = { cde:'CDE', propel:'Propel', sanon1:'Sanon 1', sanon2:'Sanon 2', mobile:'Mobile Plant' };
+const ANNUAL_PLANT_COLORS = { cde:'#0D9488', propel:'#0891B2', sanon1:'#7C3AED', sanon2:'#DC2626', mobile:'#EA580C' };
+const ANNUAL_PLANT_HEX   = { cde:'0D9488', propel:'0891B2', sanon1:'7C3AED', sanon2:'DC2626', mobile:'EA580C' };
+const TH_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+let _annualState = { plantKey: 'cde', year: new Date().getFullYear(), data: null };
+
+async function loadAnnualData(plantKey, year) {
+  const cfg = PRODUCTION_PLANT_CONFIG[plantKey];
+  const fromDate = `${year}-01-01`, toDate = `${year}-12-31`;
+  const cols = ['production_date','feed_ton','runtime_hour','runtime_minute','avg_ton_per_hour',
+    ...cfg.productColumns.map(c => c.key)].join(',');
+  const { data, error } = await db.from(cfg.table)
+    .select(cols).gte('production_date', fromDate).lte('production_date', toDate)
+    .eq('status','approved').order('production_date');
+  if (error) throw error;
+  const rows = data || [];
+
+  const monthly = Array.from({length:12}, (_,i) => ({ month:i+1, feed:0, runtime:0, days:0, products:{} }));
+  cfg.productColumns.forEach(c => monthly.forEach(m => { m.products[c.key] = 0; }));
+  rows.forEach(r => {
+    const mi = parseInt(r.production_date.slice(5,7)) - 1;
+    const m = monthly[mi];
+    m.feed += Number(r.feed_ton)||0;
+    const rt = (Number(r.runtime_hour)||0) + (Number(r.runtime_minute)||0)/60;
+    m.runtime += rt;
+    if (rt > 0) m.days++;
+    cfg.productColumns.forEach(c => { m.products[c.key] += Number(r[c.key])||0; });
+  });
+
+  const factName = ANNUAL_FACTORY_NAMES[plantKey];
+  const { data: fRows } = await db.from('factories').select('target_month,target_throughput').eq('name', factName);
+  const fRow = (fRows||[])[0];
+  const targetMonth = fRow?.target_month ? Number(fRow.target_month) : 0;
+  const targetRate  = fRow?.target_throughput ? Number(fRow.target_throughput) : 0;
+
+  const totalFeed = monthly.reduce((s,m)=>s+m.feed,0);
+  const totalDays = monthly.reduce((s,m)=>s+m.days,0);
+  const totalRt   = monthly.reduce((s,m)=>s+m.runtime,0);
+  const avgRate   = totalRt > 0 ? totalFeed / totalRt : 0;
+  const ytdTarget = targetMonth * 12;
+  const ytdAchiev = ytdTarget > 0 ? (totalFeed / ytdTarget * 100) : 0;
+
+  return { monthly, targetMonth, targetRate, cfg, plantKey, year,
+    totalFeed, totalDays, totalRt, avgRate, ytdTarget, ytdAchiev };
+}
+
+function renderDashboardAnnual(container) {
+  const curYear = new Date().getFullYear();
+  const years = Array.from({length:5}, (_,i) => curYear - i);
+  const st = _annualState;
+
+  container.innerHTML = `
+  <div class="px-4 py-4 max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h2 class="text-xl font-bold text-secondary-800">รายงานผลิตรายปี</h2>
+      <div class="flex gap-2 items-center flex-wrap">
+        <select id="annual-year-sel" class="border border-secondary-200 rounded-xl px-3 py-1.5 text-sm">
+          ${years.map(y=>`<option value="${y}" ${y===st.year?'selected':''}>${y + 543}</option>`).join('')}
+        </select>
+        <button id="annual-export-pptx-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition">
+          <i data-lucide="presentation" class="w-4 h-4"></i>Export PPTX
+        </button>
+        <button id="annual-export-pdf-btn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition">
+          <i data-lucide="printer" class="w-4 h-4"></i>PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Factory tabs -->
+    <div class="flex gap-2 flex-wrap mb-4">
+      ${Object.entries(ANNUAL_PLANT_LABELS).map(([k,label]) => `
+        <button onclick="annualSelectPlant('${k}')" id="annual-tab-${k}"
+          class="px-4 py-1.5 rounded-full text-sm font-medium border transition annual-tab-btn
+          ${st.plantKey===k ? 'text-white border-transparent' : 'bg-white text-secondary-600 border-secondary-200 hover:border-secondary-400'}"
+          style="${st.plantKey===k ? 'background:' + ANNUAL_PLANT_COLORS[k] + ';border-color:' + ANNUAL_PLANT_COLORS[k] : ''}">
+          ${label}
+        </button>`).join('')}
+    </div>
+
+    <div id="annual-content"><div class="flex items-center justify-center h-40 text-secondary-400 text-sm">กำลังโหลด...</div></div>
+  </div>`;
+
+  refreshIcons();
+  document.getElementById('annual-year-sel').addEventListener('change', e => {
+    _annualState.year = parseInt(e.target.value);
+    annualLoadAndRender();
+  });
+  document.getElementById('annual-export-pptx-btn').addEventListener('click', () => generateAnnualPptx());
+  document.getElementById('annual-export-pdf-btn').addEventListener('click', () => printAnnualReport());
+
+  annualLoadAndRender();
+}
+
+function annualSelectPlant(plantKey) {
+  _annualState.plantKey = plantKey;
+  document.querySelectorAll('.annual-tab-btn').forEach(btn => {
+    const k = btn.id.replace('annual-tab-','');
+    const isActive = k === plantKey;
+    btn.style.background = isActive ? ANNUAL_PLANT_COLORS[k] : '';
+    btn.style.borderColor = isActive ? ANNUAL_PLANT_COLORS[k] : '';
+    btn.style.color = isActive ? '#ffffff' : '';
+    btn.classList.toggle('bg-white', !isActive);
+    btn.classList.toggle('text-white', isActive);
+    btn.classList.toggle('text-secondary-600', !isActive);
+    btn.classList.toggle('border-secondary-200', !isActive);
+    btn.classList.toggle('border-transparent', isActive);
+  });
+  annualLoadAndRender();
+}
+
+async function annualLoadAndRender() {
+  const el = document.getElementById('annual-content');
+  if (!el) return;
+  el.innerHTML = `<div class="flex items-center justify-center h-40 text-secondary-400 text-sm">
+    <i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลดข้อมูล...</div>`;
+  refreshIcons();
+  try {
+    const d = await loadAnnualData(_annualState.plantKey, _annualState.year);
+    _annualState.data = d;
+    annualRenderContent(el, d);
+  } catch(err) {
+    el.innerHTML = `<div class="bg-red-50 rounded-2xl p-6 text-red-600 text-sm">โหลดข้อมูลไม่สำเร็จ: ${err.message}</div>`;
+  }
+}
+
+function annualRenderContent(el, d) {
+  const { monthly, targetMonth, targetRate, cfg, plantKey, year, totalFeed, totalDays, avgRate, ytdTarget, ytdAchiev } = d;
+  const color = ANNUAL_PLANT_COLORS[plantKey];
+  const label = ANNUAL_PLANT_LABELS[plantKey];
+  const thYear = year + 543;
+  const pctColor = p => p >= 100 ? '#059669' : p >= 70 ? '#D97706' : '#DC2626';
+  const pctBg   = p => p >= 100 ? '#f0fdf4' : p >= 70 ? '#fffbeb' : '#fef2f2';
+
+  // Monthly % vs plan
+  const monthlyPct = monthly.map(m => targetMonth > 0 ? Math.round(m.feed / targetMonth * 100) : null);
+
+  // Monthly header row: ม.ค.–ธ.ค. + รวม
+  const headerCells = TH_MONTHS_SHORT.map(th => `<th class="text-center px-1 py-1.5 text-xs whitespace-nowrap">${th}</th>`).join('') + '<th class="text-center px-2 py-1.5 text-xs">รวม</th>';
+
+  // Feed row
+  const feedCells = monthly.map(m => `<td class="text-right px-1 py-1 text-xs whitespace-nowrap">${m.feed > 0 ? fmtNum(m.feed,0) : '<span class="text-secondary-300">-</span>'}</td>`).join('') + `<td class="text-right px-2 py-1 text-xs font-bold">${fmtNum(totalFeed,0)}</td>`;
+
+  // Plan row
+  const planCells = monthly.map(_ => `<td class="text-right px-1 py-1 text-xs text-secondary-400">${targetMonth > 0 ? fmtNum(targetMonth,0) : '-'}</td>`).join('') + `<td class="text-right px-2 py-1 text-xs text-secondary-400">${targetMonth > 0 ? fmtNum(targetMonth*12,0) : '-'}</td>`;
+
+  // % row
+  const pctCells = monthlyPct.map((p, i) => monthly[i].feed > 0
+    ? `<td class="text-center px-0.5 py-0.5"><span class="block rounded text-xs font-bold px-1 py-0.5 whitespace-nowrap" style="background:${pctBg(p)};color:${pctColor(p)}">${p}%</span></td>`
+    : `<td class="text-center px-0.5 py-0.5"><span class="block rounded text-xs px-1 py-0.5 text-secondary-300">-</span></td>`
+  ).join('') + `<td class="text-center px-0.5 py-0.5"><span class="block rounded text-xs font-bold px-1 py-0.5" style="background:${pctBg(ytdAchiev)};color:${pctColor(ytdAchiev)}">${Math.round(ytdAchiev)}%</span></td>`;
+
+  // Days row
+  const daysCells = monthly.map(m => `<td class="text-center px-1 py-1 text-xs text-secondary-500">${m.days > 0 ? m.days : '-'}</td>`).join('') + `<td class="text-center px-2 py-1 text-xs font-bold">${totalDays}</td>`;
+
+  // Product rows
+  const productRows = cfg.productColumns.map(c => {
+    const pTotal = monthly.reduce((s,m)=>s+m.products[c.key],0);
+    const cells = monthly.map(m => {
+      const v = m.products[c.key];
+      return `<td class="text-right px-1 py-1 text-xs whitespace-nowrap">${v > 0 ? fmtNum(v,0) : '<span class="text-secondary-200">-</span>'}</td>`;
+    }).join('') + `<td class="text-right px-2 py-1 text-xs font-bold">${pTotal > 0 ? fmtNum(pTotal,0) : '-'}</td>`;
+    return `<tr><td class="px-2 py-1 text-xs text-secondary-700 whitespace-nowrap font-medium">${c.label}</td>${cells}</tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div class="bg-white rounded-xl border border-secondary-100 shadow-sm p-3">
+        <div class="text-xs text-secondary-500 mb-1">ยอดป้อนรวม</div>
+        <div class="text-2xl font-bold" style="color:${color}">${fmtNum(totalFeed,0)}</div>
+        <div class="text-xs text-secondary-400">ตัน / ปี ${thYear}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-secondary-100 shadow-sm p-3">
+        <div class="text-xs text-secondary-500 mb-1">วันผลิตรวม</div>
+        <div class="text-2xl font-bold text-secondary-800">${totalDays}</div>
+        <div class="text-xs text-secondary-400">วัน</div>
+      </div>
+      <div class="bg-white rounded-xl border border-secondary-100 shadow-sm p-3">
+        <div class="text-xs text-secondary-500 mb-1">อัตราเฉลี่ย</div>
+        <div class="text-2xl font-bold text-secondary-800">${fmtNum(avgRate,1)}</div>
+        <div class="text-xs text-secondary-400">ตัน/ชม. ${targetRate > 0 ? '(เป้า ' + targetRate + ')' : ''}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-secondary-100 shadow-sm p-3">
+        <div class="text-xs text-secondary-500 mb-1">YTD vs แผน</div>
+        <div class="text-2xl font-bold" style="color:${pctColor(ytdAchiev)}">${Math.round(ytdAchiev)}%</div>
+        <div class="text-xs text-secondary-400">${fmtNum(totalFeed,0)} / ${fmtNum(ytdTarget,0)} ตัน</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 mb-4">
+      <div class="font-semibold text-sm text-secondary-700 mb-3">
+        ยอดผลิตรายเดือน — ${label} ปี ${thYear}
+      </div>
+      <div style="height:220px;position:relative">
+        <canvas id="annual-main-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Monthly Table -->
+    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 mb-4 overflow-x-auto">
+      <div class="font-semibold text-sm text-secondary-700 mb-3">
+        ตารางสรุปรายเดือน (ตัน)
+      </div>
+      <table class="min-w-full text-xs border-collapse">
+        <thead>
+          <tr style="background:${color};color:#fff">
+            <th class="text-left px-2 py-1.5 text-xs rounded-tl-lg">รายการ</th>
+            ${headerCells}
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-secondary-100">
+            <td class="px-2 py-1 text-xs font-semibold text-secondary-700">ยอดผลิต (ตัน)</td>
+            ${feedCells}
+          </tr>
+          <tr class="border-b border-secondary-100 bg-secondary-50">
+            <td class="px-2 py-1 text-xs text-secondary-500">แผน (ตัน)</td>
+            ${planCells}
+          </tr>
+          <tr class="border-b border-secondary-100">
+            <td class="px-2 py-1 text-xs font-semibold text-secondary-700">%Yield</td>
+            ${pctCells}
+          </tr>
+          <tr class="bg-secondary-50">
+            <td class="px-2 py-1 text-xs text-secondary-500">วันผลิต</td>
+            ${daysCells}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Product Breakdown -->
+    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 overflow-x-auto">
+      <div class="font-semibold text-sm text-secondary-700 mb-3">
+        ผลิตภัณฑ์แยกรายเดือน (ตัน)
+      </div>
+      <table class="min-w-full text-xs border-collapse">
+        <thead>
+          <tr style="background:${color};color:#fff">
+            <th class="text-left px-2 py-1.5 text-xs">ผลิตภัณฑ์</th>
+            ${headerCells}
+          </tr>
+        </thead>
+        <tbody>
+          ${productRows}
+        </tbody>
+      </table>
+    </div>`;
+
+  // Chart.js
+  requestAnimationFrame(() => {
+    const ctx = document.getElementById('annual-main-chart');
+    if (!ctx) return;
+    if (window._annualChart) { window._annualChart.destroy(); }
+    const labels = TH_MONTHS_SHORT;
+    const actuals = monthly.map(m => m.feed > 0 ? Math.round(m.feed) : null);
+    const plans   = monthly.map(_ => targetMonth > 0 ? targetMonth : null);
+    window._annualChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'ยอดผลิต (ตัน)', data: actuals,
+            backgroundColor: color + 'AA', borderColor: color, borderWidth: 1.5,
+            borderRadius: 4, yAxisID: 'y' },
+          { label: 'แผน (ตัน)', data: plans,
+            type: 'line', borderColor: '#F59E0B', borderDash: [6,3],
+            borderWidth: 2, pointRadius: 0, fill: false, yAxisID: 'y' },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { font: { family: 'Kanit', size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmtNum(ctx.raw||0,0) + ' ตัน' } }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { family: 'Kanit', size: 10 } } },
+          y: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Kanit', size: 10 }, callback: v => fmtNum(v,0) } }
+        }
+      }
+    });
+  });
+}
+
+// ─── Annual PDF Print ───────────────────────────────────────────────
+function printAnnualReport() {
+  const d = _annualState.data;
+  if (!d) { showToast('ยังไม่มีข้อมูล — กรุณารอโหลดก่อน', 'warning'); return; }
+  const { monthly, targetMonth, cfg, plantKey, year, totalFeed, totalDays, avgRate, targetRate, ytdTarget, ytdAchiev } = d;
+  const color = ANNUAL_PLANT_COLORS[plantKey];
+  const thYear = year + 543;
+  const pc  = p => p >= 100 ? '#059669' : p >= 70 ? '#D97706' : '#DC2626';
+  const pb  = p => p >= 100 ? '#D1FAE5' : p >= 70 ? '#FEF3C7' : '#FEE2E2';
+
+  // summary row cells
+  const feedCells   = monthly.map(m=>`<td class="r">${m.feed>0?fmtNum(m.feed,0):'-'}</td>`).join('') + `<td class="r ttl">${fmtNum(totalFeed,0)}</td>`;
+  const planCells   = monthly.map(_=>`<td class="r muted">${targetMonth>0?fmtNum(targetMonth,0):'-'}</td>`).join('') + `<td class="r muted">${targetMonth>0?fmtNum(targetMonth*12,0):'-'}</td>`;
+  const pctCells    = monthly.map(m=>{
+    const p = targetMonth>0&&m.feed>0?Math.round(m.feed/targetMonth*100):null;
+    return p!=null?`<td class="c"><span class="badge" style="background:${pb(p)};color:${pc(p)}">${p}%</span></td>`:`<td class="c dash">-</td>`;
+  }).join('') + `<td class="c"><span class="badge" style="background:${pb(ytdAchiev)};color:${pc(ytdAchiev)}">${Math.round(ytdAchiev)}%</span></td>`;
+  const daysCells   = monthly.map(m=>`<td class="c muted">${m.days||'-'}</td>`).join('') + `<td class="c ttl">${totalDays}</td>`;
+
+  // product rows
+  const prodRows = cfg.productColumns.map((c,ci) => {
+    const pTotal = monthly.reduce((s,m)=>s+(m.products[c.key]||0),0);
+    const bg = ci%2===1?'background:#f8fafc':'';
+    return `<tr style="${bg}"><td class="prod-label">${c.label}</td>
+      ${monthly.map(m=>{const v=m.products[c.key]||0;return `<td class="r">${v>0?fmtNum(v,0):'-'}</td>`;}).join('')}
+      <td class="r ttl">${pTotal>0?fmtNum(pTotal,0):'-'}</td></tr>`;
+  }).join('');
+
+  const colHex = color.replace('#','');
+  const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>รายงานผลิตรายปี ${ANNUAL_PLANT_LABELS[plantKey]} ${thYear}</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Kanit',sans-serif;box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+body{margin:0;padding:0;color:#1e293b;font-size:10.5px;background:#fff}
+.cover{background:${color};color:#fff;padding:22px 28px 18px;border-bottom:5px solid rgba(0,0,0,.12)}
+.cover h1{font-size:22px;margin:4px 0 0;font-weight:700}
+.cover .sub{font-size:11px;opacity:.75;margin-top:5px}
+.body{padding:14px 20px}
+.kpi-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.kc{flex:1;min-width:100px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px}
+.kv{font-size:20px;font-weight:700;color:${color}}
+.kl{font-size:9.5px;color:#64748b;margin-top:2px}
+.section-title{font-size:12px;font-weight:700;color:#1e293b;margin:14px 0 6px;padding-bottom:4px;border-bottom:2px solid ${color}}
+table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:14px}
+thead tr{background:${color};color:#fff}
+th{padding:5px 5px;text-align:center;font-weight:600;white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:3.5px 5px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+tr:nth-child(even) td{background:#f8fafc}
+.r{text-align:right}.c{text-align:center}
+.ttl{font-weight:700}
+.muted{color:#94a3b8}
+.dash{color:#cbd5e1}
+.badge{display:inline-block;font-weight:700;font-size:9.5px;padding:1px 5px;border-radius:4px}
+.prod-label{padding-left:10px;color:#475569;font-weight:500}
+.print-btn{position:fixed;top:10px;right:10px;background:#4f46e5;color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-family:Kanit;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+@media print{.print-btn{display:none}body{font-size:9.5px}}
+</style></head><body>
+<button class="print-btn" onclick="window.print()">🖨️ บันทึก PDF</button>
+<div class="cover">
+  <div style="font-size:10px;opacity:.7">บริษัท สานนท์ จำกัด</div>
+  <h1>รายงานผลิต ${ANNUAL_PLANT_LABELS[plantKey]} ประจำปี ${thYear}</h1>
+  <div class="sub">จัดทำเมื่อ ${thDateEx(new Date().toISOString().slice(0,10))}</div>
+</div>
+<div class="body">
+<div class="kpi-row">
+  <div class="kc"><div class="kv">${fmtNum(totalFeed,0)}</div><div class="kl">ยอดผลิตรวม (ตัน)</div></div>
+  <div class="kc"><div class="kv">${totalDays} วัน</div><div class="kl">วันผลิตรวม</div></div>
+  <div class="kc"><div class="kv">${fmtNum(avgRate,1)}</div><div class="kl">อัตราเฉลี่ย (ต./ชม.)${targetRate>0?' เป้า '+targetRate:''}</div></div>
+  <div class="kc"><div class="kv" style="color:${pc(ytdAchiev)}">${Math.round(ytdAchiev)}%</div><div class="kl">YTD vs แผน (${fmtNum(ytdTarget,0)} ตัน)</div></div>
+</div>
+<div class="section-title">ตารางสรุปรายเดือน (ตัน)</div>
+<table>
+  <thead><tr><th>รายการ</th>${TH_MONTHS_SHORT.map(m=>`<th>${m}</th>`).join('')}<th>รวม</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">ยอดผลิต (ตัน)</td>${feedCells}</tr>
+    <tr><td class="muted">แผน (ตัน)</td>${planCells}</tr>
+    <tr><td style="font-weight:600">%Yield</td>${pctCells}</tr>
+    <tr><td class="muted">วันผลิต</td>${daysCells}</tr>
+  </tbody>
+</table>
+<div class="section-title">ผลิตภัณฑ์แยกรายเดือน (ตัน)</div>
+<table>
+  <thead><tr><th>ผลิตภัณฑ์</th>${TH_MONTHS_SHORT.map(m=>`<th>${m}</th>`).join('')}<th>รวม</th></tr></thead>
+  <tbody>${prodRows}</tbody>
+</table>
+</div></body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 800);
+}
+
+// ─── Annual PPTX Export ─────────────────────────────────────────────
+async function generateAnnualPptx() {
+  const st = _annualState;
+  if (!st.data) { showToast('กรุณารอโหลดข้อมูลก่อน', 'warning'); return; }
+
+  if (!window.PptxGenJS) {
+    showToast('PptxGenJS ยังไม่โหลด — กรุณา Refresh หน้าใหม่แล้วลองอีกครั้ง', 'error');
+    return;
+  }
+  showToast('กำลังสร้าง PPTX...', 'info');
+  try {
+    const allPlants = Object.keys(PRODUCTION_PLANT_CONFIG);
+    const allData = {};
+    await Promise.all(allPlants.map(async pk => { allData[pk] = await loadAnnualData(pk, st.year); }));
+
+    const pres = new window.PptxGenJS();
+    pres.layout = 'LAYOUT_WIDE';
+    const W = 13.33, H = 7.5;
+    const thYear = st.year + 543;
+    const MEN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const MTH = TH_MONTHS_SHORT;
+    // helper: safe addText (no isTextBox — causes compat issues in some PowerPoint versions)
+    const txt = (sl, text, opts) => sl.addText(text, opts);
+
+    // ── Cover ─────────────────────────────────────────────────────────
+    const cover = pres.addSlide();
+    cover.addShape(pres.ShapeType.rect, { x:0, y:0, w:W, h:H, fill:{color:'1E293B'} });
+    cover.addShape(pres.ShapeType.rect, { x:0, y:H-1.0, w:W, h:1.0, fill:{color:'0D9488'} });
+    txt(cover, 'บริษัท สานนท์ จำกัด',          { x:0.7, y:1.3, w:10, h:0.5, fontSize:16, color:'94A3B8', bold:false });
+    txt(cover, 'รายงานผลการดำเนินงานส่วนผลิต', { x:0.7, y:2.0, w:12, h:1.2, fontSize:36, color:'FFFFFF', bold:true });
+    txt(cover, `ประจำปี พ.ศ. ${thYear}`,        { x:0.7, y:3.3, w:10, h:0.7, fontSize:24, color:'7DD3FC', bold:false });
+    txt(cover, 'CDE  /  Propel  /  Sanon 1  /  Sanon 2  /  Mobile Plant', { x:0.7, y:4.0, w:11, h:0.5, fontSize:13, color:'64748B', bold:false });
+    txt(cover, `จัดทำเมื่อ ${thDateEx(new Date().toISOString().slice(0,10))}`, { x:0.7, y:H-0.85, w:8, h:0.5, fontSize:11, color:'FFFFFF', bold:false });
+
+    // ── Overview ──────────────────────────────────────────────────────
+    const ov = pres.addSlide();
+    ov.addShape(pres.ShapeType.rect, { x:0, y:0, w:W, h:0.6, fill:{color:'1E293B'} });
+    txt(ov, 'สรุปภาพรวมทุกโรงงาน', { x:0.3, y:0.1, w:W-0.6, h:0.45, fontSize:16, color:'FFFFFF', bold:true });
+    const ovRows = [
+      [{text:'โรงงาน',           options:{bold:true,fill:'1E293B',color:'FFFFFF',fontSize:11}},
+       {text:'ยอดป้อน (ตัน)',    options:{bold:true,fill:'1E293B',color:'FFFFFF',align:'right',fontSize:11}},
+       {text:'วันผลิต',          options:{bold:true,fill:'1E293B',color:'FFFFFF',align:'center',fontSize:11}},
+       {text:'อัตราเฉลี่ย',      options:{bold:true,fill:'1E293B',color:'FFFFFF',align:'right',fontSize:11}},
+       {text:'%Yield vs แผน',    options:{bold:true,fill:'1E293B',color:'FFFFFF',align:'center',fontSize:11}}],
+      ...allPlants.map(pk => {
+        const d = allData[pk];
+        const pct = Math.round(d.ytdAchiev);
+        const pF = pct>=100?'D1FAE5':pct>=70?'FEF3C7':'FEE2E2';
+        const pC = pct>=100?'065F46':pct>=70?'92400E':'991B1B';
+        return [
+          {text:ANNUAL_PLANT_LABELS[pk],  options:{bold:true,  color:ANNUAL_PLANT_HEX[pk],fontSize:11}},
+          {text:fmtNum(d.totalFeed,0),    options:{align:'right',fontSize:11}},
+          {text:String(d.totalDays),       options:{align:'center',fontSize:11}},
+          {text:fmtNum(d.avgRate,1)+' t/h',options:{align:'right',fontSize:11}},
+          {text:pct+'%',                   options:{align:'center',bold:true,fill:pF,color:pC,fontSize:11}},
+        ];
+      }),
+    ];
+    ov.addTable(ovRows, { x:0.4, y:0.7, w:W-0.8, rowH:0.42, fontSize:11, border:{type:'solid',pt:0.5,color:'E2E8F0'} });
+
+    // ── Per-Factory Slides ─────────────────────────────────────────────
+    for (const pk of allPlants) {
+      const d = allData[pk];
+      const { monthly, targetMonth, cfg, totalFeed, totalDays, avgRate, ytdAchiev } = d;
+      const col = ANNUAL_PLANT_HEX[pk];
+      const label = ANNUAL_PLANT_LABELS[pk];
+      const pF3 = p => p>=100?'D1FAE5':p>=70?'FEF3C7':'FEE2E2';
+      const pC3 = p => p>=100?'065F46':p>=70?'92400E':'991B1B';
+
+      // Summary slide
+      const sl = pres.addSlide();
+      sl.addShape(pres.ShapeType.rect, { x:0, y:0, w:W, h:0.6, fill:{color:col} });
+      txt(sl, `${label}  —  สรุปประจำปี ${thYear}`, { x:0.3, y:0.1, w:W-0.6, h:0.45, fontSize:16, color:'FFFFFF', bold:true });
+
+      // KPI row (text only, no shape borders that could corrupt)
+      const kpis = [
+        ['ยอดป้อนรวม', fmtNum(totalFeed,0)+' ตัน'],
+        ['วันผลิตรวม',  totalDays+' วัน'],
+        ['อัตราเฉลี่ย', fmtNum(avgRate,1)+' ต./ชม.'],
+        ['YTD vs แผน',  Math.round(ytdAchiev)+'%'],
+      ];
+      kpis.forEach(([lbl, val], i) => {
+        const bx = 0.3 + i*3.25;
+        txt(sl, val, { x:bx, y:0.7,  w:3.1, h:0.5, fontSize:20, bold:true,  color:col });
+        txt(sl, lbl, { x:bx, y:1.22, w:3.1, h:0.3, fontSize:9,  bold:false, color:'64748B' });
+      });
+
+      // Bar chart only (most compatible format)
+      const barData = [{ name:'ยอดผลิต (ตัน)', labels:MEN, values:monthly.map(m=>Math.round(m.feed)||0) }];
+      if (targetMonth > 0) barData.push({ name:`แผน (${fmtNum(targetMonth,0)} ต.)`, labels:MEN, values:monthly.map(_=>targetMonth) });
+      try {
+        sl.addChart(pres.ChartType.bar, barData, {
+          x:0.3, y:1.6, w:8.5, h:3.6,
+          barGrouping:'clustered',
+          chartColors: targetMonth>0 ? [col,'FBBF24'] : [col],
+          showLegend:true, legendPos:'t',
+          catAxisLabelFontSize:9, valAxisLabelFontSize:9,
+          showValue:false
+        });
+      } catch(e) { console.warn('chart skip:', e.message); }
+
+      // Monthly table
+      const pctRows = [
+        [{text:'รายการ',options:{bold:true,fill:col,color:'FFFFFF',fontSize:9}},
+         ...MTH.map(m=>({text:m,options:{bold:true,fill:col,color:'FFFFFF',align:'center',fontSize:8}})),
+         {text:'รวม',options:{bold:true,fill:col,color:'FFFFFF',align:'center',fontSize:9}}],
+        [{text:'ยอดผลิต (ตัน)',options:{bold:false,fontSize:8}},
+         ...monthly.map(m=>({text:m.feed>0?fmtNum(m.feed,0):'-',options:{align:'right',fontSize:7}})),
+         {text:fmtNum(totalFeed,0),options:{align:'right',bold:true,fontSize:8}}],
+        [{text:'แผน (ตัน)',options:{color:'94A3B8',fontSize:8}},
+         ...monthly.map(_=>({text:targetMonth>0?fmtNum(targetMonth,0):'-',options:{align:'right',fontSize:7,color:'94A3B8'}})),
+         {text:targetMonth>0?fmtNum(targetMonth*12,0):'-',options:{align:'right',fontSize:8,color:'94A3B8'}}],
+        [{text:'%Yield',options:{bold:true,fontSize:8}},
+         ...monthly.map(m=>{
+           const p=targetMonth>0&&m.feed>0?Math.round(m.feed/targetMonth*100):null;
+           return p!=null?{text:p+'%',options:{align:'center',bold:true,fill:pF3(p),color:pC3(p),fontSize:8}}:{text:'-',options:{align:'center',color:'CBD5E1',fontSize:8}};
+         }),
+         {text:Math.round(ytdAchiev)+'%',options:{align:'center',bold:true,fill:pF3(ytdAchiev),color:pC3(ytdAchiev),fontSize:8}}],
+        [{text:'วันผลิต',options:{color:'64748B',fontSize:8}},
+         ...monthly.map(m=>({text:m.days>0?String(m.days):'-',options:{align:'center',fontSize:7,color:'64748B'}})),
+         {text:String(totalDays),options:{align:'center',bold:true,fontSize:8}}],
+      ];
+      sl.addTable(pctRows, { x:0.3, y:5.3, w:W-0.6, rowH:0.28, fontSize:8, border:{type:'solid',pt:0.3,color:'E2E8F0'} });
+
+      // Product slide
+      const sl2 = pres.addSlide();
+      sl2.addShape(pres.ShapeType.rect, { x:0, y:0, w:W, h:0.6, fill:{color:col} });
+      txt(sl2, `${label}  —  ผลิตภัณฑ์รายเดือน ปี ${thYear}`, { x:0.3, y:0.1, w:W-0.6, h:0.45, fontSize:16, color:'FFFFFF', bold:true });
+      const hd2 = [{text:'ผลิตภัณฑ์',options:{bold:true,fill:col,color:'FFFFFF',fontSize:10}},
+        ...MTH.map(m=>({text:m,options:{bold:true,fill:col,color:'FFFFFF',align:'center',fontSize:9}})),
+        {text:'รวม',options:{bold:true,fill:col,color:'FFFFFF',align:'center',fontSize:10}}];
+      const p2rows = [hd2, ...cfg.productColumns.map((c,ci) => {
+        const pTotal = monthly.reduce((s,m)=>s+(m.products[c.key]||0),0);
+        const aF = ci%2===1?'F1F5F9':'FFFFFF';
+        return [{text:c.label,options:{bold:false,fill:aF,fontSize:10}},
+          ...monthly.map(m=>{const v=m.products[c.key]||0;return {text:v>0?fmtNum(v,0):'-',options:{align:'right',fill:aF,fontSize:9}};}),
+          {text:pTotal>0?fmtNum(pTotal,0):'-',options:{align:'right',bold:true,fill:aF,fontSize:9}}];
+      })];
+      sl2.addTable(p2rows, { x:0.3, y:0.7, w:W-0.6, rowH:0.36, fontSize:10, border:{type:'solid',pt:0.3,color:'E2E8F0'} });
+    }
+
+    // Download via blob (more reliable than writeFile on local files)
+    const thYear2 = st.year + 543;
+    const fname = `รายงานผลิต_สานนท์_ปี${thYear2}.pptx`;
+    const blob = await pres.write({ outputType:'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast(`ดาวน์โหลด ${fname} สำเร็จ`, 'success');
+  } catch(err) {
+    console.error('Annual PPTX error:', err);
+    showToast('สร้าง PPTX ไม่สำเร็จ: ' + (err.message||err), 'error');
+  }
 }
 
 // =====================================================================
