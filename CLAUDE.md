@@ -7,18 +7,18 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-09-02)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-09-02 รอบ 3)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ (รวมจองห้องประชุม + ขอลา)**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน (ตรง import template, เรียง asc)**, **รายงาน Export ครบ columns**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ** | ต้องรัน `production_mobile_schema.sql` ใน Supabase ก่อนใช้งาน Mobile Plant |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price** | ไม่มี Loading Screen (ถูก revert) |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price**, **สารตกตะกอน — เพิ่มผู้เบิก + Realtime approval + สีตามโรงงาน + เบิก/รับเข้าเดือนนี้ per card + วันที่ปัจจุบันใน card + KPI กก.**, **ตารางวัตถุคงเหลือ — ราคาจาก FIFO lot จริง** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
 | System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
 | System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานทันทีผ่าน Supabase Realtime Broadcast**, **หน้า login ใหม่ — avatar วงกลมด้านบน + ชื่อ/รหัส/แผนก ก่อน PIN**, **LINE Security การ์ดมีรูปพนักงาน (เก็บ photo_url ใน pass_requests)** | ต้องรัน SQL 6 ชุด (รวม pass_requests_photo patch) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages + เปิด Realtime ใน Supabase Dashboard |
-| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), SW cache v3 | excavator.png ยังอยู่ใน GitHub/ แต่ไม่ได้ใช้แล้ว (ลบด้วยมือได้) |
+| PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), **SW cache v6 — Network First สำหรับ root URL `/sanon-webapp/`** | — |
 
 ### LINE Notification Status
 
@@ -90,7 +90,7 @@
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
-| `index.html` | System 1 | 2026-09-02 (เพิ่ม Mobile Plant — dash-mobile, manage-prod-mobile, approve-mobile, PRODUCTION_PLANT_CONFIG, Dashboard, Approval) |
+| `index.html` | System 1 | 2026-09-02 (Mobile Plant ครบทุก feature + เพิ่ม target_month ในหน้าเพิ่มโรงงาน + แก้ factoryErr fallback ไม่ crash + sw.js v6 Network First) |
 | `production_mobile_schema.sql` | System 1 | 2026-09-02 (ตาราง production_mobile — UH312/QA451 columns, RLS) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
 | `leave.html` | System 6 | 2026-08-22 (หน้า login ใหม่ avatar+profile, Realtime Broadcast popup, LINE Security มีรูป, photo_url ใน pass_requests) |
@@ -318,6 +318,134 @@ sessionWarnShown, approvalCountInterval
 ---
 
 ## 7. ประวัติการแก้ไข (Changelog)
+
+### 2026-09-02 รอบ 3 — inventory.html: สารตกตะกอน UX + ราคา FIFO ในตารางวัตถุคงเหลือ
+
+**`GitHub/inventory.html` — การเปลี่ยนแปลง:**
+
+**1. สารตกตะกอน stock card — เพิ่ม stat row "เบิก/รับเข้าเดือนนี้":**
+- แต่ละ card แสดง `เบิกเดือนนี้ (มิ.ย.) = XX ถุง` (สีส้ม) + `รับเข้าเดือนนี้ = XX ถุง` (สีน้ำเงิน)
+- ดึงจาก `curWd[ci.id]?.qty` และ `curRcv[ci.id]?.qty` — ข้อมูลเดียวกับ KPI card
+- เพิ่ม separator line `border-t` แยกออกจากส่วน stock
+
+**2. สารตกตะกอน stock card — เพิ่มวันที่ปัจจุบันใน card header:**
+- แสดง `ณ 10 ส.ค. 2569` ชิดขวาของ badge โรงงาน (flex justify-between)
+- คำนวณจาก `new Date()` → แปลงเป็น พ.ศ. อัตโนมัติ
+
+**3. KPI card เบิกจ่าย/รับเข้า — เพิ่มน้ำหนักรวม (กก.):**
+- คำนวณ `totWdKg = Σ(qty × wpkg)` และ `totRcvKg = Σ(qty × wpkg)` per item
+- แสดงใต้ตัวเลข ถุง เช่น `21.0 ถุง` → `525 กก.`
+- เฉพาะ card "เบิกจ่ายเดือนนี้" และ "รับเข้าเดือนนี้" เท่านั้น
+
+**4. ตารางวัตถุคงเหลือ — คอลัมน์ "ราคาต่อหน่วย" ใช้ FIFO lot จริง:**
+- เดิม: `i.unit_price` (ราคา master — ไม่อัปเดตเมื่อรับล็อตใหม่)
+- ใหม่: คำนวณ weighted average จาก `_lotsMap[i.id]` ที่มี `remaining_qty > 0`
+  - `avgP = Σ(remaining_qty × unit_cost) / Σ(remaining_qty)`
+  - Fallback เป็น `i.unit_price` ถ้าไม่มีล็อตเหลือ
+- Tooltip `title` บอกว่าเป็น "ราคาเฉลี่ย FIFO lot ปัจจุบัน" หรือ "ราคา master"
+- **ไม่กระทบ logic การเบิก** — `calcFifoCost()` ยังคง FIFO จริง (ล็อตเก่าก่อน)
+
+**ไม่ต้องรัน SQL เพิ่ม** — เป็น JavaScript frontend ทั้งหมด
+
+**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-09-03 — index.html: เพิ่ม Annual Report Dashboard + PPTX Export
+
+**`index.html` — การเปลี่ยนแปลง:**
+
+**เพิ่มเมนู `dash-annual` "รายงานรายปี":**
+- เพิ่มใน `DASHBOARD_MENUS` (icon: `calendar-range`, group: extra)
+- เพิ่ม case `dash-annual` ใน `renderPageContent()`
+- เพิ่ม Section 29B: ANNUAL REPORT DASHBOARD
+
+**หน้า Annual Report Dashboard (รายโรงงาน + รายปี):**
+- Factory tabs: CDE / Propel / Sanon 1 / Sanon 2 / Mobile Plant
+- Year dropdown: ปีปัจจุบัน ย้อนหลัง 5 ปี
+- KPI cards 4 ใบ: ยอดป้อนรวม, วันผลิต, อัตราเฉลี่ย, YTD vs แผน
+- Chart.js bar+line: ยอดผลิตรายเดือน Actual (bar) vs แผน (dashed line)
+- ตารางสรุปรายเดือน: ยอดผลิต / แผน / % ทำได้ (สีตามเกณฑ์) / วันผลิต
+- ตารางผลิตภัณฑ์รายเดือน: แยกตาม productColumns ของแต่ละโรงงาน
+- ปุ่ม PDF (print window) + ปุ่ม Export PPTX
+
+**PDF Print (`printAnnualReport()`):**
+- หน้า HTML สำหรับพิมพ์/บันทึก PDF
+- ออกแบบด้วย cover header สีโรงงาน + KPI cards + ตารางรายเดือน
+- % ทำได้ มีสีพื้นหลัง (เขียว/เหลือง/แดง) เหมือนต้นแบบ PPTX
+
+**PPTX Export (`generateAnnualPptx()`):**
+- โหลด PptxGenJS 3.12.0 จาก cdnjs CDN (on-demand)
+- ดึงข้อมูลทุกโรงงานพร้อมกัน (Promise.all)
+- โครงสร้างสไลด์:
+  - Slide 1: Cover — ชื่อบริษัท, ปี, โรงงานทุกแห่ง (พื้นหลัง navy)
+  - Slide 2: Overview — ตารางสรุปทุกโรงงาน (ยอดผลิต/วัน/อัตรา/% vs แผน)
+  - ต่อโรงงาน (5 โรงงาน):
+    - Slide A: KPI summary + Bar+Line chart รายเดือน + Monthly % table
+    - Slide B: Product breakdown รายเดือน ทุก productColumn
+- สีตามโรงงาน: CDE=teal, Propel=blue, Sanon1=purple, Sanon2=red, Mobile=orange
+- ชื่อไฟล์: `รายงานผลิต_สานนท์_ปี{thYear}.pptx`
+
+**ไม่ต้องรัน SQL เพิ่ม** — ใช้ข้อมูลจาก production tables และ factories table ที่มีอยู่แล้ว
+
+**ไฟล์ที่แก้ไข:** `index.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `index.html` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-09-02 รอบ 2 — index.html: แก้ Runtime + เป้าตัน/เดือน + sw.js v6
+
+**`index.html` — การเปลี่ยนแปลง:**
+
+**1. แก้ Runtime Mobile Plant (เวลาเดิน):**
+- Root cause: `runtime_hour` เป็น `GENERATED ALWAYS AS` จาก `runtime_minute` ที่ default 0 — ไม่มี trigger คำนวณจาก start/stop hour
+- Fix: รัน SQL patch ใน Supabase:
+  1. `ALTER TABLE production_mobile DROP COLUMN IF EXISTS runtime_hour;`
+  2. `ALTER TABLE production_mobile ADD COLUMN IF NOT EXISTS runtime_hour numeric(8,2) DEFAULT 0;`
+  3. สร้าง trigger `calc_mobile_runtime()` — คำนวณ `runtime_minute = total_min % 60`, `runtime_hour = total_min / 60`, `avg_ton_per_hour = feed_ton / hours`
+  4. `UPDATE production_mobile SET updated_at = now();` — recalculate แถวเดิม
+
+**2. เพิ่มช่อง "เป้าผลิต (ตัน/เดือน)" ในหน้าเพิ่มโรงงาน:**
+- เพิ่ม `target_month` column ใน `factories` table: `ALTER TABLE factories ADD COLUMN IF NOT EXISTS target_month numeric DEFAULT NULL;`
+- เพิ่ม `<input id="ff-target-month">` ในฟอร์ม `openFactoryForm()`
+- payload เพิ่ม `target_month: isNaN(ffTm) ? null : ffTm`
+- Dashboard query: `select('id, name, target_throughput, target_month')`
+- Logic: `effectiveTargetMonth = targetMonthDB > 0 ? targetMonthDB : cfg.targetMonth` → ส่งต่อให้ `renderKpiGapBlock`
+- ใช้ได้ทุกโรงงาน: CDE, Propel, Sanon1, Sanon2, Mobile Plant
+
+**3. แก้ factoryErr ไม่ crash Dashboard:**
+- เปลี่ยน `if (factoryErr) throw factoryErr` → `const factoryRow = (!factoryErr && factoryRows) ? factoryRows[0] : null`
+- ทั้ง `renderDashboardCdePropel` และ `renderDashboardSanon`
+
+**`sw.js` → v6:**
+- แก้ bug root URL `/sanon-webapp/` ถูก Cache First แทน Network First
+- เพิ่ม condition: `pathname.endsWith('/') || pathname === BASE` → Network First
+
+**SQL ที่ต้องรันใน Supabase (ถ้ายังไม่ได้รัน):**
+1. `ALTER TABLE production_mobile DROP COLUMN IF EXISTS runtime_hour;`
+2. `ALTER TABLE production_mobile ADD COLUMN IF NOT EXISTS runtime_hour numeric(8,2) DEFAULT 0;`
+3. สร้าง trigger `calc_mobile_runtime` (ดูรายละเอียดในแชต)
+4. `UPDATE production_mobile SET updated_at = now();`
+5. `ALTER TABLE factories ADD COLUMN IF NOT EXISTS target_month numeric DEFAULT NULL;`
+6. `NOTIFY pgrst, 'reload schema';`
+
+**factories table — ข้อมูลปัจจุบัน (รันผ่าน UI แล้ว):**
+
+| name | target_throughput | target_month |
+|------|-----------------|-------------|
+| CDE | 120 | 30000 |
+| Propel | 180 | 45000 |
+| Sanon 1 | 500 | 100000 |
+| Sanon 2 | 400 | 100000 |
+| Mobile Plant | 350 | 84000 |
+
+**⚠️ ข้อควรระวัง:** ชื่อ factory ต้องตรงกับ `cfg.factoryName` ใน code — "Mobile Plant" (1 space) ไม่ใช่ "Mobile  Plant" (2 space)
+
+**ไฟล์ที่แก้ไข:** `index.html`, `sw.js`, `CLAUDE.md`
+**Copy ไป GitHub/:** `index.html` ✅ | `sw.js` ✅ | `CLAUDE.md` ✅
+
+---
 
 ### 2026-09-02 — index.html: เพิ่ม Mobile Plant (โรงงานที่ 5)
 

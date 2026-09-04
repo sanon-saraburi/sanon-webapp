@@ -18,7 +18,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS/dist/pptxgen.bundled.js"></script>
+<script src="https://unpkg.com/pptxgenjs/dist/pptxgen.bundled.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
   tailwind.config = {
     theme: {
@@ -1687,16 +1687,17 @@ function renderAppShell() {
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
             </div>
-            <span class="text-[10px] font-bold text-white leading-tight">เช็คอิน</span>
+            <span class="text-[10px] font-bold text-white leading-tight">HR</span>
           </a>
-          <!-- System 5 — Meeting -->
+          <!-- System 5 — Meeting (เฉพาะผู้มีสิทธิ์) -->
+          ${(currentUser.meeting_access || currentUser.role === 'admin') ? `
           <a href="#" onclick="event.preventDefault();gotoSystem('meeting.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#0e7490,#0284c7);box-shadow:0 2px 8px rgba(14,116,144,.30)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">จองห้อง</span>
-          </a>
+          </a>` : ''}
           <!-- System 6 — Leave -->
           <a href="#" onclick="event.preventDefault();gotoSystem('leave.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#6d28d9,#7c3aed);box-shadow:0 2px 8px rgba(109,40,217,.30)">
@@ -1875,10 +1876,11 @@ function renderAppShell() {
             </div>
             <div>
               <p class="text-sm font-bold text-white leading-tight">งานบุคคล</p>
-              <p class="text-[10px] text-white/70 leading-tight">เช็คอิน · พนักงาน · บัตรตอก</p>
+              <p class="text-[10px] text-white/70 leading-tight">HR · พนักงาน · บัตรตอก</p>
             </div>
           </a>
-          <!-- System 5 — Meeting -->
+          <!-- System 5 — Meeting (เฉพาะผู้มีสิทธิ์) -->
+          ${(currentUser.meeting_access || currentUser.role === 'admin') ? `
           <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('meeting.html')"
              class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
              style="background:linear-gradient(135deg,#0e7490,#0284c7);box-shadow:0 4px 12px rgba(14,116,144,.30)">
@@ -1889,7 +1891,7 @@ function renderAppShell() {
               <p class="text-sm font-bold text-white leading-tight">จองห้องประชุม</p>
               <p class="text-[10px] text-white/70 leading-tight">ประชุม / อบรม</p>
             </div>
-          </a>
+          </a>` : ''}
           <!-- System 6 — Leave -->
           <a href="#" onclick="event.preventDefault();isSystemSheetOpen=false;gotoSystem('leave.html')"
              class="flex items-center gap-3 p-4 rounded-2xl transition-all duration-150 active:scale-95"
@@ -11257,8 +11259,16 @@ async function generateAnnualPptx() {
   const st = _annualState;
   if (!st.data) { showToast('กรุณารอโหลดข้อมูลก่อน', 'warning'); return; }
 
-  if (!window.PptxGenJS) {
-    showToast('PptxGenJS ยังไม่โหลด — กรุณา Refresh หน้าใหม่แล้วลองอีกครั้ง', 'error');
+  // ตรวจสอบ global name ที่ PptxGenJS อาจ expose
+  const PptxClass = window.PptxGenJS || window.PptxGenJs || window.pptxgen || window.pptxgenjs;
+  if (!PptxClass) {
+    const found = Object.keys(window).filter(k => /pptx/i.test(k));
+    console.log('PptxGenJS globals found:', found.length ? found : 'none');
+    if (found.length) {
+      showToast('พบ PptxGenJS ในชื่อ: ' + found.join(', ') + ' — แจ้ง admin', 'error');
+    } else {
+      showToast('PptxGenJS โหลดไม่สำเร็จ — ตรวจสอบ Console (F12)', 'error');
+    }
     return;
   }
   showToast('กำลังสร้าง PPTX...', 'info');
@@ -11267,7 +11277,7 @@ async function generateAnnualPptx() {
     const allData = {};
     await Promise.all(allPlants.map(async pk => { allData[pk] = await loadAnnualData(pk, st.year); }));
 
-    const pres = new window.PptxGenJS();
+    const pres = new PptxClass();
     pres.layout = 'LAYOUT_WIDE';
     const W = 13.33, H = 7.5;
     const thYear = st.year + 543;

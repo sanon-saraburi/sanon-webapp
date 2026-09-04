@@ -360,7 +360,7 @@ tbody tr:last-child td{border-bottom:none;}
   <div class="layout">
     <div class="sidebar" id="sidebar">
       <div class="sb-header">
-        <div class="sb-brand">สานนท์ — เช็คอิน</div>
+        <div class="sb-brand">สานนท์ — HR</div>
         <div class="sb-sub">ระบบงานบุคคล</div>
       </div>
       <div class="sb-menu">
@@ -371,6 +371,9 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-item" onclick="nav('ck-pass')">🚪 <span>Pass ออกนอก
           <span id="ck-pass-badge" style="display:none;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;padding:0 5px;margin-left:4px;"></span>
         </span></div>
+        <div class="sb-sec">ข้อมูลการลา</div>
+        <div class="sb-item perm-sup" onclick="nav('ck-leave-summary')">📅 <span>สรุปการลาประจำเดือน</span></div>
+        <div class="sb-item perm-sup" onclick="nav('ck-leave-history')">📂 <span>ประวัติการลาทั้งหมด</span></div>
         <div class="sb-sec">ข้อมูล</div>
         <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-stats')">📊 <span>สถิติรายเดือน</span></div>
@@ -596,6 +599,7 @@ function doLogout() {
   _stopGuardRealtime();
   currentUser = null;
   sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem('_sn_ck_lastpage');
   document.getElementById('app').style.display         = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   const lastUser = localStorage.getItem('_sn_ck_lastuser');
@@ -665,13 +669,15 @@ const CK_PERM_MENUS = [
   { id:'ck-stats',     label:'📈 สถิติรายเดือน',   group:'ข้อมูล' },
   { id:'ck-employees', label:'👥 จัดการพนักงาน',   group:'ข้อมูล' },
   { id:'ck-timecard',    label:'🕐 บัตรตอก',        group:'ข้อมูล' },
-  { id:'ck-tc-settings', label:'⚙️ ตั้งค่า OT',     group:'Admin'  },
-  { id:'ck-users',       label:'🔑 จัดการผู้ใช้',  group:'Admin'  },
+  { id:'ck-tc-settings',    label:'⚙️ ตั้งค่า OT',           group:'Admin'       },
+  { id:'ck-users',          label:'🔑 จัดการผู้ใช้',         group:'Admin'       },
+  { id:'ck-leave-summary',  label:'📅 สรุปการลาประจำเดือน',  group:'ข้อมูลการลา' },
+  { id:'ck-leave-history',  label:'📂 ประวัติการลาทั้งหมด',  group:'ข้อมูลการลา' },
 ];
 const CK_ROLE_PERMS = {
   guard:      ['ck-guard','ck-visitor','ck-pass'],
-  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard'],
-  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users'],
+  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-leave-summary','ck-leave-history'],
+  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users','ck-leave-summary','ck-leave-history'],
 };
 
 function ckCanAccess(page) {
@@ -696,12 +702,16 @@ const PAGE_TITLES = {
   'ck-stats':      'สถิติรายเดือน / รายแผนก',
   'ck-employees':  'จัดการพนักงาน',
   'ck-timecard':     'บัตรตอก',
-  'ck-tc-settings':  'ตั้งค่า OT',
-  'ck-users':        'จัดการผู้ใช้',
+  'ck-tc-settings':   'ตั้งค่า OT',
+  'ck-users':         'จัดการผู้ใช้',
+  'ck-leave-summary': 'สรุปการลาประจำเดือน',
+  'ck-leave-history': 'ประวัติการลาทั้งหมด',
 };
 
 function nav(page) {
   if (!ckCanAccess(page)) return;
+  // จำหน้าปัจจุบันไว้ (ใช้ตอน refresh)
+  try { sessionStorage.setItem('_sn_ck_lastpage', page); } catch(_) {}
   // หยุด auto-refresh dashboard เมื่อออกจากหน้า
   if (page !== 'ck-supervisor') {
     clearInterval(_svRefreshTimer);
@@ -727,7 +737,9 @@ function nav(page) {
   else if (page === 'ck-employees')  renderEmployees();
   else if (page === 'ck-timecard')      renderTimecard();
   else if (page === 'ck-tc-settings')  renderTcSettings();
-  else if (page === 'ck-users')      renderUsers();
+  else if (page === 'ck-users')        renderUsers();
+  else if (page === 'ck-leave-summary') renderLeaveSummary();
+  else if (page === 'ck-leave-history') renderLeaveHistory();
 }
 
 // ============================================================
@@ -3607,8 +3619,13 @@ function printEmpCard(empId) {
 }
 
 function printAllCards() {
-  const rows = _empAll;
-  if (!rows.length) { alert('ยังไม่มีข้อมูลพนักงาน'); return; }
+  // พิมพ์เฉพาะรายการที่ผ่านตัวกรองปัจจุบัน (แผนก + ค้นหา)
+  const q    = (document.getElementById('emp-search')?.value||'').trim();
+  const dept = (document.getElementById('emp-dept-filter')?.value||'');
+  let rows = _empAll;
+  if (dept) rows = rows.filter(e => (e.department||'') === dept);
+  if (q)    rows = rows.filter(e => (e.name||'').includes(q)||(e.employee_id||'').includes(q)||(e.department||'').includes(q));
+  if (!rows.length) { alert('ไม่มีข้อมูลพนักงานในตัวกรองที่เลือก'); return; }
   const win = window.open('','_blank','width=900,height=600');
   win.document.write(_cardHtml(rows, true));
   win.document.close();
@@ -4311,6 +4328,270 @@ function _showGuardPassPopup(p) {
   document.body.appendChild(d);
 }
 
+// ============================================================
+// SECTION — ข้อมูลการลา (ดึงจาก leave_requests + pass_requests)
+// ============================================================
+let _lhYear  = new Date().getFullYear();
+let _lhMonth = new Date().getMonth() + 1; // 1-12
+let _lhDept  = '';
+let _lhStatus = '';
+let _lhSearch = '';
+let _lhData  = [];
+
+const TH_MONTHS = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const LEAVE_STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ', rejected:'ปฏิเสธ', cancelled:'ยกเลิก' };
+const LEAVE_STATUS_COLOR = { pending:'#f59e0b', approved:'#22c55e', rejected:'#ef4444', cancelled:'#94a3b8' };
+
+function _leaveMonthOpts(selYear, selMonth) {
+  const curY = new Date().getFullYear();
+  let html = '';
+  for (let y = curY; y >= curY - 2; y--) {
+    for (let m = 12; m >= 1; m--) {
+      if (y === curY && m > new Date().getMonth() + 1) continue;
+      const sel = (y === selYear && m === selMonth) ? 'selected' : '';
+      html += `<option value="${y}-${m}" ${sel}>${TH_MONTHS[m]} ${y+543}</option>`;
+    }
+  }
+  return html;
+}
+
+async function renderLeaveHistory() {
+  const c = document.getElementById('page-content');
+  // ดึงแผนกทั้งหมด
+  const { data: depts } = await sb.from('checkin_employees').select('department').order('department');
+  const deptSet = [...new Set((depts||[]).map(d=>d.department).filter(Boolean))];
+  const deptOpts = deptSet.map(d=>`<option value="${d}" ${d===_lhDept?'selected':''}>${d}</option>`).join('');
+
+  // Query leave_requests
+  let q = sb.from('leave_requests').select('*').order('start_date',{ascending:false});
+  if (_lhStatus) q = q.eq('status', _lhStatus);
+  if (_lhDept)   q = q.eq('department', _lhDept);
+  if (_lhSearch) q = q.ilike('employee_name', `%${_lhSearch}%`);
+  const { data: rows } = await q.limit(500);
+  _lhData = rows || [];
+
+  const tRows = _lhData.map(r => {
+    const stColor = LEAVE_STATUS_COLOR[r.status] || '#64748b';
+    const stTh    = LEAVE_STATUS_TH[r.status]    || r.status;
+    const half = r.half_day === 'am' ? ' (ครึ่งเช้า)' : r.half_day === 'pm' ? ' (ครึ่งบ่าย)' : '';
+    return `<tr>
+      <td style="white-space:nowrap;font-size:12px;color:#64748b;">${r.employee_id||'-'}</td>
+      <td style="font-weight:600;">${r.employee_name||'-'}</td>
+      <td><span style="background:#e2e8f0;border-radius:6px;padding:2px 7px;font-size:11px;">${r.department||'-'}</span></td>
+      <td style="font-size:12px;">${r.type_name||'-'}</td>
+      <td style="white-space:nowrap;font-size:12px;">${fmtDate(r.start_date)}${r.start_date!==r.end_date?` – ${fmtDate(r.end_date)}`:''}</td>
+      <td style="text-align:center;font-weight:700;">${r.days}${half}</td>
+      <td style="font-size:11px;color:#64748b;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(r.reason||'').replace(/"/g,'&quot;')}">${r.reason||'-'}</td>
+      <td><span style="background:${stColor}22;color:${stColor};border:1px solid ${stColor}44;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:600;">${stTh}</span></td>
+      <td style="font-size:11px;color:#64748b;">${r.approver_name||'-'}</td>
+    </tr>`;
+  }).join('');
+
+  c.innerHTML = `
+  <div style="max-width:1100px;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;">
+      <select class="form-control" style="width:140px;" onchange="_lhDept=this.value;renderLeaveHistory()">
+        <option value="">ทุกแผนก</option>${deptOpts}
+      </select>
+      <select class="form-control" style="width:130px;" onchange="_lhStatus=this.value;renderLeaveHistory()">
+        <option value="" ${!_lhStatus?'selected':''}>ทุกสถานะ</option>
+        <option value="pending"   ${_lhStatus==='pending'  ?'selected':''}>รออนุมัติ</option>
+        <option value="approved"  ${_lhStatus==='approved' ?'selected':''}>อนุมัติแล้ว</option>
+        <option value="rejected"  ${_lhStatus==='rejected' ?'selected':''}>ปฏิเสธ</option>
+        <option value="cancelled" ${_lhStatus==='cancelled'?'selected':''}>ยกเลิก</option>
+      </select>
+      <input class="form-control" style="width:170px;" placeholder="ค้นหาชื่อพนักงาน..."
+        value="${_lhSearch}" oninput="_lhSearch=this.value" onkeydown="if(event.key==='Enter')renderLeaveHistory()">
+      <button class="btn btn-primary btn-sm" onclick="renderLeaveHistory()">🔍 ค้นหา</button>
+      <button class="btn btn-success btn-sm" onclick="exportLeaveHistoryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+      <div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:15px;font-weight:700;">📂 ประวัติการลาทั้งหมด</span>
+        <span style="background:#3b82f6;color:#fff;border-radius:10px;font-size:11px;padding:1px 8px;">${_lhData.length} รายการ</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;text-transform:uppercase;">
+            <th style="padding:10px 12px;text-align:left;">รหัส</th>
+            <th style="padding:10px 12px;text-align:left;">ชื่อ-นามสกุล</th>
+            <th style="padding:10px 12px;text-align:left;">แผนก</th>
+            <th style="padding:10px 12px;text-align:left;">ประเภทลา</th>
+            <th style="padding:10px 12px;text-align:left;">วันที่</th>
+            <th style="padding:10px 12px;text-align:center;">จำนวน (วัน)</th>
+            <th style="padding:10px 12px;text-align:left;">เหตุผล</th>
+            <th style="padding:10px 12px;text-align:left;">สถานะ</th>
+            <th style="padding:10px 12px;text-align:left;">ผู้อนุมัติ</th>
+          </tr></thead>
+          <tbody>${tRows || `<tr><td colspan="9" style="text-align:center;padding:32px;color:#94a3b8;">ไม่พบข้อมูล</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+function exportLeaveHistoryCSV() {
+  if (!_lhData.length) { alert('ไม่มีข้อมูล'); return; }
+  const cols = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภทลา','รหัสประเภท','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','ครึ่งวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
+  const rows = [cols, ..._lhData.map(r=>[
+    r.employee_id||'', r.employee_name||'', r.department||'',
+    r.type_name||'', r.type_code||'',
+    r.start_date||'', r.end_date||'', r.days||0, r.half_day||'',
+    r.reason||'', LEAVE_STATUS_TH[r.status]||r.status||'',
+    r.approver_name||'', r.approved_at?(r.approved_at.slice(0,10)):'',
+    r.reject_note||''
+  ])];
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download = `leave_history_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ---- สรุปการลาประจำเดือน ----
+let _lsYear  = new Date().getFullYear();
+let _lsMonth = new Date().getMonth() + 1;
+let _lsDept  = '';
+
+async function renderLeaveSummary() {
+  const c = document.getElementById('page-content');
+  c.innerHTML = '<div class="log-empty">กำลังโหลดข้อมูล...</div>';
+
+  const y = _lsYear, m = _lsMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10); // วันสุดท้ายของเดือน
+
+  // โหลดพร้อมกัน
+  const [deptRes, lvRes, passRes] = await Promise.all([
+    sb.from('checkin_employees').select('department').order('department'),
+    sb.from('leave_requests').select('employee_id,employee_name,department,type_code,type_name,days,status')
+      .gte('start_date', mStart).lte('start_date', mEnd).eq('status','approved'),
+    sb.from('pass_requests').select('employee_id,employee_name,department,status,reason_name')
+      .gte('request_date', mStart).lte('request_date', mEnd)
+      .in('status',['approved','out','returned'])
+  ]);
+
+  const passData = passRes.data;
+
+  const deptSet = [...new Set((deptRes.data||[]).map(d=>d.department).filter(Boolean))];
+  const deptOpts = deptSet.map(d=>`<option value="${d}" ${d===_lsDept?'selected':''}>${d}</option>`).join('');
+
+  const lvRows  = lvRes.data  || [];
+  const passRows = passData || [];
+
+  // Group by employee
+  const empMap = {};
+  const add = (eid, ename, dept) => {
+    if (!empMap[eid]) empMap[eid] = { eid, ename, dept, sick:0, personal:0, annual:0, out:0, other:0, pass:0, total:0 };
+  };
+  lvRows.forEach(r => {
+    if (_lsDept && r.department !== _lsDept) return;
+    add(r.employee_id, r.employee_name, r.department);
+    const code = r.type_code || 'other';
+    const days = Number(r.days)||0;
+    if (['sick','personal','annual','out'].includes(code)) empMap[r.employee_id][code] += days;
+    else empMap[r.employee_id].other += days;
+    empMap[r.employee_id].total += days;
+  });
+  passRows.forEach(r => {
+    if (_lsDept && r.department !== _lsDept) return;
+    add(r.employee_id, r.employee_name, r.department);
+    empMap[r.employee_id].pass += 1;
+  });
+
+  const empList = Object.values(empMap).sort((a,b)=>a.dept.localeCompare(b.dept,'th')||a.ename.localeCompare(b.ename,'th'));
+
+  // Group by dept for display
+  const byDept = {};
+  empList.forEach(e => {
+    if (!byDept[e.dept]) byDept[e.dept] = [];
+    byDept[e.dept].push(e);
+  });
+
+  const sections = Object.entries(byDept).map(([dept, emps]) => {
+    const rows = emps.map(e => `<tr>
+      <td style="font-size:11px;color:#64748b;">${e.eid}</td>
+      <td style="font-weight:600;">${e.ename}</td>
+      <td>${e.sick    ? `<b style="color:#ef4444;">${e.sick}</b>`    : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td>${e.personal? `<b style="color:#f59e0b;">${e.personal}</b>`: '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td>${e.annual  ? `<b style="color:#22c55e;">${e.annual}</b>`  : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td>${e.out     ? `<b style="color:#3b82f6;">${e.out}</b>`     : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td>${e.other   ? `<b style="color:#8b5cf6;">${e.other}</b>`   : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td>${e.pass    ? `<b style="color:#0891b2;">${e.pass}</b>`    : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td style="font-weight:700;color:#1e293b;">${e.total||'-'}</td>
+    </tr>`).join('');
+    const totSick = emps.reduce((s,e)=>s+e.sick,0);
+    const totAll  = emps.reduce((s,e)=>s+e.total,0);
+    return `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:16px;">
+      <div style="background:#1e293b;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:#fff;font-size:14px;font-weight:700;">🏭 ${dept}</span>
+        <span style="background:rgba(255,255,255,.15);color:#fff;border-radius:8px;font-size:11px;padding:2px 8px;">${emps.length} คน</span>
+        ${totAll ? `<span style="background:#ef444440;color:#fca5a5;border-radius:8px;font-size:11px;padding:2px 8px;margin-left:auto;">รวมลา ${totAll} วัน</span>` : ''}
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;">
+            <th style="padding:8px 12px;text-align:left;">รหัส</th>
+            <th style="padding:8px 12px;text-align:left;">ชื่อ-นามสกุล</th>
+            <th style="padding:8px 12px;text-align:center;">🤒 ป่วย</th>
+            <th style="padding:8px 12px;text-align:center;">📌 กิจ</th>
+            <th style="padding:8px 12px;text-align:center;">🏖️ พักร้อน</th>
+            <th style="padding:8px 12px;text-align:center;">🚗 ออกนอก</th>
+            <th style="padding:8px 12px;text-align:center;">📋 อื่นๆ</th>
+            <th style="padding:8px 12px;text-align:center;">🚪 Pass</th>
+            <th style="padding:8px 12px;text-align:center;">รวม (วัน)</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  const monthOpts = _leaveMonthOpts(_lsYear, _lsMonth);
+
+  c.innerHTML = `
+  <div style="max-width:1000px;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;">
+      <select class="form-control" style="width:150px;" onchange="const p=this.value.split('-');_lsYear=+p[0];_lsMonth=+p[1];renderLeaveSummary()">
+        ${monthOpts}
+      </select>
+      <select class="form-control" style="width:150px;" onchange="_lsDept=this.value;renderLeaveSummary()">
+        <option value="">ทุกแผนก</option>${deptOpts}
+      </select>
+      <button class="btn btn-success btn-sm" onclick="exportLeaveSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+    </div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:12px;color:#166534;margin-bottom:14px;">
+      📌 แสดงเฉพาะการลาที่ <b>อนุมัติแล้ว</b> และ Pass ที่ <b>อนุมัติ/ออก/กลับ</b> ในเดือน <b>${TH_MONTHS[_lsMonth]} ${_lsYear+543}</b>
+    </div>
+    ${empList.length ? sections : '<div style="text-align:center;padding:40px;color:#94a3b8;">ไม่มีข้อมูลการลาในเดือนนี้</div>'}
+  </div>`;
+}
+
+function exportLeaveSummaryCSV() {
+  const empMap2 = {}; // rebuild for export
+  // re-use _lhData not available — just export from current rendered data (simplistic)
+  const rows = [['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ลาป่วย(วัน)','ลากิจ(วัน)','พักร้อน(วัน)','ออกนอก(วัน)','อื่นๆ(วัน)','Pass(ครั้ง)','รวมวันลา']];
+  // query again for export
+  const y = _lsYear, m = _lsMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
+  Promise.all([
+    sb.from('leave_requests').select('employee_id,employee_name,department,type_code,days').gte('start_date',mStart).lte('start_date',mEnd).eq('status','approved'),
+    sb.from('pass_requests').select('employee_id,employee_name,department').gte('request_date',mStart).lte('request_date',mEnd).in('status',['approved','out','returned'])
+  ]).then(([lvR, passR]) => {
+    const em = {};
+    const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,sick:0,personal:0,annual:0,out:0,other:0,pass:0,total:0}; };
+    (lvR.data||[]).forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); const c2=r.type_code||'other',d=Number(r.days)||0; if(['sick','personal','annual','out'].includes(c2)) em[r.employee_id][c2]+=d; else em[r.employee_id].other+=d; em[r.employee_id].total+=d; });
+    (passR.data||[]).forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); em[r.employee_id].pass+=1; });
+    const sorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th'));
+    const csvRows = [rows[0], ...sorted.map(e=>[e.eid,e.ename,e.dept,e.sick,e.personal,e.annual,e.out,e.other,e.pass,e.total])];
+    const csv = csvRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+    a.download=`leave_summary_${y}_${String(m).padStart(2,'0')}.csv`; a.click();
+  });
+}
+
 async function bootApp() {
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
@@ -4333,7 +4614,9 @@ async function bootApp() {
     if (!gateNames[currentGate]) currentGate = Object.keys(gateNames).sort()[0];
   } catch(e) {}
   _startGuardRealtime();
-  nav('ck-guard');
+  // ถ้า refresh → กลับหน้าเดิม, ถ้า login ใหม่ → ไป ck-guard
+  const lastPage = sessionStorage.getItem('_sn_ck_lastpage');
+  nav(lastPage || 'ck-guard');
 }
 
 // Auto-restore session (ไม่ใช้ shared session — แยกจากระบบอื่น)
