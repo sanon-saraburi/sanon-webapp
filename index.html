@@ -2932,7 +2932,13 @@ async function loadDroneFactories() {
     // dedupe ด้วย Map ตาม id กันกรณีข้อมูลซ้ำจาก join/insert ซ้ำ
     const map = new Map();
     (data || []).forEach(f => { if (!map.has(f.id)) map.set(f.id, f); });
-    _droneFactoriesCache = Array.from(map.values());
+    const _droneOrder = ['CDE','Propel','Sanon 1','Sanon 2','Mobile Plant'];
+    _droneFactoriesCache = Array.from(map.values()).sort((a,b) => {
+      const ai = _droneOrder.indexOf(a.name); const bi = _droneOrder.indexOf(b.name);
+      if (ai === -1 && bi === -1) return a.name.localeCompare(b.name);
+      if (ai === -1) return 1; if (bi === -1) return -1;
+      return ai - bi;
+    });
   } catch (err) {
     console.error(err);
     _droneFactoriesCache = [];
