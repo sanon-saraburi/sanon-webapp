@@ -7,17 +7,17 @@
 > **กฎ:** ทุกแชตที่เปิดใหม่ต้องอ่านส่วนนี้ก่อนเสมอ เพื่อให้รู้สถานะปัจจุบันของทุกระบบ
 > อัปเดตทุกครั้งที่แก้ไขสำเร็จหรือพบปัญหา
 
-### สถานะระบบ (อัปเดตล่าสุด: 2026-09-02 รอบ 3)
+### สถานะระบบ (อัปเดตล่าสุด: 2026-09-08)
 
 | ระบบ | ไฟล์ | สถานะ | Feature ที่ทำงานได้ล่าสุด | ปัญหาที่รู้อยู่ |
 |------|------|--------|--------------------------|--------------|
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
-| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
+| System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน**, **System Switcher: ชื่อ "เช็คอิน" → "HR", การ์ดจองห้องซ่อนตาม meeting_access**, **วิเคราะห์รายวัน — กราฟ/ตาราง/Breakdown ครบทุกโรงงาน**, **รายวัน auto-detect วันล่าสุดที่มีข้อมูล**, **material_types: is_feed_material + is_product**, **groundwater_usage: ผู้บันทึก**, **drone factory sort: CDE→Propel→Sanon1→Sanon2→Mobile Plant** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price**, **สารตกตะกอน — เพิ่มผู้เบิก + Realtime approval + สีตามโรงงาน + เบิก/รับเข้าเดือนนี้ per card + วันที่ปัจจุบันใน card + KPI กก.**, **ตารางวัตถุคงเหลือ — ราคาจาก FIFO lot จริง** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
-| System 4 — Checkin    | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน |
+| System 4 — Checkin/HR | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)**, **ชื่อ Sidebar → "สานนท์ — HR"**, **Refresh ค้างหน้าเดิม (sessionStorage._sn_ck_lastpage)**, **พิมพ์ตามตัวกรองแผนก**, **Guard Realtime Popup เมื่อ Pass approved (Supabase Broadcast)**, **ข้อมูลการลา: สรุปประจำเดือน + ประวัติทั้งหมด (ดึงจาก leave_requests + pass_requests)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน — ต้องรัน SQL: `ALTER TABLE checkin_users ADD COLUMN IF NOT EXISTS permissions text[];` |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
-| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานทันทีผ่าน Supabase Realtime Broadcast**, **หน้า login ใหม่ — avatar วงกลมด้านบน + ชื่อ/รหัส/แผนก ก่อน PIN**, **LINE Security การ์ดมีรูปพนักงาน (เก็บ photo_url ใน pass_requests)** | ต้องรัน SQL 6 ชุด (รวม pass_requests_photo patch) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages + เปิด Realtime ใน Supabase Dashboard |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานทันทีผ่าน Supabase Realtime Broadcast**, **หน้า login ใหม่ — avatar วงกลมด้านบน + ชื่อ/รหัส/แผนก ก่อน PIN**, **LINE Security การ์ดมีรูปพนักงาน (เก็บ photo_url ใน pass_requests)**, **Realtime แจ้งเตือนหัวหน้า/Admin เมื่อมีคำขอใหม่ (ลา+Pass) — ไม่ต้องรีเฟรชหน้าจอเอง** | ต้องรัน SQL 6 ชุด (รวม pass_requests_photo patch) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages + เปิด Realtime ใน Supabase Dashboard |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), **SW cache v6 — Network First สำหรับ root URL `/sanon-webapp/`** | — |
 
 ### LINE Notification Status
@@ -90,7 +90,7 @@
 | ไฟล์/โฟลเดอร์ | ระบบ | อัปเดตล่าสุด |
 |--------------|------|------------|
 | `portal.html` | Portal | 2026-08-15 (เพิ่ม System 6 ขอลา — openAll=true) |
-| `index.html` | System 1 | 2026-09-02 (Mobile Plant ครบทุก feature + เพิ่ม target_month ในหน้าเพิ่มโรงงาน + แก้ factoryErr fallback ไม่ crash + sw.js v6 Network First) |
+| `index.html` | System 1 | 2026-09-08 (Daily Analysis Block + รายวัน auto-detect + material_types is_feed/is_product + groundwater recorder + drone sort) |
 | `production_mobile_schema.sql` | System 1 | 2026-09-02 (ตาราง production_mobile — UH312/QA451 columns, RLS) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
 | `leave.html` | System 6 | 2026-08-22 (หน้า login ใหม่ avatar+profile, Realtime Broadcast popup, LINE Security มีรูป, photo_url ใน pass_requests) |
@@ -143,6 +143,19 @@
 | System 3 | `pm.html` + `CLAUDE.md` + `PM.md` | ไฟล์ระบบอื่น |
 | System 4 | `checkin.html` + `CLAUDE.md` | ไฟล์ระบบอื่น |
 | ทุกแชต | ห้าม copy `sw.js`, `manifest-*.json`, `icons/` | ยกเว้นถูกสั่งให้แก้ PWA โดยเฉพาะ |
+
+---
+
+## ⚠️ 0F. ขอบเขตแชตปัจจุบัน (กำหนดโดยคุณใหญ่ — 2026-09-10)
+
+> **แชตนี้มีสิทธิ์แก้ไขเฉพาะ System 2 — Inventory (`inventory.html`) เท่านั้น**
+> ขอบเขตงาน: FIFO, QR/Label, เบิก/อนุมัติ, Dashboard คลัง
+> ถ้าจะแก้ไขระบบอื่น (Portal, System 1 Production, System 3 PM, System 4 Checkin/HR, System 5 Meeting, System 6 Leave, หรือไฟล์ shared เช่น `sw.js`/`manifest-*.json`) **ต้องถามคุณใหญ่ก่อนทุกครั้ง**
+
+**ไฟล์ที่แก้ไขได้ในแชตนี้:** `inventory.html`, `inventory_schema.sql`, `inventory_alert.sql`, `inventory_alert_fn.ts`, `lot_tracking.sql`, `fix_stock.sql`, `INVENTORY.md`, และอัปเดต `CLAUDE.md` เฉพาะส่วน System 2 ใน Section 0
+
+> **📌 ข้อยกเว้นที่คุณใหญ่อนุมัติเพิ่มในแชตนี้ (2026-09-10):** อนุญาตให้แก้ไข **System 6 — Leave (`leave.html`)** เพิ่มเติมได้ด้วย (คุณใหญ่ยืนยันโดยตรงในแชตนี้ว่าให้แก้ `leave.html` ได้ นอกเหนือจากขอบเขตเดิมที่จำกัดไว้เฉพาะ System 2)
+> **ไฟล์เพิ่มเติมที่แก้ไขได้:** `leave.html`, `checkin_system/leave_schema*.sql`, `leave_schema_v6_patch.sql`
 
 ---
 
@@ -319,6 +332,29 @@ sessionWarnShown, approvalCountInterval
 
 ## 7. ประวัติการแก้ไข (Changelog)
 
+### 2026-09-11 — leave.html: Realtime แจ้งเตือนหัวหน้า/Admin เมื่อมีคำขอใหม่
+
+**ปัญหาที่พบ:** เดิมเมื่อพนักงานยื่นคำขอลา/Pass ใหม่ LINE แจ้งเตือนไปกลุ่ม HR ตามปกติ แต่ในหน้าเว็บแอป (หน้า "อนุมัติคำขอ" / Dashboard) หัวหน้างานหรือ Admin ที่ล็อกอินค้างอยู่ **ไม่เห็นคำขอใหม่จนกว่าจะกดรีเฟรชเอง** เพราะไม่มีกลไก realtime ฝั่งผู้อนุมัติ (มีแต่ฝั่งพนักงานที่ subscribe รอฟังผลอนุมัติ/ปฏิเสธผ่าน `emp-notif-{employee_id}` channel เท่านั้น)
+
+**`leave.html` — การเปลี่ยนแปลง:**
+
+**1. เพิ่ม Supabase Broadcast channel ใหม่ `leave-approvers-notif`:**
+- `_broadcastNewRequestToApprovers(kind, r)` — พนักงานเรียกทันทีหลัง insert `leave_requests`/`pass_requests` สำเร็จ (ใน `submitRequest()` และ `submitPassRequest()`) ส่ง payload `{kind, employee_name, department, type_name, days}`
+- `_startApproverRealtime()` / `_stopApproverRealtime()` — หัวหน้า/Admin subscribe channel นี้ตอน `_bootApp()` เมื่อ `can('approve')` เป็นจริง (และ unsubscribe ใน `doLogout()`)
+
+**2. `_onNewApproverRequest(payload)` — ตัวจัดการเมื่อมี broadcast เข้ามา:**
+- ทำงานเฉพาะผู้มีสิทธิ์อนุมัติ (`can('approve')`)
+- Supervisor (ไม่ใช่ admin) จะได้รับแจ้งเฉพาะคำขอแผนกตัวเองเท่านั้น (เทียบ `currentUser.department` — ตรงกับ logic กรองที่ใช้ในหน้าอนุมัติเดิม) ส่วน Admin ได้รับแจ้งทุกแผนก
+- แสดง toast `🔔 คำขอใหม่: ...` ทันที
+- ถ้ากำลังอยู่หน้า `lv-approvals` → re-render อัตโนมัติ, หน้า `lv-pass-approve` → re-render Pass, หน้า `lv-dashboard` → re-render dashboard, หน้าอื่น → อัปเดตแค่ตัวเลข badge (`_refreshApproveBadgeOnly()` / `_refreshPassBadgeOnly()`)
+
+**ไม่ต้องรัน SQL เพิ่ม** — ใช้ Supabase Realtime Broadcast (เหมือน popup แจ้งพนักงานเดิม) ไม่ต้องเปิด Realtime บนตารางเพิ่มเติม (ใช้ broadcast ไม่ใช่ postgres_changes)
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
+
+---
+
 ### 2026-09-02 รอบ 3 — inventory.html: สารตกตะกอน UX + ราคา FIFO ในตารางวัตถุคงเหลือ
 
 **`GitHub/inventory.html` — การเปลี่ยนแปลง:**
@@ -349,6 +385,92 @@ sessionWarnShown, approvalCountInterval
 
 **ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `CLAUDE.md`
 **Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-09-08 — index.html: วิเคราะห์รายวัน + แก้ material_types + groundwater + drone sort
+
+**`index.html` — การเปลี่ยนแปลง:**
+
+**1. เพิ่ม Section 12B: Daily Analysis Block (ทุกโรงงาน CDE/Propel/Sanon1/Sanon2/Mobile Plant)**
+- `renderDailyDetailBlock(type, targetThroughput, rows)` — ฟังก์ชันใหม่
+- กราฟ Bar+Line Chart รายวัน: ยอดป้อน (bar, ฟ้า) + Throughput (line, เหลือง) + เส้น target (แดงประ ถ้ากำหนดไว้)
+- ตารางรายวันครบ: วันที่, ยอดป้อน(ตัน), Runtime(ชม.), Throughput(ตัน/ชม.สี 🟢🟡🔴), product columns ตามโรงงาน, Breakdown — พร้อมแถว "รวม/เฉลี่ย"
+- สรุป Breakdown: แสดงเฉพาะวันที่มี Breakdown (ซ่อนถ้าไม่มี)
+- เพิ่ม `<div id="${type}-daily-table-block">` ใน HTML template ทั้ง CDE/Propel และ Sanon/Mobile
+- เพิ่ม `daily-table-block` ใน error block list ทั้ง 2 load functions
+
+**2. แก้ "รายวัน" mode — auto-detect วันล่าสุดที่มีข้อมูล**
+- `attachRangeControlEvents`: กดปุ่ม "รายวัน" → set `rangeState._dayInitialized = false`
+- `loadCdePropelData` + `loadSanonData`: ถ้า mode=day && `!_dayInitialized` → query วันล่าสุด → set `rangeState.date` + update date input DOM
+- เดิม: แสดงวันนี้ (ไม่มีข้อมูล) → ใหม่: แสดงวันล่าสุดที่บันทึกไว้
+
+**3. material_types — เพิ่ม is_feed_material + is_product**
+- SQL: `ALTER TABLE material_types ADD COLUMN IF NOT EXISTS is_feed_material boolean DEFAULT false;`
+- SQL: `ALTER TABLE material_types ADD COLUMN IF NOT EXISTS is_product boolean DEFAULT false;`
+- หน้าจัดการวัสดุ: เพิ่ม checkbox "วัตถุดิบป้อน" และ "ผลผลิต" ในฟอร์ม
+- ตารางรายการวัสดุ: เพิ่มคอลัมน์ ✓ วัตถุดิบป้อน / ✓ ผลผลิต
+- Dropdown บันทึกยอดผลิต: กรองเฉพาะ `is_feed_material=true` + factory ที่ตรงกัน (ไม่ปน product อื่น)
+
+**4. groundwater_usage — เพิ่มคอลัมน์ผู้บันทึก**
+- SQL: `ALTER TABLE groundwater_usage ADD COLUMN IF NOT EXISTS recorder_name text;` (รันแล้ว ✅)
+- ตาราง: เพิ่มคอลัมน์ "ผู้บันทึก" (colspan 7→8)
+- INSERT payload: เพิ่ม `recorder_name: currentUser.full_name`
+
+**5. Drone stock — factory button sort**
+- เพิ่ม `_droneOrder = ['CDE','Propel','Sanon 1','Sanon 2','Mobile Plant']`
+- sort ปุ่มกรองตามลำดับนี้ (ไม่ใช่ alphabetical)
+
+**ไม่ต้องรัน SQL เพิ่ม** (ยกเว้น material_types columns ถ้ายังไม่ได้รัน)
+
+**ไฟล์ที่แก้ไข:** `index.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `index.html` ✅ | `CLAUDE.md` ✅
+
+---
+
+### 2026-09-04 — checkin.html + index.html: สานนท์ HR + ข้อมูลการลา
+
+**`checkin.html` — การเปลี่ยนแปลง:**
+
+**1. ชื่อ Sidebar เปลี่ยนจาก "สานนท์ — เช็คอิน" → "สานนท์ — HR"**
+
+**2. Refresh ค้างหน้าเดิม:**
+- `nav()` บันทึก page ปัจจุบันลง `sessionStorage._sn_ck_lastpage`
+- `bootApp()` อ่านกลับมา → ถ้า refresh ไปหน้าเดิม, ถ้า login ใหม่ → `ck-guard`
+- `doLogout()` ล้าง `_sn_ck_lastpage`
+
+**3. พิมพ์ตามตัวกรอง:**
+- `printAllCards()` อ่านค่า `emp-search` + `emp-dept-filter` แล้วกรอง `_empAll` ก่อนพิมพ์
+- พิมพ์เฉพาะแผนกหรือชื่อที่กรองไว้
+
+**4. หมวดเมนูใหม่ "ข้อมูลการลา" (เฉพาะ Supervisor + Admin):**
+- `ck-leave-summary` — สรุปการลาประจำเดือน
+  - Filter: เดือน/ปี, แผนก
+  - ตารางรายแผนก: ป่วย/กิจ/พักร้อน/ออกนอก/อื่นๆ/Pass/รวมวัน ต่อคน
+  - Export CSV
+- `ck-leave-history` — ประวัติการลาทั้งหมด
+  - Filter: แผนก, สถานะ, ค้นหาชื่อ
+  - ตาราง: รหัส, ชื่อ, แผนก, ประเภทลา, วันที่, จำนวนวัน, เหตุผล, สถานะ, ผู้อนุมัติ
+  - Export CSV
+- ดึงจาก `leave_requests` + `pass_requests` — DB เดียวกับ leave.html
+
+**5. ย้ายหมวด "ข้อมูลการลา" ขึ้นมาก่อนหมวด "ข้อมูล"**
+
+**ไม่ต้องรัน SQL เพิ่ม** (ยกเว้น `ALTER TABLE checkin_users ADD COLUMN IF NOT EXISTS permissions text[];` ถ้ายังไม่ได้รัน)
+
+---
+
+**`index.html` — การเปลี่ยนแปลง:**
+
+**1. System Switcher: "เช็คอิน" → "HR"** (Desktop sidebar + Mobile bottom sheet)
+
+**2. การ์ด "จองห้อง" ซ่อนตามสิทธิ์:**
+- แสดงเฉพาะ `currentUser.meeting_access === true` หรือ `role === 'admin'`
+- Admin กำหนดสิทธิ์ผ่าน SQL: `UPDATE app_users SET meeting_access = true WHERE username = 'xxx';`
+
+**ไฟล์ที่แก้ไข:** `checkin.html`, `index.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `checkin.html` ✅ | `index.html` ✅ | `CLAUDE.md` ✅
+**ยังไม่ได้ upload ขึ้น GitHub Pages**
 
 ---
 

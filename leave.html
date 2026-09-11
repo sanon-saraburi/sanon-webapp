@@ -1073,6 +1073,7 @@ function toggleSupPassFallback() {
 
 function doLogout() {
   _stopNotifRealtime();
+  _stopApproverRealtime();
   localStorage.removeItem(SESSION_KEY);
   currentUser = null; currentEmp = null; currentMode = null;
   document.getElementById('main-app').style.display    = 'none';
@@ -1613,6 +1614,9 @@ async function submitRequest() {
 
   // Send LINE notify
   await sendLineNotify(data, 'new');
+
+  // แจ้งเตือนหัวหน้า/Admin แบบ Realtime ในระบบ — เห็นทันทีไม่ต้องรีเฟรชหน้าจอ
+  _broadcastNewRequestToApprovers('leave', data);
 
   showToast('ส่งคำขอลาเรียบร้อยแล้ว ✅','success');
   navigateTo('lv-my-hist');
@@ -2366,6 +2370,10 @@ async function submitPassRequest() {
 
   // แจ้ง LINE หัวหน้า — ทุกประเภทรออนุมัติ
   sendPassLineNotify(data.pass_id, payload, 'pending');
+
+  // แจ้งเตือนหัวหน้า/Admin แบบ Realtime ในระบบ — เห็นทันทีไม่ต้องรีเฟรชหน้าจอ
+  _broadcastNewRequestToApprovers('pass', payload);
+
   showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
   navigateTo('lv-pass-hist');
 }
@@ -3602,6 +3610,11 @@ async function _bootApp() {
     setTimeout(() => checkLeaveStatusNotifications(), 800);
     _startNotifRealtime();
   }
+
+  // แจ้งเตือนหัวหน้า/Admin: realtime เมื่อมีคำขอใหม่เข้ามา — ไม่ต้องรีเฟรชหน้าจอเองอีกต่อไป
+  if (can('approve')) {
+    _startApproverRealtime();
+  }
 }
 
 async function checkLeaveStatusNotifications() {
@@ -3706,6 +3719,83 @@ function _sendBroadcastNotif(employeeId, payload) {
       type: 'broadcast', event: 'status_update', payload
     });
   } catch(_) {}
+}
+
+// ─────────────────────────────────────────────────────────────
+// หัวหน้า/Admin — Realtime แจ้งเตือนทันทีเมื่อมีคำขอใหม่ (ลา/Pass) เข้ามา
+// ไม่ต้องกดรีเฟรชหน้าจอเองอีกต่อไป
+// ─────────────────────────────────────────────────────────────
+let _approverNotifChannel = null;
+
+function _startApproverRealtime() {
+  _stopApproverRealtime();
+  _approverNotifChannel = sb.channel('leave-approvers-notif')
+    .on('broadcast', { event: 'new_request' }, ({ payload }) => {
+      _onNewApproverRequest(payload);
+    })
+    .subscribe();
+}
+
+function _stopApproverRealtime() {
+  if (_approverNotifChannel) { sb.removeChannel(_approverNotifChannel); _approverNotifChannel = null; }
+}
+
+// พนักงาน — ส่ง Broadcast แจ้งหัวหน้า/Admin ทันทีที่ยื่นคำขอใหม่ (เรียกหลัง insert สำเร็จ)
+function _broadcastNewRequestToApprovers(kind, r) {
+  try {
+    sb.channel('leave-approvers-notif').send({
+      type: 'broadcast', event: 'new_request',
+      payload: {
+        kind, // 'leave' | 'pass'
+        employee_name: r?.employee_name || '',
+        department: r?.department || '',
+        type_name: kind === 'leave' ? (r?.type_name || 'คำขอลา') : (r?.reason_name || 'ขอออกนอกบริเวณ'),
+        days: r?.days || null
+      }
+    });
+  } catch(_) {}
+}
+
+// รับ broadcast คำขอใหม่ — เฉพาะผู้มีสิทธิ์อนุมัติเท่านั้นที่ทำงาน
+function _onNewApproverRequest(payload) {
+  if (!can('approve')) return;
+  // Supervisor (ไม่ใช่ admin) เห็นเฉพาะแผนกตัวเอง — คำขอแผนกอื่นไม่ต้องแจ้ง (ไม่มีสิทธิ์เห็นอยู่แล้ว)
+  if (!can('admin') && currentUser?.department && payload?.department && payload.department !== currentUser.department) return;
+
+  const kindLabel = payload?.kind === 'pass' ? '🚪 ขอออกนอกบริเวณ' : '📋 คำขอลา';
+  showToast(`🔔 คำขอใหม่: ${kindLabel} — ${payload?.employee_name||''}${payload?.department?` (${payload.department})`:''}`, 'info', 6000);
+
+  if (payload?.kind === 'pass') {
+    if (currentPage === 'lv-pass-approve') renderPassApprovals();
+    else _refreshPassBadgeOnly();
+  } else {
+    if (currentPage === 'lv-approvals') renderApprovals();
+    else if (currentPage === 'lv-dashboard') renderDashboard();
+    else _refreshApproveBadgeOnly();
+  }
+}
+
+// อัปเดตแค่ badge ตัวเลข "รออนุมัติ" (คำขอลา) โดยไม่ re-render ทั้งหน้า
+async function _refreshApproveBadgeOnly() {
+  if (!can('approve')) return;
+  let q = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { count } = await q;
+  const badge = document.getElementById('sb-badge-approve');
+  if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
+  const bnBadge = document.getElementById('bn-badge-approve');
+  if(bnBadge){ bnBadge.textContent=count||''; bnBadge.style.display=count>0?'':'none'; }
+}
+
+// อัปเดตแค่ badge ตัวเลข "รออนุมัติ" (Pass) โดยไม่ re-render ทั้งหน้า
+async function _refreshPassBadgeOnly() {
+  if (!can('approve')) return;
+  const today = new Date().toISOString().slice(0,10);
+  let q = sb.from('pass_requests').select('pass_id', { count: 'exact', head: true }).eq('status','pending').gte('request_date', today);
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { count } = await q;
+  const badge = document.getElementById('sb-badge-pass');
+  if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
 }
 
 function _showSingleNotifPopup({ icon, label, detail, status, note }) {
