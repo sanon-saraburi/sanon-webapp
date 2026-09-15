@@ -435,6 +435,56 @@ function buildPassRequestCard(r: Record<string, unknown>, isPending: boolean) {
   }
 }
 
+function buildOtRequestCard(r: Record<string, unknown>) {
+  const TYPE_LABEL: Record<string, string> = { advance: "ขอล่วงหน้า", actual: "บันทึกย้อนหลัง (ขอเบิก)" };
+  const typeCode  = String(r.request_type ?? "advance");
+  const typeLabel = TYPE_LABEL[typeCode] ?? typeCode;
+  const hours     = Number(r.estimated_hours ?? 0);
+  const photoUrl  = r.photo_url ? String(r.photo_url) : null;
+
+  return {
+    type: "bubble", size: "kilo",
+    header: {
+      type: "box", layout: "horizontal", backgroundColor: "#0f766e", paddingAll: "14px",
+      contents: [
+        {
+          type: "box", layout: "vertical", flex: 1,
+          contents: [
+            { type: "text", text: "⏱️  คำขอโอทีใหม่ · ระบบขอลา", size: "xxs", color: "#ffffffaa" },
+            { type: "text", text: `⏱️ ${typeLabel}`, size: "xl", weight: "bold", color: "#ffffff" },
+            { type: "text", text: "สานนท์ จำกัด", size: "xs", color: "#ffffff88" },
+          ],
+        },
+        ...(photoUrl ? [{
+          type: "box", layout: "vertical", width: "60px", height: "60px",
+          cornerRadius: "30px", margin: "md", flex: 0,
+          contents: [{
+            type: "image", url: photoUrl, size: "full",
+            aspectRatio: "1:1", aspectMode: "cover",
+          }],
+        }] : []),
+      ],
+    },
+    body: {
+      type: "box", layout: "vertical", spacing: "sm",
+      contents: [
+        row("👤", `พนักงาน: ${r.employee_name ?? "-"}`),
+        row("🏢", `แผนก: ${r.department ?? "-"}`),
+        row("📅", `วันที่: ${fmtDate(r.ot_date)}`),
+        row("🕐", `เวลา: ${String(r.start_time ?? "-").slice(0,5)} – ${String(r.end_time ?? "-").slice(0,5)} น. (${hours.toFixed(1)} ชม.)`),
+        ...(r.reason ? [row("📝", `งาน/เหตุผล: ${r.reason}`)] : []),
+      ],
+    },
+    footer: {
+      type: "box", layout: "vertical", paddingAll: "12px",
+      contents: [{
+        type: "button", style: "primary", color: "#0f766e", height: "sm",
+        action: { type: "uri", label: "👆 ไปหน้าอนุมัติ", uri: `${LEAVE_APP_URL}?page=lv-ot-approve` },
+      }],
+    },
+  };
+}
+
 // ─── Send LINE Push ──────────────────────────────────────────────────
 async function sendLine(flexBubble: unknown, groupId?: string, token?: string, backupToken?: string) {
   const toGroup = groupId || LINE_GROUP_ID;
@@ -718,6 +768,16 @@ serve(async (req) => {
         return new Response("sent:pass_approved_security", { status: 200, headers: CORS });
       }
       return new Response("skip:pass_other_status", { status: 200, headers: CORS });
+    }
+
+    // ── System 6: OT Request → OA HR (LINE_CHANNEL_TOKEN_HR) ──────
+    if (table === "ot_requests") {
+      if (record.status !== "pending") return new Response("skip:not_pending", { status: 200, headers: CORS });
+      const hrGroup   = LINE_GROUP_ID_HR || LINE_GROUP_ID;
+      const hrToken   = LINE_TOKEN_HR || LINE_TOKEN;
+      const hrBackup  = LINE_TOKEN_HR_2 || "";
+      await sendLine(buildOtRequestCard(record), hrGroup, hrToken, hrBackup);
+      return new Response("sent:ot_request", { status: 200, headers: CORS });
     }
 
     return new Response("skip:unknown_table", { status: 200, headers: CORS });

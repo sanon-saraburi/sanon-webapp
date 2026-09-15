@@ -381,22 +381,24 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
         <div class="sb-link" id="sb-lv-request" onclick="navigateTo('lv-request')">
           <span class="ic">✏️</span> ยื่นคำขอลา
         </div>
-        <div class="sb-link" id="sb-lv-my-hist" onclick="navigateTo('lv-my-hist')">
-          <span class="ic">📄</span> ประวัติของฉัน
+        <div class="sb-link" id="sb-lv-pass" onclick="navigateTo('lv-pass')">
+          <span class="ic">🚪</span> ขอออกนอกบริษัท
+        </div>
+        <div class="sb-link" id="sb-lv-ot" onclick="navigateTo('lv-ot')">
+          <span class="ic">⏱️</span> ขอทำโอที
         </div>
       </div>
 
       <div class="sb-section">
-        <div class="sb-label">ออกนอกบริษัท</div>
-        <div class="sb-link" id="sb-lv-pass" onclick="navigateTo('lv-pass')">
-          <span class="ic">🚪</span> ขอออกนอกบริษัท
+        <div class="sb-label">ประวัติของฉัน</div>
+        <div class="sb-link" id="sb-lv-my-hist" onclick="navigateTo('lv-my-hist')">
+          <span class="ic">📄</span> ประวัติของฉัน
         </div>
         <div class="sb-link" id="sb-lv-pass-hist" onclick="navigateTo('lv-pass-hist')">
-          <span class="ic">📋</span> ประวัติ Pass ของฉัน
+          <span class="ic">📋</span> ประวัติอนุญาต
         </div>
-        <div class="sb-link" id="sb-lv-pass-approve" onclick="navigateTo('lv-pass-approve')" style="display:none;">
-          <span class="ic">🔑</span> อนุมัติ Pass
-          <span id="sb-badge-pass" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
+        <div class="sb-link" id="sb-lv-ot-hist" onclick="navigateTo('lv-ot-hist')">
+          <span class="ic">📋</span> ประวัติโอทีของฉัน
         </div>
       </div>
 
@@ -405,6 +407,14 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
         <div class="sb-link" id="sb-lv-approvals" onclick="navigateTo('lv-approvals')">
           <span class="ic">✅</span> อนุมัติคำขอ
           <span id="sb-badge-approve" style="display:none;background:#ef4444;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
+        </div>
+        <div class="sb-link" id="sb-lv-pass-approve" onclick="navigateTo('lv-pass-approve')">
+          <span class="ic">🔑</span> อนุมัติ Pass
+          <span id="sb-badge-pass" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
+        </div>
+        <div class="sb-link" id="sb-lv-ot-approve" onclick="navigateTo('lv-ot-approve')">
+          <span class="ic">🔑</span> อนุมัติโอที
+          <span id="sb-badge-ot" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
         </div>
         <div class="sb-link" id="sb-lv-all" onclick="navigateTo('lv-all')">
           <span class="ic">📋</span> ทุกคำขอ
@@ -1235,7 +1245,8 @@ function _overlayClick(e) { if(e.target.id==='modal-overlay') closeModal(); }
 const PAGE_TITLES = {
   'lv-dashboard':'แดชบอร์ด','lv-request':'ยื่นคำขอลา','lv-my-hist':'ประวัติของฉัน',
   'lv-approvals':'อนุมัติคำขอ','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
-  'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติ Pass ของฉัน','lv-pass-approve':'อนุมัติ Pass'
+  'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติอนุญาต','lv-pass-approve':'อนุมัติ Pass',
+  'lv-ot':'ขอทำโอที','lv-ot-hist':'ประวัติโอทีของฉัน','lv-ot-approve':'อนุมัติโอที'
 };
 function navigateTo(page) {
   currentPage = page;
@@ -1262,6 +1273,9 @@ function navigateTo(page) {
     case 'lv-pass':          renderPassRequest(); break;
     case 'lv-pass-hist':     renderMyPassHistory(); break;
     case 'lv-pass-approve':  renderPassApprovals(); break;
+    case 'lv-ot':            renderOtRequest(); break;
+    case 'lv-ot-hist':       renderMyOtHistory(); break;
+    case 'lv-ot-approve':    renderOtApprovals(); break;
     default: pc.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่พบหน้านี้</div>';
   }
 }
@@ -2387,7 +2401,7 @@ async function submitPassRequest() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// ประวัติ Pass ของฉัน
+// ประวัติอนุญาต (เดิมชื่อ ประวัติ Pass ของฉัน)
 // ─────────────────────────────────────────────────────────────
 async function renderMyPassHistory() {
   const empId = currentUser?.id || currentEmp?.employee_id || '';
@@ -2589,6 +2603,507 @@ async function sendPassLineNotify(passId, r, event) {
       })
     }).catch(e => console.warn('pass LINE notify failed:', e));
   } catch(e) { console.warn('pass LINE notify error:', e); }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11D — OT Request (ขอทำโอที: ขอล่วงหน้า + บันทึกย้อนหลัง)
+// ─────────────────────────────────────────────────────────────
+let _otTypeSelected = 'advance'; // 'advance' = ขอล่วงหน้า | 'actual' = บันทึกย้อนหลัง
+let _otCache = {};               // cache ot_requests ที่โหลดมาแล้ว (key=ot_id) — ใช้โดย openEditOtModal
+let _editOtTypeSelected = 'advance'; // ประเภทคำขอที่เลือกอยู่ในโมดัลแก้ไข
+
+function renderOtRequest() {
+  const empId   = currentUser?.id || currentEmp?.employee_id || '';
+  const empName = currentUser?.full_name || currentEmp?.name || '';
+  const dept    = currentUser?.department || currentEmp?.department || '';
+
+  const now = new Date();
+  const todayISO = now.toISOString().slice(0,10);
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:600px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">⏱️ ยื่นขอทำโอที</div>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-ot-hist')">ประวัติ →</button>
+      </div>
+
+      <!-- ข้อมูลผู้ขอ -->
+      <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#0f766e;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">
+          ${empName.charAt(0)||'?'}
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:14px;color:#0f172a;">${esc(empName)}</div>
+          <div style="font-size:12px;color:#64748b;">${esc(dept||'—')}</div>
+        </div>
+      </div>
+
+      <!-- ประเภทคำขอ -->
+      <div class="form-group">
+        <label class="form-label">ประเภทคำขอ <span style="color:#ef4444;">*</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="type-card" id="ot-type-advance" onclick="selectOtType('advance')" style="cursor:pointer;">
+            <div class="tc-icon">📝</div>
+            <div class="tc-name">ขอล่วงหน้า</div>
+            <div style="font-size:10px;color:#64748b;">ก่อนทำ OT</div>
+          </div>
+          <div class="type-card" id="ot-type-actual" onclick="selectOtType('actual')" style="cursor:pointer;">
+            <div class="tc-icon">🧾</div>
+            <div class="tc-name">บันทึกย้อนหลัง</div>
+            <div style="font-size:10px;color:#64748b;">ขอเบิกหลังทำแล้ว</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- วัน-เวลา -->
+      <div class="form-group">
+        <label class="form-label" id="ot-date-label">วันที่ทำ OT</label>
+        <input type="date" id="ot-date" class="form-control" value="${todayISO}" min="${todayISO}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">เวลาเริ่ม</label>
+          <input type="time" id="ot-start-time" class="form-control" value="17:00" onchange="_calcOtHours()">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">เวลาสิ้นสุด</label>
+          <input type="time" id="ot-end-time" class="form-control" value="19:00" onchange="_calcOtHours()">
+        </div>
+      </div>
+      <div style="font-size:12px;color:#64748b;margin-top:6px;">⏱️ รวมประมาณ <strong id="ot-hours-display">2.0</strong> ชั่วโมง</div>
+
+      <!-- ชั่วโมงจริง (เฉพาะบันทึกย้อนหลัง) -->
+      <div class="form-group" id="ot-actual-hours-group" style="display:none;margin-top:12px;">
+        <label class="form-label">จำนวนชั่วโมงจริงที่ทำ (สำหรับเบิกจ่าย)</label>
+        <input type="number" id="ot-actual-hours" class="form-control" step="0.5" min="0" placeholder="เช่น 2.5">
+      </div>
+
+      <!-- วันหยุด -->
+      <div class="form-group" style="margin-top:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;cursor:pointer;">
+          <input type="checkbox" id="ot-holiday">
+          เป็นการทำ OT ในวันหยุด
+        </label>
+      </div>
+
+      <!-- เหตุผล/งาน -->
+      <div class="form-group" style="margin-top:8px;">
+        <label class="form-label">งาน/เหตุผลที่ต้องทำ OT <span style="color:#ef4444;">*</span></label>
+        <textarea id="ot-reason" class="form-control" rows="2" placeholder="ระบุงานที่ต้องทำ..."></textarea>
+      </div>
+
+      <div id="ot-err" style="color:#ef4444;font-size:13px;margin-bottom:10px;"></div>
+
+      <button class="btn btn-primary" id="ot-submit-btn" onclick="submitOtRequest()" style="width:100%;">
+        📝 ยื่นขอล่วงหน้า
+      </button>
+    </div>
+  </div>`;
+
+  selectOtType('advance');
+}
+
+function selectOtType(type) {
+  _otTypeSelected = type;
+  document.getElementById('ot-type-advance').style.borderColor = type==='advance' ? '#0f766e' : '#e2e8f0';
+  document.getElementById('ot-type-advance').style.background  = type==='advance' ? '#ccfbf1' : '';
+  document.getElementById('ot-type-actual').style.borderColor  = type==='actual'  ? '#0f766e' : '#e2e8f0';
+  document.getElementById('ot-type-actual').style.background   = type==='actual'  ? '#ccfbf1' : '';
+
+  const dateInput = document.getElementById('ot-date');
+  const dateLabel = document.getElementById('ot-date-label');
+  const today = new Date().toISOString().slice(0,10);
+  const actualGroup = document.getElementById('ot-actual-hours-group');
+  const submitBtn = document.getElementById('ot-submit-btn');
+
+  if (type === 'advance') {
+    dateLabel.textContent = 'วันที่ต้องการทำ OT';
+    dateInput.min = today; dateInput.removeAttribute('max');
+    if (dateInput.value < today) dateInput.value = today;
+    actualGroup.style.display = 'none';
+    submitBtn.textContent = '📝 ยื่นขอล่วงหน้า';
+  } else {
+    dateLabel.textContent = 'วันที่ทำ OT (ย้อนหลัง)';
+    dateInput.max = today; dateInput.removeAttribute('min');
+    if (dateInput.value > today) dateInput.value = today;
+    actualGroup.style.display = '';
+    submitBtn.textContent = '🧾 ยื่นขอเบิก (ย้อนหลัง)';
+  }
+  _calcOtHours();
+}
+
+function _calcOtHours() {
+  const s = document.getElementById('ot-start-time')?.value;
+  const e = document.getElementById('ot-end-time')?.value;
+  const disp = document.getElementById('ot-hours-display');
+  if (!s || !e || !disp) return;
+  const hrs = _otHoursBetween(s, e);
+  disp.textContent = hrs.toFixed(1);
+  const actualInput = document.getElementById('ot-actual-hours');
+  if (actualInput && !actualInput.dataset.touched) actualInput.value = hrs.toFixed(1);
+}
+
+function _otHoursBetween(startStr, endStr) {
+  const [sh,sm] = startStr.split(':').map(Number);
+  const [eh,em] = endStr.split(':').map(Number);
+  let mins = (eh*60+em) - (sh*60+sm);
+  if (mins <= 0) mins += 24*60; // ข้ามเที่ยงคืน
+  return mins/60;
+}
+
+async function submitOtRequest() {
+  const err = document.getElementById('ot-err');
+  err.textContent = '';
+
+  const date  = document.getElementById('ot-date')?.value;
+  const start = document.getElementById('ot-start-time')?.value;
+  const end   = document.getElementById('ot-end-time')?.value;
+  const reason = document.getElementById('ot-reason')?.value.trim();
+  const isHoliday = document.getElementById('ot-holiday')?.checked || false;
+
+  if (!date || !start || !end) { err.textContent = 'กรุณาระบุวันและเวลา'; return; }
+  if (!reason) { err.textContent = 'กรุณาระบุงาน/เหตุผลที่ต้องทำ OT'; document.getElementById('ot-reason')?.focus(); return; }
+
+  const estimatedHours = _otHoursBetween(start, end);
+  let actualHours = null;
+  if (_otTypeSelected === 'actual') {
+    const raw = document.getElementById('ot-actual-hours')?.value;
+    actualHours = raw ? parseFloat(raw) : estimatedHours;
+  }
+
+  const empId   = currentUser?.id || currentEmp?.employee_id || '';
+  const empName = currentUser?.full_name || currentEmp?.name || '';
+  const dept    = currentUser?.department || currentEmp?.department || '';
+
+  const payload = {
+    employee_id: empId, employee_name: empName, department: dept,
+    request_type: _otTypeSelected,
+    ot_date: date, start_time: start, end_time: end,
+    estimated_hours: estimatedHours, is_holiday: isHoliday,
+    actual_hours: actualHours,
+    reason, status: 'pending', approver_name: null
+  };
+
+  const { data, error } = await sb.from('ot_requests').insert([payload]).select('ot_id').single();
+  if (error) { err.textContent = 'บันทึกไม่สำเร็จ: '+error.message; return; }
+
+  sendOtLineNotify(data.ot_id, payload, 'pending');
+  _broadcastNewRequestToApprovers('ot', payload);
+
+  showToast('📝 ยื่นคำขอโอทีสำเร็จ รออนุมัติจากหัวหน้า', 'info');
+  navigateTo('lv-ot-hist');
+}
+
+// ─────────────────────────────────────────────────────────────
+// ประวัติโอทีของฉัน
+// ─────────────────────────────────────────────────────────────
+async function renderMyOtHistory() {
+  const empId = currentUser?.id || currentEmp?.employee_id || '';
+  const { data } = await sb.from('ot_requests').select('*')
+    .eq('employee_id', empId).order('created_at',{ascending:false}).limit(50);
+  const reqs = data || [];
+  reqs.forEach(r => { _otCache[r.ot_id] = r; });
+
+  const OT_STATUS = { pending:'⏳ รออนุมัติ', approved:'✅ อนุมัติแล้ว', rejected:'❌ ปฏิเสธ', cancelled:'🚫 ยกเลิก' };
+  const OT_COLOR  = { pending:'#f59e0b', approved:'#22c55e', rejected:'#ef4444', cancelled:'#94a3b8' };
+  const OT_TYPE_LABEL = { advance:'📝 ขอล่วงหน้า', actual:'🧾 ย้อนหลัง' };
+
+  const rows = reqs.length ? reqs.map(r=>`
+    <tr>
+      <td style="font-size:12px;">${r.ot_date}</td>
+      <td style="font-size:12px;">${OT_TYPE_LABEL[r.request_type]||r.request_type}</td>
+      <td style="font-size:12px;">${r.start_time?.slice(0,5)} → ${r.end_time?.slice(0,5)}</td>
+      <td style="font-size:12px;">${Number(r.estimated_hours||0).toFixed(1)} ชม.</td>
+      <td>
+        <span style="background:${OT_COLOR[r.status]}22;color:${OT_COLOR[r.status]};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">
+          ${OT_STATUS[r.status]||r.status}
+        </span>
+      </td>
+      <td>${r.status==='pending'?`<div style="display:flex;gap:4px;">
+        <button class="btn btn-xs btn-outline" onclick="openEditOtModal(${r.ot_id})">✏️ แก้ไข</button>
+        <button class="btn btn-xs btn-outline" onclick="cancelOtRequest(${r.ot_id})">ยกเลิก</button>
+      </div>`:''}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติ</td></tr>';
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:900px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">📋 ประวัติคำขอโอที</div>
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-ot')">+ คำขอใหม่</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>วันที่</th><th>ประเภท</th><th>เวลา</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function cancelOtRequest(otId) {
+  if(!confirm('ยืนยันยกเลิกคำขอนี้?')) return;
+  const { error } = await sb.from('ot_requests')
+    .update({status:'cancelled',updated_at:new Date().toISOString()}).eq('ot_id',otId);
+  if(error) { showToast('ยกเลิกไม่สำเร็จ','error'); return; }
+  showToast('ยกเลิกคำขอแล้ว','info');
+  renderMyOtHistory();
+}
+
+// ── แก้ไขคำขอโอทีของตัวเอง (เฉพาะสถานะ pending) ─────────────────
+function openEditOtModal(otId) {
+  const r = _otCache[otId];
+  if (!r) { showToast('ไม่พบข้อมูล', 'error'); return; }
+  if (r.status !== 'pending') { showToast('แก้ไขได้เฉพาะคำขอที่ยังรออนุมัติ', 'error'); return; }
+
+  _editOtTypeSelected = r.request_type || 'advance';
+
+  openModal(`
+    <div class="modal-hd">
+      <span class="modal-title">✏️ แก้ไขคำขอโอที</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:12px;">
+      ${esc(r.employee_name)} · ${fmtDate(r.ot_date)}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">ประเภทคำขอ</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="type-card" id="edit-ot-type-advance" onclick="_selectEditOtType('advance')" style="cursor:pointer;">
+          <div class="tc-icon">📝</div><div class="tc-name">ขอล่วงหน้า</div>
+        </div>
+        <div class="type-card" id="edit-ot-type-actual" onclick="_selectEditOtType('actual')" style="cursor:pointer;">
+          <div class="tc-icon">🧾</div><div class="tc-name">บันทึกย้อนหลัง</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">วันที่ทำ OT</label>
+      <input type="date" id="edit-ot-date" class="form-control" value="${r.ot_date}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">เวลาเริ่ม</label>
+        <input type="time" id="edit-ot-start" class="form-control" value="${(r.start_time||'').slice(0,5)}" onchange="_calcEditOtHours()">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">เวลาสิ้นสุด</label>
+        <input type="time" id="edit-ot-end" class="form-control" value="${(r.end_time||'').slice(0,5)}" onchange="_calcEditOtHours()">
+      </div>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:6px;">⏱️ รวมประมาณ <strong id="edit-ot-hours-display">${Number(r.estimated_hours||0).toFixed(1)}</strong> ชั่วโมง</div>
+
+    <div class="form-group" id="edit-ot-actual-hours-group" style="margin-top:12px;">
+      <label class="form-label">จำนวนชั่วโมงจริงที่ทำ (สำหรับเบิกจ่าย)</label>
+      <input type="number" id="edit-ot-actual-hours" class="form-control" step="0.5" min="0" value="${r.actual_hours!=null?r.actual_hours:''}">
+    </div>
+
+    <div class="form-group" style="margin-top:12px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;cursor:pointer;">
+        <input type="checkbox" id="edit-ot-holiday" ${r.is_holiday?'checked':''}>
+        เป็นการทำ OT ในวันหยุด
+      </label>
+    </div>
+
+    <div class="form-group" style="margin-top:8px;">
+      <label class="form-label">งาน/เหตุผลที่ต้องทำ OT</label>
+      <textarea id="edit-ot-reason" class="form-control" rows="2">${esc(r.reason||'')}</textarea>
+    </div>
+
+    <div id="edit-ot-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveEditOt(${otId})" style="flex:1;justify-content:center;">💾 บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+
+  _selectEditOtType(_editOtTypeSelected);
+}
+
+function _selectEditOtType(type) {
+  _editOtTypeSelected = type;
+  const adv = document.getElementById('edit-ot-type-advance');
+  const act = document.getElementById('edit-ot-type-actual');
+  if (adv) { adv.style.borderColor = type==='advance' ? '#0f766e' : '#e2e8f0'; adv.style.background = type==='advance' ? '#ccfbf1' : ''; }
+  if (act) { act.style.borderColor = type==='actual'  ? '#0f766e' : '#e2e8f0'; act.style.background = type==='actual'  ? '#ccfbf1' : ''; }
+  const actualGroup = document.getElementById('edit-ot-actual-hours-group');
+  if (actualGroup) actualGroup.style.display = type==='actual' ? '' : 'none';
+}
+
+function _calcEditOtHours() {
+  const s = document.getElementById('edit-ot-start')?.value;
+  const e = document.getElementById('edit-ot-end')?.value;
+  const disp = document.getElementById('edit-ot-hours-display');
+  if (!s || !e || !disp) return;
+  disp.textContent = _otHoursBetween(s, e).toFixed(1);
+}
+
+async function saveEditOt(otId) {
+  const err = document.getElementById('edit-ot-err');
+  err.textContent = '';
+
+  const r = _otCache[otId];
+  if (!r) { err.textContent = 'ไม่พบข้อมูล'; return; }
+  if (r.status !== 'pending') { err.textContent = 'แก้ไขได้เฉพาะคำขอที่ยังรออนุมัติ'; return; }
+
+  const date       = document.getElementById('edit-ot-date').value;
+  const start      = document.getElementById('edit-ot-start').value;
+  const end        = document.getElementById('edit-ot-end').value;
+  const reason     = document.getElementById('edit-ot-reason').value.trim();
+  const isHoliday  = document.getElementById('edit-ot-holiday').checked;
+  const rawActual  = document.getElementById('edit-ot-actual-hours').value;
+
+  if (!date || !start || !end) { err.textContent = 'กรุณาระบุวันและเวลา'; return; }
+  if (!reason) { err.textContent = 'กรุณาระบุงาน/เหตุผลที่ต้องทำ OT'; return; }
+
+  const estimatedHours = _otHoursBetween(start, end);
+  const actualHours = _editOtTypeSelected === 'actual' ? (rawActual ? parseFloat(rawActual) : estimatedHours) : null;
+
+  const payload = {
+    request_type: _editOtTypeSelected,
+    ot_date: date, start_time: start, end_time: end,
+    estimated_hours: estimatedHours, is_holiday: isHoliday,
+    actual_hours: actualHours, reason,
+    updated_at: new Date().toISOString()
+  };
+
+  // .eq('status','pending') กันกรณีถูกอนุมัติ/ปฏิเสธไปแล้วระหว่างที่เปิดโมดัลค้างไว้
+  const { data, error } = await sb.from('ot_requests').update(payload)
+    .eq('ot_id', otId).eq('status', 'pending').select('ot_id');
+  if (error) { err.textContent = 'บันทึกไม่สำเร็จ: ' + error.message; return; }
+  if (!data || !data.length) { err.textContent = 'คำขอนี้ถูกดำเนินการไปแล้ว ไม่สามารถแก้ไขได้'; return; }
+
+  closeModal();
+  showToast('แก้ไขคำขอโอทีเรียบร้อย ✅', 'success');
+  renderMyOtHistory();
+}
+
+// ─────────────────────────────────────────────────────────────
+// อนุมัติโอที (Supervisor / Admin)
+// ─────────────────────────────────────────────────────────────
+async function renderOtApprovals() {
+  if(!can('approve')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;">ไม่มีสิทธิ์</div>'; return; }
+
+  let q = sb.from('ot_requests').select('*').in('status',['pending','approved'])
+    .order('ot_date',{ascending:false}).order('start_time',{ascending:false});
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { data } = await q.limit(200);
+  const reqs = data||[];
+
+  const pendingCount = reqs.filter(r=>r.status==='pending').length;
+  const badge = document.getElementById('sb-badge-ot');
+  if(badge){ badge.textContent=pendingCount||''; badge.style.display=pendingCount>0?'':'none'; }
+
+  const OT_COLOR = { pending:'#f59e0b', approved:'#22c55e' };
+  const OT_LABEL = { pending:'⏳ รออนุมัติ', approved:'✅ อนุมัติ' };
+  const OT_TYPE_LABEL = { advance:'📝 ล่วงหน้า', actual:'🧾 ย้อนหลัง' };
+  const isMobile = window.innerWidth <= 768;
+
+  const items = reqs.length ? reqs.map(r=>{
+    const actionBtns = r.status==='pending' ? `
+      <button class="btn btn-success btn-xs" onclick="approveOt(${r.ot_id})" style="flex:1;">✅ อนุมัติ</button>
+      <button class="btn btn-danger btn-xs"  onclick="rejectOt(${r.ot_id})" style="flex:1;">❌ ปฏิเสธ</button>` : '';
+
+    if(isMobile) {
+      return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
+            <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')} · ${OT_TYPE_LABEL[r.request_type]||''}</div>
+          </div>
+          <span style="background:${OT_COLOR[r.status]||'#94a3b8'}22;color:${OT_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${OT_LABEL[r.status]||r.status}</span>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-bottom:3px;">🕐 ${r.ot_date} ${r.start_time?.slice(0,5)} → ${r.end_time?.slice(0,5)} (${Number(r.estimated_hours||0).toFixed(1)} ชม.)</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">📝 ${esc(r.reason)}</div>
+        ${r.status==='pending'?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}</div>`:''}
+      </div>`;
+    }
+    return `<tr>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td style="font-size:12px;">${OT_TYPE_LABEL[r.request_type]||r.request_type}</td>
+      <td style="font-size:12px;">${r.ot_date} ${r.start_time?.slice(0,5)}→${r.end_time?.slice(0,5)}</td>
+      <td style="font-size:12px;">${Number(r.estimated_hours||0).toFixed(1)} ชม.</td>
+      <td style="font-size:12px;color:#64748b;">${esc(r.reason).slice(0,30)}</td>
+      <td><span style="background:${OT_COLOR[r.status]||'#94a3b8'}22;color:${OT_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${OT_LABEL[r.status]||r.status}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}</div></td>
+    </tr>`;}).join('')
+    : (isMobile
+        ? '<div style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</div>'
+        : '<tr><td colspan="7" style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</td></tr>');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:1100px;">
+    <div class="card">
+      <div class="card-hd">
+        <div class="card-title">🔑 อนุมัติคำขอโอที</div>
+        <button class="btn btn-outline btn-sm" onclick="renderOtApprovals()">🔄 รีเฟรช</button>
+      </div>
+      ${isMobile
+        ? `<div>${items}</div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>พนักงาน</th><th>ประเภท</th><th>วันเวลา</th><th>ชั่วโมง</th><th>เหตุผล</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <tbody>${items}</tbody>
+           </table></div>`
+      }
+    </div>
+  </div>`;
+}
+
+async function approveOt(otId) {
+  const approverName = currentUser?.full_name||'';
+  const approverId   = currentUser?.id||'';
+  const { data, error } = await sb.from('ot_requests').update({
+    status:'approved', approver_id:approverId, approver_name:approverName,
+    approved_at: new Date().toISOString(), updated_at: new Date().toISOString()
+  }).eq('ot_id',otId).select().single();
+  if(error){ showToast('อนุมัติไม่สำเร็จ','error'); return; }
+  sendOtLineNotify(otId, data, 'approved');
+  _sendBroadcastNotif(data.employee_id, { icon:'⏱️', label:'คำขอโอที', detail:`${data.ot_date||''} · ${data.start_time||''} → ${data.end_time||''}`, status:'approved', note:'' });
+  showToast('✅ อนุมัติคำขอเรียบร้อย','success');
+  renderOtApprovals();
+}
+
+async function rejectOt(otId) {
+  const note = prompt('ระบุเหตุผลที่ปฏิเสธ (ถ้ามี):');
+  const { data, error } = await sb.from('ot_requests').update({
+    status:'rejected', reject_note: note||null, updated_at: new Date().toISOString()
+  }).eq('ot_id',otId).select().single();
+  if(error){ showToast('ปฏิเสธไม่สำเร็จ','error'); return; }
+  if(data) _sendBroadcastNotif(data.employee_id, { icon:'⏱️', label:'คำขอโอที', detail:`${data.ot_date||''} · ${data.start_time||''} → ${data.end_time||''}`, status:'rejected', note:note||'' });
+  showToast('❌ ปฏิเสธคำขอแล้ว','info');
+  renderOtApprovals();
+}
+
+// LINE Notify สำหรับ OT (fire-and-forget)
+async function sendOtLineNotify(otId, r, event) {
+  const status = event === 'approved' ? 'approved' : 'pending';
+  try {
+    fetch(`${SB_URL}/functions/v1/line-notify`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'INSERT',
+        table: 'ot_requests',
+        record: {
+          ot_id: otId,
+          status,
+          employee_name: r.employee_name,
+          department:    r.department,
+          request_type:  r.request_type,
+          ot_date:       r.ot_date,
+          start_time:    r.start_time,
+          end_time:      r.end_time,
+          estimated_hours: r.estimated_hours,
+          reason:        r.reason,
+          approver_name: r.approver_name || null
+        }
+      })
+    }).catch(e => console.warn('OT LINE notify failed:', e));
+  } catch(e) { console.warn('OT LINE notify error:', e); }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3592,6 +4107,7 @@ async function _bootApp() {
   document.getElementById('sb-sec-approve').style.display    = 'none';
   document.getElementById('sb-sec-admin').style.display      = 'none';
   document.getElementById('sb-lv-pass-approve').style.display= 'none';
+  document.getElementById('sb-lv-ot-approve').style.display  = 'none';
   const bnApv = document.getElementById('bn-lv-approvals');
   if(bnApv) bnApv.style.display='none';
 
@@ -3600,6 +4116,7 @@ async function _bootApp() {
     document.getElementById('sb-sec-approve').style.display='';
     if(bnApv) bnApv.style.display='';
     document.getElementById('sb-lv-pass-approve').style.display='';
+    document.getElementById('sb-lv-ot-approve').style.display='';
   }
   if(can('admin')) {
     document.getElementById('sb-sec-admin').style.display='';
@@ -3754,10 +4271,12 @@ function _broadcastNewRequestToApprovers(kind, r) {
     sb.channel('leave-approvers-notif').send({
       type: 'broadcast', event: 'new_request',
       payload: {
-        kind, // 'leave' | 'pass'
+        kind, // 'leave' | 'pass' | 'ot'
         employee_name: r?.employee_name || '',
         department: r?.department || '',
-        type_name: kind === 'leave' ? (r?.type_name || 'คำขอลา') : (r?.reason_name || 'ขอออกนอกบริเวณ'),
+        type_name: kind === 'leave' ? (r?.type_name || 'คำขอลา')
+                 : kind === 'ot'    ? (r?.reason || 'ขอทำโอที')
+                 : (r?.reason_name || 'ขอออกนอกบริเวณ'),
         days: r?.days || null
       }
     });
@@ -3770,12 +4289,17 @@ function _onNewApproverRequest(payload) {
   // Supervisor (ไม่ใช่ admin) เห็นเฉพาะแผนกตัวเอง — คำขอแผนกอื่นไม่ต้องแจ้ง (ไม่มีสิทธิ์เห็นอยู่แล้ว)
   if (!can('admin') && currentUser?.department && payload?.department && payload.department !== currentUser.department) return;
 
-  const kindLabel = payload?.kind === 'pass' ? '🚪 ขอออกนอกบริเวณ' : '📋 คำขอลา';
+  const kindLabel = payload?.kind === 'pass' ? '🚪 ขอออกนอกบริเวณ'
+                   : payload?.kind === 'ot'   ? '⏱️ คำขอโอที'
+                   : '📋 คำขอลา';
   showToast(`🔔 คำขอใหม่: ${kindLabel} — ${payload?.employee_name||''}${payload?.department?` (${payload.department})`:''}`, 'info', 6000);
 
   if (payload?.kind === 'pass') {
     if (currentPage === 'lv-pass-approve') renderPassApprovals();
     else _refreshPassBadgeOnly();
+  } else if (payload?.kind === 'ot') {
+    if (currentPage === 'lv-ot-approve') renderOtApprovals();
+    else _refreshOtBadgeOnly();
   } else {
     if (currentPage === 'lv-approvals') renderApprovals();
     else if (currentPage === 'lv-dashboard') renderDashboard();
@@ -3803,6 +4327,16 @@ async function _refreshPassBadgeOnly() {
   if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
   const { count } = await q;
   const badge = document.getElementById('sb-badge-pass');
+  if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
+}
+
+// อัปเดตแค่ badge ตัวเลข "รออนุมัติ" (OT) โดยไม่ re-render ทั้งหน้า
+async function _refreshOtBadgeOnly() {
+  if (!can('approve')) return;
+  let q = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
+  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  const { count } = await q;
+  const badge = document.getElementById('sb-badge-ot');
   if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
 }
 

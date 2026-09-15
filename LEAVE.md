@@ -37,6 +37,7 @@
 - **ตั้งค่าโควต้าวันลา** (`leave_settings`)
 - **Calendar วันหยุด** (`leave_holidays`)
 - **เปลี่ยน PIN** (พนักงาน) / **รีเซ็ต PIN** (Admin)
+- **ขอทำโอที (OT Request)** — 2 ประเภทในหน้าเดียว: ขอล่วงหน้า (advance) ก่อนทำ OT / บันทึกย้อนหลังขอเบิก (actual) หลังทำแล้ว, มีประวัติของฉันและหน้าอนุมัติแยก department-scoped เหมือน Pass (ดู Section 4/6/11 — เพิ่ม 2026-09-15)
 
 ---
 
@@ -50,6 +51,7 @@ leave_dept_supervisors    -- แมปแผนก → หัวหน้าผ�
 leave_settings            -- ตั้งค่าโควต้าต่อประเภทการลา
 leave_holidays            -- ปฏิทินวันหยุด (รวมวันหยุดไทย)
 pass_requests             -- คำขอออกนอกบริเวณ (+ photo_url)
+ot_requests               -- คำขอทำโอที (request_type: advance/actual, estimated_hours, actual_hours) — ใหม่ 2026-09-15
 
 -- ใช้ร่วมกับระบบอื่น
 checkin_employees         -- พนักงาน (+ pin_code, photo_url) — ร่วมกับ System 4
@@ -67,6 +69,7 @@ app_users                 -- ผู้ใช้ที่มี role จริง
 | `leave_schema_v6_patch.sql` | อยู่ในขอบเขตแก้ไขได้ — ยังไม่ได้ตรวจสอบเนื้อหาในแชตนี้ | ⏳ |
 | photo_url patch | `ALTER TABLE pass_requests ADD COLUMN IF NOT EXISTS photo_url TEXT;` | ⏳ ตรวจสอบสถานะรัน |
 | `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` | จำเป็นสำหรับ System 5 (ไม่ใช่ Leave โดยตรง แต่เคยอยู่ใน checklist เดียวกัน) | ⏳ |
+| `checkin_system/ot_schema.sql` | ตาราง `ot_requests` + RLS (ใหม่ 2026-09-15) | ⏳ ยังไม่ได้รัน — ต้องรันใน Supabase SQL Editor ก่อนใช้ฟีเจอร์ขอทำโอที |
 
 ---
 
@@ -107,6 +110,7 @@ _empPinHash      // สถานะ PIN ระหว่างกรอก (emplo
 | คำขอลา (`leave_requests`, status=pending) | OA HR → กลุ่ม Sanon HR 2 | มีรูปโปรไฟล์พนักงาน (`photo_url`) ในการ์ด |
 | ขอออกนอกบริเวณ — pending (`pass_requests`) | OA HR → กลุ่ม Sanon HR 2 | 🟠 แจ้งหัวหน้า |
 | ขอออกนอกบริเวณ — approved (walk-in) | OA Security → กลุ่ม รปภ สานนท์ | 🔵 แจ้งยาม, มีรูปโปรไฟล์ |
+| คำขอโอที (`ot_requests`, status=pending) | OA HR → กลุ่ม Sanon HR 2 | ใหม่ 2026-09-15 — ส่งเฉพาะ pending เหมือน leave_requests (ไม่มีรอบ approved แยกไป รปภ.) |
 
 - ใช้ **LINE Messaging API** (`api.line.me/v2/bot/message/push`) ผ่าน Edge Function `line-notify_index.txt` (ไฟล์ shared กับ System 1-3 — ดู Section 0B ใน `CLAUDE.md` ก่อนแก้)
 - Secrets: `LINE_CHANNEL_TOKEN_HR` + `LINE_GROUP_ID_HR` (OA HR), `LINE_CHANNEL_TOKEN_SECURITY` + `LINE_GROUP_ID_SECURITY` (OA รปภ.)
@@ -141,7 +145,8 @@ _empPinHash      // สถานะ PIN ระหว่างกรอก (emplo
 - `_onNewApproverRequest(payload)` — จัดการเมื่อมี broadcast เข้ามา:
   - Supervisor ได้รับแจ้งเฉพาะแผนกตัวเอง (เทียบ `currentUser.department`), Admin ได้รับทุกแผนก
   - แสดง toast `🔔 คำขอใหม่: ...`
-  - อยู่หน้า `lv-approvals`/`lv-pass-approve`/`lv-dashboard` → re-render อัตโนมัติ, หน้าอื่น → อัปเดตแค่ badge (`_refreshApproveBadgeOnly()`, `_refreshPassBadgeOnly()`)
+  - อยู่หน้า `lv-approvals`/`lv-pass-approve`/`lv-ot-approve`/`lv-dashboard` → re-render อัตโนมัติ, หน้าอื่น → อัปเดตแค่ badge (`_refreshApproveBadgeOnly()`, `_refreshPassBadgeOnly()`, `_refreshOtBadgeOnly()`)
+  - **2026-09-15:** ขยาย `kind` ให้รองรับ `'ot'` เพิ่มจาก `'leave'`/`'pass'` เดิม — ใช้ channel `leave-approvers-notif` ร่วมกัน ไม่ต้องเปิด channel ใหม่
 
 > **⚠️ ต้องเปิด Realtime ใน Supabase Dashboard:** Table Editor → ตรวจว่า Realtime เปิดอยู่ (จำเป็นสำหรับ Broadcast ด้วย แม้ไม่ผูกกับตารางเฉพาะ)
 
@@ -157,6 +162,119 @@ _empPinHash      // สถานะ PIN ระหว่างกรอก (emplo
 ---
 
 ## 11. Changelog
+
+### 2026-09-15 (รอบ 2) — เพิ่มระบบ "ขอทำโอที" (OT Request) — ขอล่วงหน้า + บันทึกย้อนหลัง
+
+**คำขอ:** คุณใหญ่ถามว่าเพิ่มหัวข้อระบบขอทำโอทีได้ไหม — ยืนยันให้อยู่ใน `leave.html` (System 6) ใช้ pattern คำขอ→อนุมัติ→แจ้งเตือน LINE เดียวกับลา/Pass และต้องการทั้ง 2 รูปแบบคำขอ (ขอล่วงหน้า + บันทึกย้อนหลังขอเบิก)
+
+**DB — ตารางใหม่ `ot_requests` (`checkin_system/ot_schema.sql`, ยังไม่ได้รัน):**
+- `request_type` ('advance'|'actual'), `ot_date`, `start_time`, `end_time`, `estimated_hours`, `is_holiday`, `reason`, `status`, approval fields (เหมือน pass_requests), `actual_hours` (สำหรับ payroll)
+- RLS `anon_all` เหมือนตารางอื่นในระบบ
+
+**`leave.html` — การเปลี่ยนแปลง:**
+
+**1. Sidebar — เพิ่มหมวดใหม่ "โอที":**
+- `sb-lv-ot` (ขอทำโอที), `sb-lv-ot-hist` (ประวัติโอทีของฉัน), `sb-lv-ot-approve` (อนุมัติโอที — ซ่อนไว้ก่อน แสดงเมื่อ `can('approve')` ใน `_bootApp()`)
+- เพิ่ม `PAGE_TITLES` + case ใน router (`navigateTo`) สำหรับ 3 หน้าใหม่ — ไม่ได้เพิ่มใน bottom-nav มือถือ (ตามแบบ Pass ที่หน้ารองก็ไม่อยู่ใน bottom-nav)
+
+**2. `renderOtRequest()` + `submitOtRequest()`:**
+- Toggle ประเภทคำขอ 2 ปุ่ม (`selectOtType()`): "ขอล่วงหน้า" (วันที่ ≥ วันนี้) / "บันทึกย้อนหลัง" (วันที่ ≤ วันนี้, โชว์ช่องกรอกชั่วโมงจริงสำหรับเบิก)
+- คำนวณชั่วโมงอัตโนมัติจากเวลาเริ่ม-สิ้นสุด (`_otHoursBetween()` รองรับกรณีข้ามเที่ยงคืน)
+- Insert → `sendOtLineNotify()` + `_broadcastNewRequestToApprovers('ot', payload)`
+
+**3. `renderMyOtHistory()` / `cancelOtRequest()`** — เหมือนแพทเทิร์นประวัติ Pass
+
+**4. `renderOtApprovals()` / `approveOt()` / `rejectOt()`** — department-scoped เหมือน `renderPassApprovals()`, อัปเดต badge `sb-badge-ot`
+
+**5. ขยาย Realtime เดิม (ไม่ได้เปิด channel ใหม่):**
+- `_broadcastNewRequestToApprovers()` รองรับ `kind='ot'`
+- `_onNewApproverRequest()` แยกเคส `kind==='ot'` → re-render `lv-ot-approve` หรือ `_refreshOtBadgeOnly()`
+
+**`line-notify_index.txt` (Edge Function shared กับ System 1-3 — แจ้งในแชตตามกฎ Section 0B):**
+- เพิ่ม `buildOtRequestCard()` — การ์ดสีเขียวอมฟ้า ส่งเฉพาะ `status='pending'` ไปกลุ่ม HR (เหมือน `leave_requests`, ไม่มีรอบ approved แยกไป รปภ. เพราะ OT ไม่เกี่ยวกับการออกนอกบริเวณ)
+- เพิ่ม handler `table === "ot_requests"` ใน main serve()
+
+**ตรวจสอบแล้ว:** `node --check` ผ่าน (leave.html), `tsc --noEmit` ไม่พบ syntax error ใหม่ใน `line-notify_index.txt` (error ที่เหลือเป็น Deno/lib environment เดิมของไฟล์ ไม่เกี่ยวกับโค้ดที่เพิ่ม)
+
+**⏳ สิ่งที่ต้องทำก่อนใช้งานจริง:**
+1. รัน `checkin_system/ot_schema.sql` ใน Supabase SQL Editor
+2. Deploy Edge Function `line-notify` เวอร์ชันล่าสุด (มี `buildOtRequestCard`)
+3. Upload `leave.html` + `line-notify_index.txt` ขึ้น GitHub Pages / Supabase
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `line-notify_index.txt`, `checkin_system/ot_schema.sql` (ใหม่), `LEAVE.md`
+**Copy ไป GitHub/:** `leave.html` ✅ | `line-notify_index.txt` ✅ | `ot_schema.sql` — ไม่ต้อง copy (รันตรงใน Supabase ไม่ใช่ asset ที่ deploy ผ่าน GitHub Pages)
+
+---
+
+### 2026-09-15 (รอบ 5) — เพิ่มปุ่ม "แก้ไข" ให้พนักงานแก้ไขคำขอโอทีของตัวเอง (เฉพาะสถานะรออนุมัติ)
+
+**คำขอ:** คุณใหญ่ถามว่ากรณีพนักงานยื่นคำขอทำโอทีแล้วกรอกข้อมูลผิด สามารถแก้ไขเองได้ไหม — ตรวจสอบพบว่าหน้า "ประวัติโอทีของฉัน" มีแค่ปุ่ม "ยกเลิก" ยังไม่มีปุ่มแก้ไข จึงถามยืนยันแล้วเพิ่มฟีเจอร์ตามคำตอบ "เพิ่มเลย"
+
+**`leave.html` — การเปลี่ยนแปลง:**
+- เพิ่ม global cache `_otCache` (เก็บ row ot_requests ที่โหลดมาแล้ว key=ot_id) — populate ใน `renderMyOtHistory()`
+- เพิ่มปุ่ม "✏️ แก้ไข" ข้างปุ่ม "ยกเลิก" ในตาราง `renderMyOtHistory()` — แสดงเฉพาะแถวที่ `status==='pending'`
+- เพิ่มฟังก์ชันชุดใหม่ (มินิฟอร์มในโมดัล ใช้ `openModal()`/`closeModal()` เดิม): `openEditOtModal(otId)` (เปิดฟอร์มแก้ไข พร้อมกันไม่ให้แก้คำขอที่ไม่ใช่ pending), `_selectEditOtType(type)`, `_calcEditOtHours()` (คำนวณชั่วโมงใหม่แบบเรียลไทม์เหมือนฟอร์มยื่นคำขอ), `saveEditOt(otId)` (validate แล้ว update `ot_requests` — ใส่เงื่อนไข `.eq('status','pending')` กันแก้ไขซ้อนกรณีหัวหน้าอนุมัติ/ปฏิเสธไปแล้วระหว่างที่พนักงานเปิดฟอร์มค้างไว้)
+- แก้ไขได้ทุกฟิลด์ที่กรอกตอนยื่นคำขอ: ประเภทคำขอ (ขอล่วงหน้า/ย้อนหลัง), วันที่, เวลาเริ่ม-สิ้นสุด, ชั่วโมงจริง (กรณีย้อนหลัง), วันหยุด, เหตุผล — คำนวณ `estimated_hours` ใหม่อัตโนมัติจากเวลาที่แก้
+- ไม่ส่งแจ้งเตือน LINE ซ้ำเมื่อแก้ไข (คำขอยังอยู่สถานะ pending เดิม หัวหน้าเห็นข้อมูลล่าสุดตอนเข้าหน้าอนุมัติอยู่แล้ว)
+
+**ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่าน
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `LEAVE.md`
+**Copy ไป GitHub/:** `leave.html` ✅
+
+---
+
+### 2026-09-15 (รอบ 4) — เปลี่ยนชื่อเมนู "ประวัติ Pass ของฉัน" → "ประวัติอนุญาต"
+
+**คำขอ:** คุณใหญ่ส่งภาพหน้าจอเมนู "ประวัติของฉัน" ขอเปลี่ยนชื่อเมนู "ประวัติ Pass ของฉัน" เป็น "ประวัติอนุญาต"
+
+**การเปลี่ยนแปลง (`leave.html`):** แก้ label ที่ใช้แสดงผล 2 จุด — sidebar link ของ `sb-lv-pass-hist` และค่าใน `PAGE_TITLES['lv-pass-hist']` (หัวข้อหน้าเวลานำทางเข้ามา) — เปลี่ยนเป็น "ประวัติอนุญาต" ทั้งคู่ — ไม่กระทบ id, route, หรือเมนู "อนุมัติ Pass" (คนละเมนูกัน ไม่ได้ขอให้เปลี่ยน)
+
+**ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่าน
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `LEAVE.md`
+**Copy ไป GitHub/:** `leave.html` ✅
+
+---
+
+### 2026-09-15 (รอบ 3) — จัดหมวดหมู่ Sidebar ใหม่ทั้งหมด (รวม "ขอทำโอที" + รวมประวัติ + ย้ายเมนูอนุมัติเข้า "จัดการ")
+
+**คำขอ:** คุณใหญ่ส่งภาพหน้าจอ sidebar หน้า "ขอทำโอที" พร้อมวาดลูกศรชี้ ขอให้ (1) ย้ายเมนู "ขอทำโอที" ไปไว้ใต้ "ขอออกนอกบริษัท", (2) เปลี่ยนชื่อหมวด "ออกนอกบริษัท" ใหม่, (3) รวมเมนูประวัติทั้ง 3 รายการ (ประวัติของฉัน / ประวัติ Pass ของฉัน / ประวัติโอทีของฉัน) มาไว้ด้วยกัน — ตามด้วยข้อความยืนยัน "จัดหมวดหมู่ใหม่"
+
+ถามคุณใหญ่เพิ่ม 2 ข้อผ่าน AskUserQuestion ก่อนแก้:
+- ชื่อหมวดใหม่ (แทน "ออกนอกบริษัท") → คุณใหญ่เลือก **"ประวัติของฉัน"**
+- ย้าย "อนุมัติ Pass" + "อนุมัติโอที" (เมนูลับเฉพาะหัวหน้า) ไปรวมกับ "อนุมัติคำขอ" ในหมวด "จัดการ" ด้วยหรือไม่ → คุณใหญ่เลือก **ย้ายไปรวมกับ "จัดการ"**
+
+**โครงสร้าง Sidebar ใหม่ (`leave.html`, ผลจากการจัดหมวดใหม่ — ใช้ ID เดิมทั้งหมด ย้ายตำแหน่งเท่านั้น ไม่มีการสร้าง/ลบเมนู):**
+
+1. **ภาพรวม** — แดชบอร์ด, ยื่นคำขอลา, ขอออกนอกบริษัท, ขอทำโอที
+2. **ประวัติของฉัน** (เปลี่ยนชื่อจาก "ออกนอกบริษัท") — ประวัติของฉัน (`lv-my-hist`), ประวัติ Pass ของฉัน (`lv-pass-hist`), ประวัติโอทีของฉัน (`lv-ot-hist`)
+3. **จัดการ** (`sb-sec-approve`, ซ่อนเมื่อไม่ใช่ supervisor/admin) — อนุมัติคำขอ (`lv-approvals`), อนุมัติ Pass (`lv-pass-approve` — ย้ายมาจากหมวดเดิม), อนุมัติโอที (`lv-ot-approve` — ย้ายมาจากหมวดเดิม), ทุกคำขอ (`lv-all`), รายงาน (`lv-report`)
+
+หมวด "โอที" แยกต่างหาก (จากการเพิ่มฟีเจอร์รอบ 2) ถูกยุบรวมเข้ากับโครงสร้างข้างต้น — ไม่มีหมวด "โอที" แยกอีกต่อไป
+
+**การตรวจสอบ:** ย้ายเฉพาะตำแหน่ง DOM ของเมนูเดิม ไม่แก้ id/logic ใดๆ — extract inline `<script>` ทั้งหมดแล้วรัน `node --check` ผ่าน, จำนวนตัวอักษรของสคริปต์ (184,202) เท่าเดิมก่อน-หลังแก้ ยืนยันว่าไม่มีเนื้อหาโค้ดหาย/เพี้ยน อ่านซ้ำ HTML ที่แก้แล้วเทียบกับโครงสร้างที่ตั้งใจไว้ — ตรงกัน
+
+**หมายเหตุ:** เมนู mobile bottom-nav และ drawer เมนูมือถือใช้ DOM sidebar เดียวกับ desktop จึงได้ผลลัพธ์เดียวกันโดยอัตโนมัติ ไม่ต้องแก้เพิ่ม
+
+**ไฟล์ที่แก้ไข:** `leave.html`, `LEAVE.md`
+**Copy ไป GitHub/:** `leave.html` ✅
+
+---
+
+### 2026-09-15 — Sidebar (desktop): ย้าย "ขอออกนอกบริษัท" มาอยู่ใต้ "ยื่นคำขอลา"
+
+**คำขอ:** คุณใหญ่ส่งภาพหน้าจอ sidebar พร้อมวาดลูกศรชี้ว่าต้องการให้เมนู "ขอออกนอกบริษัท" ย้ายจากหมวด "ออกนอกบริษัท" มาอยู่ใต้ "ยื่นคำขอลา" ในหมวด "ภาพรวม"
+
+**แก้ไข (`<div id="sidebar">`, desktop เท่านั้น — ไม่ได้แตะ bottom-nav มือถือ):**
+- ย้าย `<div class="sb-link" id="sb-lv-pass">` (ขอออกนอกบริษัท) จากหมวด "ออกนอกบริษัท" มาอยู่ระหว่าง `sb-lv-request` (ยื่นคำขอลา) กับ `sb-lv-my-hist` (ประวัติของฉัน) ในหมวด "ภาพรวม"
+- หมวด "ออกนอกบริษัท" เหลือ 2 รายการ: `sb-lv-pass-hist` (ประวัติ Pass ของฉัน) และ `sb-lv-pass-approve` (อนุมัติ Pass — เฉพาะผู้มีสิทธิ์)
+- ไม่กระทบ `navigateTo()`, badge count, หรือ logic อื่นใดๆ — เป็นการย้ายตำแหน่ง DOM ล้วนๆ
+
+**ไฟล์ที่แก้ไข:** `leave.html`
+**Copy ไป GitHub/:** `leave.html` ✅
+
+---
 
 ### 2026-09-11 รอบ 2 — เพิ่ม PWA manifest + ไอคอน (แก้ไอคอนไม่ขึ้นตอน Add to Home Screen)
 
