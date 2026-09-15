@@ -3269,7 +3269,7 @@ function _renderPassRulesTable() {
       <td><input class="form-control" style="width:100%;font-size:12px;padding:4px 6px;" value="${esc(r.name)}"
           oninput="_passRulesData[${i}].name=this.value"></td>
       <td><input type="number" class="form-control" style="width:100%;font-size:12px;padding:4px 4px;text-align:center;" placeholder="นาที"
-          value="${r.level1_minutes||''}"
+          value="${r.level1_minutes||r.max_minutes||''}"
           oninput="_passRulesData[${i}].level1_minutes=this.value?+this.value:null"></td>
       <td><select class="form-control" style="width:100%;font-size:11px;padding:4px 2px;" onchange="_passRulesData[${i}].level1_status=this.value">
           ${statusOpts(r.level1_status||'')}</select></td>
@@ -3343,28 +3343,41 @@ async function removePassRule(idx) {
 
 async function savePassTimeRules() {
   let ok = 0;
+  const failed = [];
   for (const r of _passRulesData) {
     if (!r.name.trim()) continue;
-    const payload = {
+    const basePayload = {
       name: r.name.trim(), icon: r.icon||'📋',
       max_minutes: r.level1_minutes || r.max_minutes || 60,
       requires_approval: r.requires_approval ?? true,
       is_active: r.is_active ?? true,
-      sort_order: r.sort_order || 99,
+      sort_order: r.sort_order || 99
+    };
+    const fullPayload = {
+      ...basePayload,
       level1_minutes: r.level1_minutes || null,
       level1_status:  r.level1_status  || null,
       level2_minutes: r.level2_minutes || null,
       level2_status:  r.level2_status  || null
     };
+    let error;
     if (r.reason_id) {
-      await sb.from('pass_reasons').update(payload).eq('reason_id', r.reason_id);
+      ({ error } = await sb.from('pass_reasons').update(fullPayload).eq('reason_id', r.reason_id));
+      // ถ้าคอลัมน์ระดับ 2 (level1/level2_*) ยังไม่มีในตาราง (ยังไม่ได้รัน pass_schema_time_levels.sql)
+      // ให้ลองบันทึกเฉพาะฟิลด์หลักแทน อย่างน้อย "เวลาสูงสุดที่อนุญาต" ต้องบันทึกติดเสมอ
+      if (error) ({ error } = await sb.from('pass_reasons').update(basePayload).eq('reason_id', r.reason_id));
     } else {
-      await sb.from('pass_reasons').insert([payload]);
+      ({ error } = await sb.from('pass_reasons').insert([fullPayload]));
+      if (error) ({ error } = await sb.from('pass_reasons').insert([basePayload]));
     }
-    ok++;
+    if (error) { failed.push(r.name); } else { ok++; }
   }
-  _passReasons = []; // clear cache ให้โหลดใหม่
-  showToast(`บันทึก ${ok} รายการเรียบร้อย ✅`, 'success');
+  _passReasons = []; // clear cache ให้โหลดใหม่ (หน้า "ขอออกนอกบริษัท" จะเห็นค่าใหม่ทันที)
+  if (failed.length) {
+    showToast(`บันทึกสำเร็จ ${ok} รายการ — ล้มเหลว: ${failed.join(', ')}`, 'error');
+  } else {
+    showToast(`บันทึก ${ok} รายการเรียบร้อย ✅`, 'success');
+  }
   await loadPassTimeRulesEditor();
 }
 
@@ -3619,24 +3632,25 @@ async function renderSettings() {
         <span style="font-size:11px;color:#94a3b8;">Admin only</span>
       </div>
       <p style="font-size:12px;color:#64748b;margin:0 0 12px;">
-        ตั้งได้ 2 ระดับต่อเหตุผล — ระดับ 1 = เริ่มนับว่าเกิน, ระดับ 2 = ขั้นรุนแรง (เว้นว่าง = ไม่ใช้)
+        <b>"เวลาสูงสุดที่อนุญาต"</b> คือค่าที่พนักงานเห็นในหน้ายื่นคำขอออกนอกบริษัท (การ์ดแต่ละเหตุผล) —
+        ส่วน <b>"แจ้งเตือนเมื่อเกิน"</b> เป็นขั้นขั้นที่ 2 (ทางเลือก) สำหรับติดป้ายสถานะเมื่อใช้เวลาเกินกว่านี้ (เว้นว่าง = ไม่ใช้)
       </p>
       <div class="tbl-wrap">
         <table style="table-layout:fixed;font-size:12px;">
           <colgroup>
             <col style="width:120px;">
-            <col style="width:72px;">
+            <col style="width:90px;">
             <col style="width:100px;">
-            <col style="width:72px;">
+            <col style="width:90px;">
             <col style="width:100px;">
             <col style="width:44px;">
           </colgroup>
           <thead><tr>
             <th>เหตุผล</th>
-            <th style="text-align:center;">ระดับ 1</th>
-            <th>สถานะ 1</th>
-            <th style="text-align:center;">ระดับ 2</th>
-            <th>สถานะ 2</th>
+            <th style="text-align:center;">เวลาสูงสุดที่อนุญาต (นาที)</th>
+            <th>สถานะเมื่อเกิน</th>
+            <th style="text-align:center;">ขั้นรุนแรง (นาที)</th>
+            <th>สถานะขั้นรุนแรง</th>
             <th></th>
           </tr></thead>
           <tbody id="pass-rules-tbody">

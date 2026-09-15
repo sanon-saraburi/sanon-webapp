@@ -13,7 +13,7 @@
 |------|------|--------|--------------------------|--------------|
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
 | System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน**, **System Switcher: ชื่อ "เช็คอิน" → "HR", การ์ดจองห้องซ่อนตาม meeting_access**, **วิเคราะห์รายวัน — กราฟ/ตาราง/Breakdown ครบทุกโรงงาน**, **รายวัน auto-detect วันล่าสุดที่มีข้อมูล**, **material_types: is_feed_material + is_product**, **groundwater_usage: ผู้บันทึก**, **drone factory sort: CDE→Propel→Sanon1→Sanon2→Mobile Plant** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ + Changelog ทั้งหมดย้ายไปที่ **`INVENTORY.md`** แล้ว (ตามนโยบาย 2026-09-15) | ดู `INVENTORY.md` |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price**, **สารตกตะกอน — เพิ่มผู้เบิก + Realtime approval + สีตามโรงงาน + เบิก/รับเข้าเดือนนี้ per card + วันที่ปัจจุบันใน card + KPI กก.**, **ตารางวัตถุคงเหลือ — ราคาจาก FIFO lot จริง** | ไม่มี Loading Screen (ถูก revert) |
 | System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`PM.md`** | ไม่มี Loading Screen (ถูก revert) — รายละเอียดเพิ่มเติมดู `PM.md` |
 | System 4 — Checkin/HR | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)**, **ชื่อ Sidebar → "สานนท์ — HR"**, **Refresh ค้างหน้าเดิม (sessionStorage._sn_ck_lastpage)**, **พิมพ์ตามตัวกรองแผนก**, **Guard Realtime Popup เมื่อ Pass approved (Supabase Broadcast)**, **ข้อมูลการลา: สรุปประจำเดือน + ประวัติทั้งหมด (ดึงจาก leave_requests + pass_requests)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน — ต้องรัน SQL: `ALTER TABLE checkin_users ADD COLUMN IF NOT EXISTS permissions text[];` |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
@@ -53,7 +53,7 @@
 | ระบบ | ไฟล์เอกสาร | สถานะการย้าย |
 |------|-----------|-------------|
 | System 1 — Production | `PRODUCTION.md` | ✅ ตัวอย่างที่ทำเสร็จแล้ว (Changelog อาจยังไม่ครบ 100% — ตรวจสอบก่อนใช้อ้างอิง) |
-| System 2 — Inventory | `INVENTORY.md` | ✅ ดูเหมือนย้ายแล้ว (ตรวจพบว่า Changelog เดิมใน Section 7 ถูกย้ายออกแล้ว) |
+| System 2 — Inventory | `INVENTORY.md` | ⏳ ยังไม่ย้าย (มีไฟล์อยู่แล้ว) |
 | System 3 — PM | `PM.md` | ✅ ย้ายแล้ว (Section 0 เหลือ pointer แล้ว) |
 | System 4 — Checkin/HR | `CHECKIN.md` | ⏳ ยังไม่สร้าง |
 | System 5 — Meeting | `MEETING.md` | ⏳ ยังไม่สร้าง |
@@ -122,7 +122,7 @@
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
 | `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
-| `checkin.html` | System 4 | 2026-08-01 (รายงาน 2 แท็บ, Permission Matrix, QR+Barcode, สแกนกล้อง, สมัครสมาชิก) |
+| `checkin.html` | System 4 | 2026-09-15 (เพิ่ม "สรุปโอที" เชื่อมข้อมูลจาก ot_requests ของ System 6 + เปลี่ยนชื่อหมวด "ข้อมูลการลา-โอที") |
 | `line-notify_index.txt` | Edge Function | 2026-08-22 (URI button footer แทน postback, cornerRadius fix, AbortController timeout 10s, postback token fix) |
 | `CLAUDE.md` | ทุกระบบ | 2026-08-22 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
@@ -177,7 +177,7 @@
 
 | แชต/ระบบ | ขอบเขตที่แก้ไขได้ | กำหนดเมื่อ | หมายเหตุ |
 |---|---|---|---|
-| System 2 — Inventory | `inventory.html`, `inventory_schema.sql`, `inventory_alert.sql`, `inventory_alert_fn.ts`, `lot_tracking.sql`, `fix_stock.sql`, `INVENTORY.md`, และ `CLAUDE.md` เฉพาะส่วน System 2 | 2026-09-10 | ขอบเขตงาน: FIFO, QR/Label, เบิก/อนุมัติ, Dashboard คลัง — **ข้อยกเว้นที่อนุมัติเพิ่ม:** แก้ `leave.html`, `checkin_system/leave_schema*.sql`, `leave_schema_v6_patch.sql` ได้ด้วย (System 6) |
+| System 4+6 — Checkin/HR + Leave | `checkin.html`, `leave.html`, `LEAVE.md`, `checkin_system/leave_schema*.sql`, `leave_schema_v6_patch.sql`, `checkin_system/pass_schema*.sql`, `checkin_system/pass_schema_time_levels_patch.sql`, `checkin_system/ot_schema.sql`, `line-notify_index.txt` (Edge Function), และ `CLAUDE.md` เฉพาะส่วน System 4/6 | 2026-09-15 (แก้ไขจากเดิม) | **แก้ไขขอบเขต:** เดิมแถวนี้ระบุเป็น "System 2 — Inventory" ซึ่งไม่ถูกต้อง — คุณใหญ่แจ้งว่า Inventory ไม่ได้เชื่อมระบบดึงข้อมูลกับงานที่แชตนี้ทำเลย จึงไม่จำเป็นต้องแก้ไข Inventory — **ขอบเขตที่ถูกต้องคือ:** `checkin.html` (System 4 — HR/บัตรตอก, สรุปโอที) + `leave.html` (System 6 — ลา/ออกนอกบริษัท/โอที) และไฟล์ที่เกี่ยวข้องโดยตรง — **หมายเหตุ:** แชตนี้จะไม่แก้ไข `inventory.html` หรือไฟล์ Inventory อื่นใดอีกต่อไป |
 | System 3 — PM | `pm.html`, `pm_schema.sql`, `pm_repair_schema.sql`, `pm_meter_schema.sql`, `pm_sync.sql`, `pm_cron.sql`, `PM.md`, และ `CLAUDE.md` เฉพาะส่วน System 3 | 2026-09-10 | ขอบเขตงาน: บันทึกมิเตอร์, ซ่อมบำรุง, OEE, คลังอะไหล่ — ถ้าจะแก้ระบบอื่นต้องถามคุณใหญ่ก่อนทุกครั้ง |
 
 > ทุกแชตในตารางนี้: ถ้าจะแก้ไขไฟล์นอกขอบเขตของตัวเอง (รวมไฟล์ shared เช่น `sw.js`/`manifest-*.json`) **ต้องถามคุณใหญ่ก่อนทุกครั้ง**
@@ -358,6 +358,55 @@ sessionWarnShown, approvalCountInterval
 ## 7. ประวัติการแก้ไข (Changelog)
 
 > **📌 System 6 — Leave:** Changelog/รายละเอียดฟีเจอร์ย้ายไป **`LEAVE.md`** แล้ว (2026-09-15) — Section นี้เหลือเฉพาะเรื่องที่กระทบหลายระบบพร้อมกัน
+
+### 2026-09-15 — checkin.html (System 4): เพิ่ม "สรุปโอที" เชื่อมข้อมูลจาก System 6 (leave.html) + เปลี่ยนชื่อหมวด
+
+**คำขอ:** คุณใหญ่ขอให้เชื่อมระบบสรุปโอทีเข้ากับระบบ HR (`checkin.html`) โดยให้อยู่ในหมวด "ข้อมูลการลา" พร้อมเปลี่ยนชื่อหมวดใหม่ — **นอกขอบเขตเดิมของแชตนี้** (เดิมมีแค่ System 2 + ข้อยกเว้น System 6) จึงถาม + บันทึกข้อยกเว้นใน Section 0F ก่อนแก้ (คุณใหญ่ยืนยันผ่าน AskUserQuestion)
+
+**`checkin.html` — การเปลี่ยนแปลง:**
+1. เปลี่ยนชื่อหมวด sidebar "ข้อมูลการลา" → **"ข้อมูลการลา-โอที"** (ทั้ง sidebar label และ `group` ใน `CK_PERM_MENUS` ที่ใช้สร้างหมวดใน Permission Matrix หน้าจัดการผู้ใช้ด้วย — เปลี่ยนจุดเดียวมีผลทั้งสองที่)
+2. เพิ่มเมนูใหม่ **"⏱️ สรุปโอที"** (`ck-ot-summary`) ในหมวดเดียวกัน — เพิ่มใน `CK_PERM_MENUS`, `CK_ROLE_PERMS` (supervisor+admin), `PAGE_TITLES`, router (`nav()`)
+3. เพิ่มฟังก์ชัน `renderOtSummary()` + `exportOtSummaryCSV()` — query ตาราง **`ot_requests` ข้ามระบบจาก System 6 (leave.html)** โดยตรง (เหมือนที่ `renderLeaveSummary()` เดิม query `leave_requests`/`pass_requests` ข้ามระบบอยู่แล้ว) แสดงสรุปรายเดือน/รายแผนก/รายพนักงาน: จำนวนครั้งที่อนุมัติ, ชั่วโมงรวม (ใช้ `actual_hours` ถ้ามี ไม่งั้น fallback `estimated_hours`), จำนวนที่รออนุมัติ — มี filter เดือน/แผนก + ปุ่ม Export CSV (ตามแพทเทิร์นเดียวกับ "สรุปการลาประจำเดือน")
+
+**ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่าน
+
+**ไฟล์ที่แก้ไข:** `checkin.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `checkin.html` ✅
+
+---
+
+### 2026-09-02 รอบ 3 — inventory.html: สารตกตะกอน UX + ราคา FIFO ในตารางวัตถุคงเหลือ
+
+**`GitHub/inventory.html` — การเปลี่ยนแปลง:**
+
+**1. สารตกตะกอน stock card — เพิ่ม stat row "เบิก/รับเข้าเดือนนี้":**
+- แต่ละ card แสดง `เบิกเดือนนี้ (มิ.ย.) = XX ถุง` (สีส้ม) + `รับเข้าเดือนนี้ = XX ถุง` (สีน้ำเงิน)
+- ดึงจาก `curWd[ci.id]?.qty` และ `curRcv[ci.id]?.qty` — ข้อมูลเดียวกับ KPI card
+- เพิ่ม separator line `border-t` แยกออกจากส่วน stock
+
+**2. สารตกตะกอน stock card — เพิ่มวันที่ปัจจุบันใน card header:**
+- แสดง `ณ 10 ส.ค. 2569` ชิดขวาของ badge โรงงาน (flex justify-between)
+- คำนวณจาก `new Date()` → แปลงเป็น พ.ศ. อัตโนมัติ
+
+**3. KPI card เบิกจ่าย/รับเข้า — เพิ่มน้ำหนักรวม (กก.):**
+- คำนวณ `totWdKg = Σ(qty × wpkg)` และ `totRcvKg = Σ(qty × wpkg)` per item
+- แสดงใต้ตัวเลข ถุง เช่น `21.0 ถุง` → `525 กก.`
+- เฉพาะ card "เบิกจ่ายเดือนนี้" และ "รับเข้าเดือนนี้" เท่านั้น
+
+**4. ตารางวัตถุคงเหลือ — คอลัมน์ "ราคาต่อหน่วย" ใช้ FIFO lot จริง:**
+- เดิม: `i.unit_price` (ราคา master — ไม่อัปเดตเมื่อรับล็อตใหม่)
+- ใหม่: คำนวณ weighted average จาก `_lotsMap[i.id]` ที่มี `remaining_qty > 0`
+  - `avgP = Σ(remaining_qty × unit_cost) / Σ(remaining_qty)`
+  - Fallback เป็น `i.unit_price` ถ้าไม่มีล็อตเหลือ
+- Tooltip `title` บอกว่าเป็น "ราคาเฉลี่ย FIFO lot ปัจจุบัน" หรือ "ราคา master"
+- **ไม่กระทบ logic การเบิก** — `calcFifoCost()` ยังคง FIFO จริง (ล็อตเก่าก่อน)
+
+**ไม่ต้องรัน SQL เพิ่ม** — เป็น JavaScript frontend ทั้งหมด
+
+**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅
+
+---
 
 ### 2026-09-08 — index.html: วิเคราะห์รายวัน + แก้ material_types + groundwater + drone sort
 
@@ -679,6 +728,46 @@ sessionWarnShown, approvalCountInterval
 
 ---
 
+### 2026-08-05 — inventory.html: Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน
+
+**`GitHub/inventory.html` — การเปลี่ยนแปลงหลัก:**
+
+**1. แก้ราคาสารตกตะกอน (สารตกตะกอน cost bug):**
+- Root cause: `priceShow = wpkg*ac` ใน stock card และ `valTotal = kgTotal*ac` ใน annual report — คูณ wpkg ซ้อน เพราะ `ac` เป็น ฿/ถุงอยู่แล้ว
+- แก้ stock card (บรรทัด ~2291): `wpkg>0&&ac>0?fmtNum(wpkg*ac,0)` → `ac>0?fmtNum(ac,0)` (แสดงราคา/ถุงตรงๆ)
+- แก้ annual report (บรรทัด ~2703): `valTotal = kgTotal*ac` → `valTotal = stock*ac` (bags × ฿/bag = ฿ ถูกต้อง)
+- แก้ label (บรรทัด ~2709): `บ./กก.` → `บ./ถุง` ให้ตรงกับหน่วยจริง
+- ราคาใน `aggRows()` ใช้ FIFO lot price จริง (`r.unit_cost || r.unit_price || itemPrice`) ไม่เฉลี่ยถ่วงน้ำหนักผิด
+
+**2. Dashboard redesign (inv-dashboard):**
+- Filter bar: เปลี่ยนจากช่วง 30 วัน → dropdown เดือน/ปี (พุทธศักราช)
+- แทนที่ canvas chart-movement → ตาราง movement 25 รายการล่าสุด (id=dash-mvmt-body)
+- KPI cards ใหม่: icon + colored bg + left border (enterprise style)
+- Top 10 เบิกสูงสุด: medals 🥇🥈🥉 + progress bar
+- ลบ `destroyChart('mvmt')` เพราะไม่มี canvas แล้ว
+
+**3. เพิ่มวันที่เบิกใน LINE Notification:**
+- `saveWithdraw()`: เพิ่ม `withdraw_date: qs('#wo-date')?.value || todayISO()` ใน fetch payload
+- `line-notify_index.txt` → `buildInventoryCard()`: เพิ่ม `row("📅", \`วันที่เบิก: ...\`)` อ่านจาก `r.withdraw_date` ก่อน fallback `r.created_at`
+
+**4. Withdraw modal — filter + search (Bug #2 re-applied):**
+- `_woAllItems` global state, `woFilterItems()` function
+- Filter bar: dropdown ประเภท + input ค้นหาชื่อ/รหัส (substring match)
+- Scanner: clear filter ก่อน select item ที่สแกนได้
+
+**5. Report page — auto-load:**
+- ลบปุ่ม "แสดงผล" — filter inputs ทุกตัวมี `onchange="loadReport()"`
+
+**6. ประวัติการเบิก — month filter:**
+- `_woMonthFilter`, `woFilterMonth()`, `_woApplyFilters()`
+- Dropdown เดือนใน filter bar (auto-populate จากข้อมูล), `data-month` ใน `<tr>`
+
+**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `line-notify_index.txt`
+**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅ | `line-notify_index.txt` ⏳ (ต้อง deploy ใน Supabase)
+**ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ upload
+
+---
+
 > 📌 **2026-08-05 — pm.html:** เรียงรายการ PM ตามสถานะ + เพิ่มคอลัมน์วันที่ PM ล่าสุด — รายละเอียดย้ายไปที่ **`PM.md`** Section 11 (Changelog) ตามนโยบายแยกไฟล์ 2026-09-15
 
 ---
@@ -805,6 +894,20 @@ sessionWarnShown, approvalCountInterval
 
 ---
 
+### 2026-08-01 (ช่วงบ่าย) — inventory.html: Revert Loading Screen + normCat Filter Fix
+
+**`GitHub/inventory.html` — แก้ไข:**
+- **Revert loading screen**: ย้อนกลับ version ก่อนมี excavator loading screen (ทำให้ระบบพัง เพราะ `hideSplash()` ไม่ได้ define)
+- **normCat() function** (บรรทัด 3422): เพิ่มฟังก์ชัน normalize whitespace — `/\s+/g` แก้ทั้ง double space, non-breaking space, ฯลฯ
+- **renderBalanceTable() filter** (บรรทัด 3434): เปลี่ยนจาก `.trim()` → `normCat()` ทั้งสองฝั่ง — แก้ปัญหา filter "Filter Press CDE", "ปั้มน้ำ 6/4 CDE RYLF6SKP" ไม่เจอ
+- **withdraw modal filter** (บรรทัด 3925–3929): เพิ่ม dropdown ประเภท + search box ก่อน dropdown วัสดุ — แก้ปัญหา 74 รายการไม่มี filter
+- **`_woAllItems`** (บรรทัด 269): เพิ่ม global state สำหรับ cache วัสดุใน modal
+- **`woFilterItems()`** (บรรทัด 3874): เพิ่มฟังก์ชัน filter dropdown วัสดุตามประเภท/ค้นหา
+
+**`CLAUDE.md`:** อัปเดต status board + changelog
+
+---
+
 ### 2026-08-01 — LINE Notification Fix + Mobile System Switcher
 
 **`line_webhook.sql` — trigger enrichment:**
@@ -882,7 +985,15 @@ sessionWarnShown, approvalCountInterval
 - Deploy Edge Function `pm-daily` — ส่ง LINE Flex Card แจ้ง PM เกินกำหนด/ใกล้ถึง แยกตามโรงงาน
 - `pm_cron.sql`: ตั้ง pg_cron job `pm-daily-notify` ทุกวันจันทร์ 07:00 (ไทย)
 
-> รายละเอียด `inventory.html` วันเดียวกัน (ปุ่มยกเลิกยอดเบิก + สิทธิ์เบิกตามโรงงาน) ย้ายไปอยู่ใน `INVENTORY.md` แล้ว
+**inventory.html — ปุ่มยกเลิกยอดเบิก:**
+- เพิ่มฟังก์ชัน `cancelWithdraw(id)` — เปลี่ยน status → `rejected` (trigger คืนสต็อกอัตโนมัติ) + คืน FIFO lots
+- เพิ่มคอลัมน์ "จัดการ" ในตารางรายงาน (ยอดเคลื่อนไหว/สรุปเบิก) แสดงปุ่ม "ยกเลิก" เฉพาะ Manager ขึ้นไป
+
+**inventory.html — สิทธิ์เบิกตามโรงงาน (allowed_factories):**
+- SQL: `ALTER TABLE inventory_items ADD COLUMN allowed_factories text[]` (`allowed_factories.sql`)
+- `openItemModal()`: เพิ่ม checkbox โรงงาน CDE/Propel/Sanon1/Sanon2 ต่อวัสดุ (ไม่เลือก = ของส่วนกลาง)
+- `saveItem()`: บันทึก `allowed_factories` array ลง DB
+- Modal เบิก: User ทั่วไป → เห็นเฉพาะวัสดุที่โรงงานตัวเองมีสิทธิ์ / Admin+Manager → เห็นทั้งหมด
 
 ---
 
@@ -985,13 +1096,21 @@ let _pmRepairs   = [];
 - Summary line: `⚡ ค่าไฟฟ้ารวม 4 โรงงาน X บาท`
 - Section ใหม่ใน PDF: "⚡ ค่าไฟฟ้าโรงงาน" — KPI cards + ตาราง ค่าไฟ/ผลิต/บาท/ตัน ต่อโรงงาน (ซ่อนอัตโนมัติถ้าไม่มีข้อมูล)
 
+**Print Color Fix (inventory.html):**
+- เพิ่ม `print-color-adjust:exact!important` ทุก popup window (สารตกตะกอน, QR/Label, PO Form, Main CSS)
+- แก้ root cause: background class ต้องมี `!important` และ `*{print-color-adjust}` ต้องอยู่ใน rule เดียวกัน
+- เพิ่ม class ที่ขาดหาย: `text-teal-700`, `text-orange-700`, `bg-green-200`, utility layout ฯลฯ
+
+**inventory.html — UX:**
+- ลบปุ่ม "+ บันทึกรายการ" ออกจาก inv-chem (ดึงข้อมูลจากระบบเบิกโดยตรง ไม่ต้องกรอกซ้ำ)
+
 **index.html — UI ค่าไฟฟ้า Dashboard:**
 - KPI cards: gradient อิ่มสีขึ้น (opacity 55%), border สว่างขึ้น, top glow bar, corner glow, ตัวเลข 30px + text-shadow
 - Chart card + Rank card: พื้นหลัง `rgba(15,23,42,.6)` แยกจาก content ชัดเจน
 - Ranking: medal icon (🥇🥈🥉), progress bar มี glow, แสดง "ดีที่สุด/สูงสุด"
 - Badge %: มี border + background เข้มขึ้น อ่านง่าย
 
-### 2026-07-16 — Security + index.html PDF
+### 2026-07-16 — Security + inventory.html UX + index.html PDF
 
 **Supabase Security (RLS):**
 - เปิด Row Level Security (RLS) ครบทุกตาราง ทั้ง System 1 และ System 2
@@ -1004,13 +1123,55 @@ let _pmRepairs   = [];
 - เพิ่ม column `factory text` และ `department text` ใน `app_users`
 - SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS factory text, ADD COLUMN IF NOT EXISTS department text;`
 - Settings → ผู้ใช้งาน: เพิ่มปุ่ม "โรงงาน/ฝ่าย" ต่อ user → `openUserFactoryModal()` → `saveUserFactory()`
-- Modal เบิกวัสดุ: pre-fill โรงงาน + ฝ่ายจาก `currentUser.factory` / `currentUser.department` อัตโนมัติ (รายละเอียดฝั่ง inventory.html ดู `INVENTORY.md`)
+- Modal เบิกวัสดุ: pre-fill โรงงาน + ฝ่ายจาก `currentUser.factory` / `currentUser.department` อัตโนมัติ
+
+**inventory.html — UX/Layout:**
+- ย้ายเมนู "สารตกตะกอน" ขึ้นมาอยู่ลำดับ 2 (ถัดจากภาพรวมคลัง)
+- Bottom nav มือถือ: icon `w-5→w-6`, font `10px→11px`, padding เพิ่ม
+- Dashboard filter โรงงาน: เปลี่ยนจาก dropdown → toggle buttons (ทั้งหมด/CDE/Propel) + `dashSetFac()`
+- Dashboard layout: filter fluid บน mobile, chart `lg:grid-cols-2`, canvas มีความสูงคงที่
+- Modal เบิกวัสดุ: `#modal-box` mobile เพิ่ม `overflow-x:hidden; width:100vw; max-width:100vw` — แก้ scroll แนวนอน
+- ปุ่มสแกนใน modal: `flex-shrink-0`, ซ่อน text บน mobile (`hidden sm:inline`)
+- Settings → ผู้ใช้งาน: บันทึกสิทธิ์/โรงงานเสร็จแล้วค้างอยู่ tab `users` (ไม่กลับหน้าแรก)
+- Settings → ผู้ใช้งาน: เพิ่มคอลัมน์ โรงงาน / ฝ่ายกลุ่มงาน ในตาราง
+
+**inventory.html — รายงานประจำปีสารตกตะกอน:**
+- สูตร บาท/ตัน เปลี่ยนเป็น `ค่าใช้จ่ายเบิกจริง (qty × pricePerBag) ÷ ตันผลิต`
+- track `cost` ใน `chemAgg` โดยตรงจาก transaction (`unit_cost` → `unit_price` → item `unit_price`)
+- เพิ่ม `CHEM_OV` (hardcode override) สำหรับปี 2026 CDE/Propel เดือน ม.ค.–มิ.ย. ตามรายงาน Excel
+- `buildUsageTable` ใช้ `dKg`/`dCost` (override หรือ DB) สำหรับคอลัมน์รวมและ kgT/btT
 
 **index.html — PDF Executive Report:**
 - เพิ่ม `print-color-adjust:exact` และ `-webkit-print-color-adjust:exact` ใน CSS ของหน้ารายงาน
 - เพิ่มใน `@media print` ด้วย — ทำให้สีพื้นหลังและตัวอักษรออกมาครบเมื่อ Save PDF
 
-### 2026-07-13 — index.html: Landing Page Card Style (System 2/3 entry cards)
+### 2026-07-13 — inventory.html: FIFO + QR/Barcode + Layout
+
+**Layout & UX:**
+- Sidebar sticky (`position: sticky; top: 0; height: 100vh`) — ไม่เลื่อนตามหน้า
+- ซ่อน scrollbar sidebar (`scrollbar-width: none; ::-webkit-scrollbar { display: none }`)
+- Outer wrapper `h-screen overflow-hidden` — กันไม่ให้ scroll ทั้งหน้า
+- `#page-content` เป็น scroll container (`overflow-y: auto`)
+- Topbar `flex-shrink-0` — ค้างบนสุดของ main-content
+- `.tbl-wrap` — แต่ละตารางมี scroll container เอง (`overflow: auto; max-height: calc(100vh - 200px)`)
+- `thead th { position: sticky; top: 0; }` — หัวตารางทุกตารางค้างอยู่กับที่
+
+**FIFO Lot Tracking:**
+- สร้าง `inventory_lots` table (ไฟล์ `lot_tracking.sql`)
+- เพิ่ม column `lot_no`, `unit_cost`, `lot_breakdown` ใน `inventory_transactions`
+- `_lotsMap` global state — cache lots ต่อ item_id เรียงตาม received_date ASC
+- `loadLots()` — โหลด lots ที่ `remaining_qty > 0` ที่ bootstrap
+- `calcFifoCost(item_id, qty)` — คำนวณต้นทุน FIFO คืน `{breakdown, totalCost, shortage}`
+- `genLotNo(dateStr)` — สร้าง LOT-YYYYMMDD-XXX อัตโนมัติ
+- Modal รับเข้า: เพิ่มช่อง Lot No (auto-gen) + บังคับระบุราคา/หน่วย
+- `saveStockIn()`: insert `inventory_lots` ต่อ lot
+- Modal เบิก: แสดง FIFO breakdown (`#wo-fifo`) เมื่อใส่จำนวน
+- `saveWithdraw()`: หัก `remaining_qty` ใน lots ทันทีเมื่ออนุมัติ
+- `showStockCheckModal()`: แสดง lots ทั้งหมดที่เหลือ (เน้น lot แรกสีน้ำเงิน = ถูกเบิกก่อน)
+
+**QR / Label:**
+- เพิ่ม filter **โรงงาน** (`#qr-factory`) กรองจาก `item.location`
+- Grid filter ปรับเป็น `grid-cols-2 sm:grid-cols-3` รองรับ filter ใหม่
 
 **index.html (Landing Page):**
 - System 2 (Inventory): เปลี่ยนจาก `<a>` ทั้งก้อน → การ์ด + ปุ่ม "เข้าสู่ระบบ" สีเขียว
@@ -1018,7 +1179,11 @@ let _pmRepairs   = [];
 - System 3 (PM): เปลี่ยนจาก link → การ์ด Gradient `amber-500 → orange-600` + ปุ่ม "เข้าสู่ระบบ" ขาว
 - ทั้ง 3 ระบบมีสไตล์ Gradient card เหมือนกัน
 
-> รายละเอียด FIFO/QR/Layout ของ `inventory.html` วันเดียวกัน ย้ายไปอยู่ใน `INVENTORY.md` แล้ว
+**แนวคิด FIFO ที่ตกลงกัน:**
+- วัสดุชนิดเดียวกัน = 1 item, 1 QR Code ไม่เปลี่ยน
+- แต่ละรอบที่รับเข้า = 1 Lot พร้อม unit_cost ของตัวเอง
+- เบิกออก = FIFO (ของเก่าออกก่อน) คำนวณต้นทุนตาม lot จริง
+- ถ้าใช้ข้ามล็อต (Lot 1 หมดกลางเดือน ต่อ Lot 2) → ระบบแบ่ง breakdown อัตโนมัติ
 
 ### 2026-07-12 — Mobile UX + PDF Report + Bottom Nav
 
