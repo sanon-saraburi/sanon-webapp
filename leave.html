@@ -25,6 +25,7 @@ input,select,textarea{font-size:16px!important;}
 /* ─── Layout ─── */
 #main-app{display:flex;height:100vh;overflow:hidden;}
 #sidebar{width:240px;background:linear-gradient(180deg,#0f172a 0%,#1e293b 100%);color:#fff;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;scrollbar-width:none;}
+#sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:190;}
 #sidebar::-webkit-scrollbar{display:none;}
 #page-content{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 24px 80px;}
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;position:sticky;top:0;z-index:50;}
@@ -46,16 +47,18 @@ input,select,textarea{font-size:16px!important;}
 .sb-user-role{font-size:11px;color:#94a3b8;}
 
 /* ─── Bottom Nav (mobile) ─── */
-#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:100;padding:6px 0 env(safe-area-inset-bottom,0);box-shadow:0 -4px 16px rgba(0,0,0,.08);}
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eef1f6;z-index:100;padding:7px 0 env(safe-area-inset-bottom,0);box-shadow:0 -6px 20px rgba(15,23,42,.07);}
 .bn-items{display:flex;justify-content:space-around;}
-.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 6px;cursor:pointer;color:#94a3b8;font-size:9px;min-width:44px;border-radius:10px;transition:all .15s;}
-.bn-item svg{width:22px;height:22px;}
-.bn-item.active{color:#fff;}
-.bn-item#bn-lv-dashboard.active{background:#6366f1;color:#fff;}
-.bn-item#bn-lv-request.active{background:#22c55e;color:#fff;}
-.bn-item#bn-lv-pass.active{background:#f59e0b;color:#fff;}
-.bn-item#bn-lv-my-hist.active{background:#3b82f6;color:#fff;}
-.bn-item#bn-lv-approvals.active{background:#ef4444;color:#fff;}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 8px;cursor:pointer;color:#94a3b8;font-size:9.5px;font-weight:600;min-width:46px;border-radius:14px;transition:all .2s cubic-bezier(.4,0,.2,1);}
+.bn-item svg{width:22px;height:22px;transition:transform .2s cubic-bezier(.4,0,.2,1);}
+.bn-item:active svg{transform:scale(.88);}
+.bn-item.active{color:#fff;transform:translateY(-3px);box-shadow:0 6px 14px -2px var(--bn-glow,rgba(0,0,0,.25));}
+.bn-item.active svg{transform:scale(1.06);}
+.bn-item#bn-lv-dashboard.active{background:linear-gradient(145deg,#818cf8,#6366f1);--bn-glow:rgba(99,102,241,.5);}
+.bn-item#bn-lv-request.active{background:linear-gradient(145deg,#4ade80,#16a34a);--bn-glow:rgba(34,197,94,.5);}
+.bn-item#bn-lv-pass.active{background:linear-gradient(145deg,#fbbf24,#ea9d0a);--bn-glow:rgba(245,158,11,.5);}
+.bn-item#bn-lv-ot.active{background:linear-gradient(145deg,#2dd4bf,#0f766e);--bn-glow:rgba(15,118,110,.5);}
+.bn-item#bn-lv-approvals.active{background:linear-gradient(145deg,#f87171,#dc2626);--bn-glow:rgba(239,68,68,.5);}
 
 /* ─── Cards ─── */
 .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:18px;margin-bottom:14px;}
@@ -452,6 +455,9 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
   </div>
 </div>
 
+<!-- BACKDROP (มือถือ: แตะเพื่อปิดเมนู hamburger) -->
+<div id="sidebar-backdrop" onclick="closeMobileMenu()"></div>
+
 <!-- BOTTOM NAV (mobile) -->
 <div id="bottom-nav" style="display:none;">
   <div class="bn-items">
@@ -467,9 +473,9 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
       ออกนอก
     </div>
-    <div class="bn-item" id="bn-lv-my-hist" onclick="navigateTo('lv-my-hist')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      ประวัติ
+    <div class="bn-item" id="bn-lv-ot" onclick="navigateTo('lv-ot')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      ขอทำโอที
     </div>
     <div class="bn-item" id="bn-lv-approvals" onclick="navigateTo('lv-approvals')" style="display:none;position:relative;">
       <div style="position:relative;display:inline-flex;">
@@ -1250,6 +1256,7 @@ const PAGE_TITLES = {
 };
 function navigateTo(page) {
   currentPage = page;
+  closeMobileMenu(); // ปิดเมนู hamburger overlay อัตโนมัติเมื่อเลือกหน้าใหม่ (กันปัญหาเมนูค้างทับเนื้อหา)
   // Update sidebar
   document.querySelectorAll('.sb-link').forEach(el => {
     el.classList.toggle('active', el.id === 'sb-'+page);
@@ -1280,10 +1287,25 @@ function navigateTo(page) {
   }
 }
 function toggleMobileMenu() {
-  // Mobile: show sidebar overlay
   const sb = document.getElementById('sidebar');
-  if (sb.style.display==='flex') { sb.style.display='none'; }
-  else { sb.style.display='flex'; sb.style.position='fixed'; sb.style.top='0'; sb.style.left='0'; sb.style.bottom='0'; sb.style.zIndex='200'; }
+  if (sb.style.display==='flex') { closeMobileMenu(); }
+  else { openMobileMenu(); }
+}
+
+function openMobileMenu() {
+  // Mobile: แสดง sidebar เป็น overlay ลอยทับหน้าจอ + ฉากหลังกดปิดได้
+  const sb = document.getElementById('sidebar');
+  sb.style.display='flex'; sb.style.position='fixed'; sb.style.top='0'; sb.style.left='0'; sb.style.bottom='0'; sb.style.zIndex='200';
+  document.getElementById('sidebar-backdrop').style.display='block';
+}
+
+function closeMobileMenu() {
+  const sb = document.getElementById('sidebar');
+  // ปิดเฉพาะกรณีที่เปิดเป็น overlay อยู่ (มีการตั้ง position:fixed ไว้จาก openMobileMenu) — ไม่แตะ #sidebar บนจอเดสก์ท็อป
+  if (sb.style.position==='fixed') {
+    sb.style.display='none'; sb.style.position=''; sb.style.top=''; sb.style.left=''; sb.style.bottom=''; sb.style.zIndex='';
+  }
+  document.getElementById('sidebar-backdrop').style.display='none';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2808,9 +2830,24 @@ async function renderMyOtHistory() {
   const OT_STATUS = { pending:'⏳ รออนุมัติ', approved:'✅ อนุมัติแล้ว', rejected:'❌ ปฏิเสธ', cancelled:'🚫 ยกเลิก' };
   const OT_COLOR  = { pending:'#f59e0b', approved:'#22c55e', rejected:'#ef4444', cancelled:'#94a3b8' };
   const OT_TYPE_LABEL = { advance:'📝 ขอล่วงหน้า', actual:'🧾 ย้อนหลัง' };
+  const isMobile = window.innerWidth <= 768;
 
-  const rows = reqs.length ? reqs.map(r=>`
-    <tr>
+  const actionBtns = r => r.status==='pending' ? `
+      <button class="btn btn-xs btn-outline" onclick="openEditOtModal(${r.ot_id})" style="flex:1;">✏️ แก้ไข</button>
+      <button class="btn btn-xs btn-outline" onclick="cancelOtRequest(${r.ot_id})" style="flex:1;">🚫 ยกเลิก</button>` : '';
+
+  const items = reqs.length ? reqs.map(r=>{
+    if(isMobile) {
+      return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div style="font-weight:700;font-size:14px;color:#0f172a;">${r.ot_date} · ${OT_TYPE_LABEL[r.request_type]||r.request_type}</div>
+          <span style="background:${OT_COLOR[r.status]}22;color:${OT_COLOR[r.status]};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap;">${OT_STATUS[r.status]||r.status}</span>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-bottom:3px;">🕐 ${r.start_time?.slice(0,5)} → ${r.end_time?.slice(0,5)} (${Number(r.estimated_hours||0).toFixed(1)} ชม.)</div>
+        ${r.status==='pending'?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns(r)}</div>`:''}
+      </div>`;
+    }
+    return `<tr>
       <td style="font-size:12px;">${r.ot_date}</td>
       <td style="font-size:12px;">${OT_TYPE_LABEL[r.request_type]||r.request_type}</td>
       <td style="font-size:12px;">${r.start_time?.slice(0,5)} → ${r.end_time?.slice(0,5)}</td>
@@ -2820,12 +2857,11 @@ async function renderMyOtHistory() {
           ${OT_STATUS[r.status]||r.status}
         </span>
       </td>
-      <td>${r.status==='pending'?`<div style="display:flex;gap:4px;">
-        <button class="btn btn-xs btn-outline" onclick="openEditOtModal(${r.ot_id})">✏️ แก้ไข</button>
-        <button class="btn btn-xs btn-outline" onclick="cancelOtRequest(${r.ot_id})">ยกเลิก</button>
-      </div>`:''}</td>
-    </tr>`).join('')
-    : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติ</td></tr>';
+      <td>${r.status==='pending'?`<div style="display:flex;gap:4px;">${actionBtns(r)}</div>`:''}</td>
+    </tr>`;}).join('')
+    : (isMobile
+        ? '<div style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติ</div>'
+        : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">ไม่มีประวัติ</td></tr>');
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:900px;">
@@ -2834,12 +2870,13 @@ async function renderMyOtHistory() {
         <div class="card-title">📋 ประวัติคำขอโอที</div>
         <button class="btn btn-primary btn-sm" onclick="navigateTo('lv-ot')">+ คำขอใหม่</button>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>วันที่</th><th>ประเภท</th><th>เวลา</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${isMobile
+        ? `<div>${items}</div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>วันที่</th><th>ประเภท</th><th>เวลา</th><th>ชั่วโมง</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <tbody>${items}</tbody>
+           </table></div>`
+      }
     </div>
   </div>`;
 }
@@ -4415,15 +4452,11 @@ async function _restoreSession() {
   return false;
 }
 
-// Close mobile sidebar on nav
-document.querySelectorAll('.sb-link').forEach(el=>{
-  el.addEventListener('click',()=>{
-    if(window.innerWidth<=768) {
-      const sb=document.getElementById('sidebar');
-      sb.style.display='none';
-    }
-  });
-});
+// หมายเหตุ: การปิดเมนู hamburger overlay อัตโนมัติเมื่อกดลิงก์ใน sidebar
+// ย้ายไปรวมไว้ใน closeMobileMenu() ซึ่งถูกเรียกจาก navigateTo() แล้ว (ดู SECTION 6)
+// — เดิมโค้ดจุดนี้เช็คเฉพาะ window.innerWidth<=768 ตอนคลิก และรีเซ็ตไม่ครบ (ไม่ล้าง
+// position/top/left/zIndex ที่ตั้งไว้ตอนเปิดเมนู) ทำให้เมนู sidebar ค้างเป็น overlay
+// ทับเนื้อหาได้เมื่อขนาดหน้าจอเปลี่ยนหลังเปิดเมนู (เช่น หมุนจอ/ปรับขนาดหน้าต่าง)
 
 // ─── Deep Link — อ่าน ?page= จาก URL ───────────────────────────────
 function _getUrlPage() {
