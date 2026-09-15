@@ -7408,12 +7408,15 @@ async function importSalesExcel(e) {
     await loadSalesFactoriesCache();
     const createdBy = currentUser ? currentUser.id : null;
     const notFound = [];
+    const missingDate = [];
     const rows = json.map((row, i) => {
       const fnameRaw = String(row['factory_name'] || row['โรงงาน'] || '').trim();
       const factory = findFactoryByName(_mSalesFactories, fnameRaw);
       if (fnameRaw && !factory) notFound.push(`แถว ${i+2}: "${fnameRaw}"`);
       const code = factory ? factoryNameToCode(factory.name) : normalizeFactoryName(fnameRaw);
-      const saleDateVal = normalizeDateStr(row['sale_date'] || row['วันที่'] || '');
+      const saleDateRaw = String(row['sale_date'] || row['วันที่'] || '').trim();
+      const saleDateVal = saleDateRaw ? normalizeDateStr(saleDateRaw) : null;
+      if (!saleDateVal) missingDate.push(i + 2);
       const stoneTypeVal = String(row['stone_type'] || row['ชนิดหิน'] || '').trim() || null;
       const qtyVal = Number(row['quantity_ton'] !== '' ? row['quantity_ton'] : null) || Number(row['ปริมาณ(ตัน)']) || 0;
       const priceRaw = row['price_per_ton'] !== undefined ? row['price_per_ton'] : (row['ราคา(บาท/ตัน)'] !== undefined ? row['ราคา(บาท/ตัน)'] : '');
@@ -7435,6 +7438,10 @@ async function importSalesExcel(e) {
     });
     if (notFound.length) {
       showToast(`ไม่พบโรงงานตามชื่อที่กรอก: ${notFound.join(', ')}`, 'error');
+      return;
+    }
+    if (missingDate.length) {
+      showToast(`แถวที่ ${missingDate.join(', ')} ไม่มีวันที่ (sale_date/วันที่) — กรุณาตรวจสอบไฟล์แล้วลองใหม่`, 'error');
       return;
     }
     const { error } = await db.from('sales').insert(rows);

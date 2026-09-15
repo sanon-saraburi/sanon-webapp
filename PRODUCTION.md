@@ -1,11 +1,20 @@
 # PRODUCTION.md — ระบบผลิต (System 1)
 > ไฟล์นี้บันทึกรายละเอียดเฉพาะ `index.html` — อ่านก่อนแก้ไขทุกครั้ง
+> ตั้งแต่ 2026-09-15 ไฟล์นี้เป็นที่เก็บ "สถานะ/ฟีเจอร์ล่าสุด" + "Changelog" ของ System 1 ทั้งหมด — ดู `CLAUDE.md` Section 0A สำหรับเหตุผลที่แยกไฟล์
+
+---
+
+## 0. สถานะล่าสุด (อัปเดต 2026-09-15)
+
+✅ ใช้งานจริง — Dashboard ทุกเมนู (CDE/Propel/Sanon1/Sanon2/Mobile Plant), Executive Dashboard, รายงานรายปี (dash-annual: Dashboard + PDF + PPTX Export ทุกโรงงาน), ค่าไฟฟ้า, PDF Report, SSO, Mobile/Desktop System Switcher 6 ระบบ, LINE แจ้งเตือนจาก JS, Export CSV ทุกโรงงาน, Mobile Plant (โรงงานที่ 5 — Dashboard + ยอดผลิต + Approval ครบ), เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน, วิเคราะห์รายวัน (กราฟ/ตาราง/Breakdown ครบทุกโรงงาน + auto-detect วันล่าสุดที่มีข้อมูล), material_types (is_feed_material + is_product), groundwater_usage (ผู้บันทึก), drone factory sort ตามลำดับ CDE→Propel→Sanon1→Sanon2→Mobile Plant
+
+**ปัญหาที่รู้อยู่:** ต้องรัน SQL patches สำหรับ Mobile Plant ให้ครบ (ดู Section 11 — Changelog 2026-09-02)
 
 ---
 
 ## 1. ข้อมูลระบบ
 
-- **ไฟล์:** `index.html` (~9,200+ บรรทัด)
+- **ไฟล์:** `index.html` (~12,100+ บรรทัด)
 - **สถานะ:** ✅ ใช้งานจริง
 - **Supabase:** `https://pcmpwkcmvsxrvbximjgf.supabase.co`
 - **Anon Key:** `sb_publishable_RckQgaumQeIgaCICUc_6ZQ_T42qI2Nq`
@@ -40,6 +49,8 @@
 | `dash-water` | น้ำบาดาล | `groundwater_usage` |
 | `dash-electricity` | ค่าไฟฟ้า | `electricity_costs` |
 | `dash-executive` | Executive Dashboard | รวม 7 ตาราง parallel |
+| `dash-mobile` | Dashboard Mobile Plant (โรงงานที่ 5) | `production_mobile` |
+| `dash-annual` | รายงานรายปี (รายโรงงาน + PDF + PPTX Export) | production tables + `factories` |
 
 ### จัดการข้อมูล (prefix: `manage-`)
 | key | ชื่อ |
@@ -49,6 +60,7 @@
 | `manage-prod-propel` | บันทึกยอดผลิต Propel |
 | `manage-prod-sanon1` | บันทึกยอดผลิต Sanon1 |
 | `manage-prod-sanon2` | บันทึกยอดผลิต Sanon2 |
+| `manage-prod-mobile` | บันทึกยอดผลิต Mobile Plant (โรงงานที่ 5) |
 | `manage-electric-loader` | รถตักไฟฟ้า |
 | `manage-sales` | ยอดขาย |
 | `manage-groundwater` | น้ำบาดาล |
@@ -72,6 +84,7 @@ production_cde        -- ยอดผลิต CDE (feed_ton, product_*, runtime
 production_propel     -- ยอดผลิต Propel
 production_sanon1     -- ยอดผลิต Sanon1
 production_sanon2     -- ยอดผลิต Sanon2
+production_mobile     -- ยอดผลิต Mobile Plant (โรงงานที่ 5, UH312/QA451 columns)
 approval_log          -- log การอนุมัติ/ปฏิเสธ
 
 -- Master Data
@@ -164,6 +177,76 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 ---
 
 ## 11. Changelog
+
+### 2026-09-15 — แก้นำเข้า Excel/CSV ยอดขายพังเมื่อไม่มีวันที่
+
+**ปัญหาที่พบ:** หน้า "จัดการยอดขาย" กด "นำเข้า Excel/CSV" แล้วขึ้น error `นำเข้าข้อมูลล้มเหลว: invalid input syntax for type date: ""`
+
+**Root cause:** ฟังก์ชัน `importSalesExcel()` เดิมส่งค่า `sale_date` เป็น empty string `''` เข้า Supabase เมื่อไฟล์ที่นำเข้าไม่มีวันที่ในแถวนั้น — Postgres ปฏิเสธเพราะ column เป็น type `date` รับ `''` ไม่ได้ ทำให้การ insert ทั้งชุดล้มเหลว
+
+**แก้ไข (`importSalesExcel()` บรรทัด ~7402):**
+- ตรวจสอบก่อน insert: ถ้าแถวไหนไม่มีวันที่ → เก็บเลขแถวไว้ใน `missingDate[]`
+- ถ้ามีแถวขาดวันที่ → แจ้งเตือนระบุเลขแถวที่มีปัญหา แล้ว**หยุดการนำเข้าทั้งหมด** (ไม่ insert บางส่วน) ให้แก้ไฟล์ต้นทางแล้วอัปโหลดใหม่ — ไม่เดาใส่วันที่ให้เอง
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-11 — แก้ CSV Export แถวสูงผิดปกติ (breakdown_detail หลายบรรทัด)
+
+**ปัญหาที่พบ:** Export CSV จากหน้า `manage-prod-*` แล้วเปิดใน Excel บางแถวสูงผิดปกติ
+
+**Root cause:** ช่อง `breakdown_detail` มีข้อความหลายบรรทัด ระบบ export ครอบด้วย `"..."` ตามมาตรฐาน CSV ถูกต้อง แต่ Excel ขยายความสูงแถวอัตโนมัติเมื่อเจอ cell ที่มีการขึ้นบรรทัดใหม่ภายใน
+
+**แก้ไข (`exportProductionExcel()` บรรทัด ~6177):** แปลงตัวขึ้นบรรทัดใหม่ (`\r\n`,`\r`,`\n`) ในทุกค่าที่ export เป็นตัวคั่น `" / "` ก่อนเขียนลง CSV — ทุกแถวอยู่บรรทัดเดียวเสมอ ไม่กระทบข้อมูลจริงใน DB
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-08 — วิเคราะห์รายวัน + แก้ material_types + groundwater + drone sort
+
+- **Section 12B ใหม่ — Daily Analysis Block** (ทุกโรงงาน CDE/Propel/Sanon1/Sanon2/Mobile Plant): กราฟ Bar+Line รายวัน (ยอดป้อน + Throughput + เส้น target), ตารางรายวันครบ (วันที่/ยอดป้อน/Runtime/Throughput สี 🟢🟡🔴/product columns/Breakdown + แถวรวม/เฉลี่ย)
+- **"รายวัน" mode auto-detect วันล่าสุดที่มีข้อมูล** — เดิมแสดงวันนี้ (ไม่มีข้อมูล) ใหม่แสดงวันล่าสุดที่บันทึกไว้จริง
+- **material_types:** เพิ่ม `is_feed_material` + `is_product` — checkbox ในฟอร์ม, คอลัมน์ในตาราง, dropdown บันทึกยอดผลิตกรองเฉพาะ feed material ของโรงงานที่ตรงกัน
+- **groundwater_usage:** เพิ่มคอลัมน์ "ผู้บันทึก" (`recorder_name`)
+- **Drone stock:** เรียงปุ่มกรองโรงงานตามลำดับ CDE→Propel→Sanon1→Sanon2→Mobile Plant (ไม่ใช่ alphabetical)
+
+**SQL:** `ALTER TABLE material_types ADD COLUMN IF NOT EXISTS is_feed_material boolean DEFAULT false;` + `is_product` เช่นกัน, `ALTER TABLE groundwater_usage ADD COLUMN IF NOT EXISTS recorder_name text;` (รันแล้ว)
+
+### 2026-09-04 — System Switcher เปลี่ยนชื่อเป็น HR + การ์ดจองห้องซ่อนตามสิทธิ์
+
+- System Switcher: "เช็คอิน" → "HR" (Desktop sidebar + Mobile bottom sheet)
+- การ์ด "จองห้อง" แสดงเฉพาะ `currentUser.meeting_access === true` หรือ `role === 'admin'` — Admin กำหนดสิทธิ์ผ่าน SQL `UPDATE app_users SET meeting_access = true WHERE username = 'xxx';`
+
+### 2026-09-03 — เพิ่ม Annual Report Dashboard (dash-annual) + PPTX Export
+
+- เมนูใหม่ `dash-annual` "รายงานรายปี" — Section 29B: Factory tabs (CDE/Propel/Sanon1/Sanon2/Mobile Plant), Year dropdown ย้อนหลัง 5 ปี, KPI cards 4 ใบ, Chart.js bar+line Actual vs แผน, ตารางสรุปรายเดือน + ตารางผลิตภัณฑ์รายเดือน
+- ปุ่ม PDF (`printAnnualReport()`) + ปุ่ม Export PPTX (`generateAnnualPptx()` — โหลด PptxGenJS 3.12.0 จาก cdnjs on-demand, สร้างสไลด์ Cover + Overview + ต่อโรงงาน 5 โรงงาน × 2 สไลด์)
+- สีตามโรงงาน: CDE=teal, Propel=blue, Sanon1=purple, Sanon2=red, Mobile=orange
+- ไม่ต้องรัน SQL เพิ่ม — ใช้ข้อมูลจาก production tables และ factories table เดิม
+
+### 2026-09-02 รอบ 2 — แก้ Runtime Mobile Plant + เป้าตัน/เดือน + sw.js v6
+
+- **แก้ Runtime Mobile Plant:** root cause `runtime_hour` เป็น GENERATED ALWAYS จาก `runtime_minute` ที่ default 0 ไม่มี trigger คำนวณจาก start/stop hour — สร้าง trigger `calc_mobile_runtime()` คำนวณใหม่
+- **เป้าผลิต (ตัน/เดือน):** เพิ่ม column `target_month` ใน `factories`, ช่องกรอกในฟอร์มเพิ่มโรงงาน, ใช้ได้ทุกโรงงาน (CDE 30,000 / Propel 45,000 / Sanon1 100,000 / Sanon2 100,000 / Mobile Plant 84,000 ตัน/เดือน)
+- แก้ `factoryErr` ไม่ crash Dashboard เมื่อไม่พบแถว factory
+- `sw.js` → v6: แก้ bug root URL `/sanon-webapp/` ถูก Cache First แทน Network First
+
+**SQL ที่ต้องรันใน Supabase (ถ้ายังไม่ได้รัน):** `ALTER TABLE production_mobile DROP COLUMN IF EXISTS runtime_hour;` → `ADD COLUMN runtime_hour numeric(8,2) DEFAULT 0;` → สร้าง trigger `calc_mobile_runtime` → `UPDATE production_mobile SET updated_at = now();` → `ALTER TABLE factories ADD COLUMN IF NOT EXISTS target_month numeric DEFAULT NULL;` → `NOTIFY pgrst, 'reload schema';`
+
+**⚠️ ข้อควรระวัง:** ชื่อ factory ต้องตรงกับ `cfg.factoryName` ใน code — "Mobile Plant" (1 space) ไม่ใช่ "Mobile  Plant" (2 space)
+
+### 2026-09-02 — เพิ่ม Mobile Plant (โรงงานที่ 5)
+
+- เพิ่มเมนู `dash-mobile`, `manage-prod-mobile`, approval key `approve-mobile`
+- Config: `PLANT_FACTORY_CODE.mobile = 'Mobile'`, `PRODUCTION_PLANT_CONFIG.mobile` (productColumns: UH312 หิน 3/4, UH312 หินฝุ่น, QA451 หิน 3/4, QA451 หิน 3/8, QA451 หินฝุ่น, หินคลุก — `hourMeterMode: true` ไม่มี Flowmeter)
+- Dashboard ใช้ style เดียวกับ Sanon (`renderDashboardSanon('mobile')`)
+- Permission Templates เพิ่ม `manager-mobile`, `supervisor-mobile`, `op-mobile`
+- ตาราง `production_mobile` ใหม่ (`production_mobile_schema.sql`) — RLS policy `anon_all`
+
+**⏳ สิ่งที่ต้องทำก่อนใช้งาน:** รัน `production_mobile_schema.sql` ใน Supabase → Admin ตั้งสิทธิ์ Permission Matrix ให้ User ที่ดูแล Mobile Plant
+
+### 2026-08-08 — แก้ Export รายงานการผลิต + เปลี่ยน Export Excel → CSV
+
+- หน้ารายงาน (manage-reports): สร้าง `buildProductionExportData()` — export ครบทุกคอลัมน์ตรงกับตารางที่แสดงผล, status แปลงเป็นภาษาไทย
+- หน้า manage-prod-* : เปลี่ยน export จาก `.xlsx` → `.csv` (UTF-8 with BOM), หัวคอลัมน์ตรงกับ import template, เรียงวันที่ ascending เพื่อแก้แล้ว re-import ได้
 
 ### 2026-07-31
 - เพิ่ม PWA tags: `manifest-production.json`, `apple-touch-icon`, SW registration

@@ -13,11 +13,11 @@
 |------|------|--------|--------------------------|--------------|
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
 | System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน**, **System Switcher: ชื่อ "เช็คอิน" → "HR", การ์ดจองห้องซ่อนตาม meeting_access**, **วิเคราะห์รายวัน — กราฟ/ตาราง/Breakdown ครบทุกโรงงาน**, **รายวัน auto-detect วันล่าสุดที่มีข้อมูล**, **material_types: is_feed_material + is_product**, **groundwater_usage: ผู้บันทึก**, **drone factory sort: CDE→Propel→Sanon1→Sanon2→Mobile Plant** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
-| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | FIFO, QR/Label, เบิก/อนุมัติ, LINE แจ้งเตือนจาก JS, สิทธิ์ตามโรงงาน, normCat filter fix, withdraw modal filter+search, **Dashboard เดือน/ปี + movement table**, **วันที่เบิกใน LINE**, **แก้ราคาสารตกตะกอน FIFO lot price**, **สารตกตะกอน — เพิ่มผู้เบิก + Realtime approval + สีตามโรงงาน + เบิก/รับเข้าเดือนนี้ per card + วันที่ปัจจุบันใน card + KPI กก.**, **ตารางวัตถุคงเหลือ — ราคาจาก FIFO lot จริง** | ไม่มี Loading Screen (ถูก revert) |
-| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | Dashboard, pm-meter, pm-items, pm-oee, pm-report, SSO, LINE แจ้งเตือนจาก JS, dropdown PM เรียงตามสถานะ, คอลัมน์วันที่ PM ล่าสุด | ไม่มี Loading Screen (ถูก revert) |
+| System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ + Changelog ทั้งหมดย้ายไปที่ **`INVENTORY.md`** แล้ว (ตามนโยบาย 2026-09-15) | ดู `INVENTORY.md` |
+| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`PM.md`** | ไม่มี Loading Screen (ถูก revert) — รายละเอียดเพิ่มเติมดู `PM.md` |
 | System 4 — Checkin/HR | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)**, **ชื่อ Sidebar → "สานนท์ — HR"**, **Refresh ค้างหน้าเดิม (sessionStorage._sn_ck_lastpage)**, **พิมพ์ตามตัวกรองแผนก**, **Guard Realtime Popup เมื่อ Pass approved (Supabase Broadcast)**, **ข้อมูลการลา: สรุปประจำเดือน + ประวัติทั้งหมด (ดึงจาก leave_requests + pass_requests)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน — ต้องรัน SQL: `ALTER TABLE checkin_users ADD COLUMN IF NOT EXISTS permissions text[];` |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
-| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | Login 2 mode (หัวหน้า/Admin + พนักงาน quick access), Dashboard วันลาคงเหลือ, **ยื่นคำขอลา 10 ประเภท**, อนุมัติ/ปฏิเสธ, Admin แก้ไข+ลบ, **พิมพ์ใบลาฟอร์มบริษัท**, Export CSV, ตั้งค่าโควต้า, **Calendar วันหยุด**, **Working day จันทร์-เสาร์**, **Pass Request ทุกประเภทต้องอนุมัติ (รวมพักทานข้าว)**, **username autocomplete login**, **LINE แจ้งเตือน leave+pass ผ่าน Edge Function (URI button — ไม่มี postback)**, **PIN 4 หลักสำหรับ Employee mode (ตั้ง/verify/เปลี่ยน/Admin reset)**, **รูปโปรไฟล์พนักงานใน Dashboard**, **popup แจ้งพนักงานทันทีผ่าน Supabase Realtime Broadcast**, **หน้า login ใหม่ — avatar วงกลมด้านบน + ชื่อ/รหัส/แผนก ก่อน PIN**, **LINE Security การ์ดมีรูปพนักงาน (เก็บ photo_url ใน pass_requests)**, **Realtime แจ้งเตือนหัวหน้า/Admin เมื่อมีคำขอใหม่ (ลา+Pass) — ไม่ต้องรีเฟรชหน้าจอเอง** | ต้องรัน SQL 6 ชุด (รวม pass_requests_photo patch) + Deploy Edge Function (`line-notify_index.txt`) + Upload GitHub Pages + เปิด Realtime ใน Supabase Dashboard |
+| System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`LEAVE.md`** | ต้องรัน SQL 6 ชุด + Deploy Edge Function + Upload GitHub Pages + เปิด Realtime — รายละเอียดดู `LEAVE.md` |
 | PWA                   | `sw.js` + manifests | ✅ พร้อม deploy | icon-192/512.png, manifest ทั้ง 5 ระบบ (รวม portal), **SW cache v6 — Network First สำหรับ root URL `/sanon-webapp/`** | — |
 
 ### LINE Notification Status
@@ -40,6 +40,29 @@
 
 > **🔒 กฎสำคัญ: ห้ามแก้ไข LINE notification ของ System 1-3 (ผลิต/คลัง/PM)**
 > ระบบแจ้งเตือน System 1-3 → กลุ่มผลิต (`LINE_GROUP_ID`) — **สมบูรณ์แล้ว ห้ามยุ่ง**
+
+---
+
+## ⚠️ 0A. วิธีทำงานร่วมกันข้ามแชต — เอกสารแยกต่อระบบ (มีผลตั้งแต่ 15 ก.ย. 69)
+> **เปิดอ่านก่อนแก้ไขงานครั้งถัดไป**
+
+**ปัญหาที่พบ:** หลายแชตแก้ไข `CLAUDE.md` พร้อมกัน ทำให้ข้อมูลของแชตอื่นถูกเขียนทับหายไปหลายครั้ง (กระทบทั้งงานของ System 1 และ System 6)
+
+**ทางแก้ — ย้าย "รายละเอียดสถานะ/ฟีเจอร์" และ "Changelog" ของแต่ละระบบ ออกจาก `CLAUDE.md` ไปไว้ในไฟล์ `.md` ของระบบตัวเอง:**
+
+| ระบบ | ไฟล์เอกสาร | สถานะการย้าย |
+|------|-----------|-------------|
+| System 1 — Production | `PRODUCTION.md` | ✅ ตัวอย่างที่ทำเสร็จแล้ว (Changelog อาจยังไม่ครบ 100% — ตรวจสอบก่อนใช้อ้างอิง) |
+| System 2 — Inventory | `INVENTORY.md` | ✅ ดูเหมือนย้ายแล้ว (ตรวจพบว่า Changelog เดิมใน Section 7 ถูกย้ายออกแล้ว) |
+| System 3 — PM | `PM.md` | ✅ ย้ายแล้ว (Section 0 เหลือ pointer แล้ว) |
+| System 4 — Checkin/HR | `CHECKIN.md` | ⏳ ยังไม่สร้าง |
+| System 5 — Meeting | `MEETING.md` | ⏳ ยังไม่สร้าง |
+| System 6 — Leave | `LEAVE.md` | ✅ ย้ายแล้ว (2026-09-15) |
+| Portal | `PORTAL.md` | ⏳ ยังไม่สร้าง |
+
+**กฎหลังจากนี้ใน `CLAUDE.md`:**
+- **Section 0 (สถานะระบบ):** ให้เหลือแค่บรรทัดสั้นๆ ชี้ไปไฟล์ของระบบตัวเอง ไม่ต้องพิมพ์ฟีเจอร์ยาวซ้ำอีก
+- **Section 7 (Changelog):** ใช้เฉพาะเรื่องที่กระทบหลายระบบพร้อมกันเท่านั้น (เช่น แก้ `sw.js`, ย้ายไดรฟ์) — Changelog เฉพาะของแต่ละระบบให้บันทึกในไฟล์ `.md` ของระบบนั้นแทน
 
 ---
 
@@ -93,7 +116,8 @@
 | `index.html` | System 1 | 2026-09-08 (Daily Analysis Block + รายวัน auto-detect + material_types is_feed/is_product + groundwater recorder + drone sort) |
 | `production_mobile_schema.sql` | System 1 | 2026-09-02 (ตาราง production_mobile — UH312/QA451 columns, RLS) |
 | `meeting.html` | System 5 | 2026-08-14 (No-login public booking — Admin login มุมขวาบน, auto confirmed, Conflict check, Admin sections hidden จาก public) |
-| `leave.html` | System 6 | 2026-08-22 (หน้า login ใหม่ avatar+profile, Realtime Broadcast popup, LINE Security มีรูป, photo_url ใน pass_requests) |
+| `leave.html` | System 6 | 2026-09-11 (Realtime แจ้งเตือนหัวหน้า/Admin เมื่อมีคำขอใหม่ + เพิ่ม PWA manifest/icon สำหรับ Add to Home Screen) |
+| `manifest-leave.json` | System 6 | 2026-09-11 (ใหม่ — PWA manifest สำหรับ leave.html ใช้ icon-192/512.png เดิม) |
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
@@ -104,7 +128,7 @@
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
-| `PM.md` | System 3 | 2026-07-31 |
+| `PM.md` | System 3 | 2026-09-15 (ย้าย Changelog 2026-08-05 + สถานะฟีเจอร์เข้ามารวมที่นี่ ตามนโยบายแยกไฟล์) |
 | `sw.js` | PWA | 2026-08-01 (v3 — เพิ่ม portal.html + manifest-portal.json) |
 | `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
@@ -146,16 +170,17 @@
 
 ---
 
-## ⚠️ 0F. ขอบเขตแชตปัจจุบัน (กำหนดโดยคุณใหญ่ — 2026-09-10)
+## ⚠️ 0F. ขอบเขตแชตที่คุณใหญ่กำหนดไว้ (Active Chat Scopes)
 
-> **แชตนี้มีสิทธิ์แก้ไขเฉพาะ System 2 — Inventory (`inventory.html`) เท่านั้น**
-> ขอบเขตงาน: FIFO, QR/Label, เบิก/อนุมัติ, Dashboard คลัง
-> ถ้าจะแก้ไขระบบอื่น (Portal, System 1 Production, System 3 PM, System 4 Checkin/HR, System 5 Meeting, System 6 Leave, หรือไฟล์ shared เช่น `sw.js`/`manifest-*.json`) **ต้องถามคุณใหญ่ก่อนทุกครั้ง**
+> **กฎ:** ส่วนนี้เป็น**ตาราง** — แต่ละแชตเพิ่ม/แก้ไข **เฉพาะแถวของตัวเอง** เท่านั้น ห้ามลบหรือแก้แถวของแชตอื่น
+> (⚠️ พบว่าเดิมส่วนนี้เป็นข้อความเดียว ทำให้แชต System 2 เขียนทับขอบเขตของแชต System 3 ไปเมื่อ 2026-09-10 — แก้เป็นตารางเมื่อ 2026-09-15 เพื่อกันเขียนทับซ้ำ ถ้าคุณใหญ่มีขอบเขตอื่นที่เคยแจ้งไว้แล้วหายไป กรุณาแจ้งอีกครั้ง)
 
-**ไฟล์ที่แก้ไขได้ในแชตนี้:** `inventory.html`, `inventory_schema.sql`, `inventory_alert.sql`, `inventory_alert_fn.ts`, `lot_tracking.sql`, `fix_stock.sql`, `INVENTORY.md`, และอัปเดต `CLAUDE.md` เฉพาะส่วน System 2 ใน Section 0
+| แชต/ระบบ | ขอบเขตที่แก้ไขได้ | กำหนดเมื่อ | หมายเหตุ |
+|---|---|---|---|
+| System 2 — Inventory | `inventory.html`, `inventory_schema.sql`, `inventory_alert.sql`, `inventory_alert_fn.ts`, `lot_tracking.sql`, `fix_stock.sql`, `INVENTORY.md`, และ `CLAUDE.md` เฉพาะส่วน System 2 | 2026-09-10 | ขอบเขตงาน: FIFO, QR/Label, เบิก/อนุมัติ, Dashboard คลัง — **ข้อยกเว้นที่อนุมัติเพิ่ม:** แก้ `leave.html`, `checkin_system/leave_schema*.sql`, `leave_schema_v6_patch.sql` ได้ด้วย (System 6) |
+| System 3 — PM | `pm.html`, `pm_schema.sql`, `pm_repair_schema.sql`, `pm_meter_schema.sql`, `pm_sync.sql`, `pm_cron.sql`, `PM.md`, และ `CLAUDE.md` เฉพาะส่วน System 3 | 2026-09-10 | ขอบเขตงาน: บันทึกมิเตอร์, ซ่อมบำรุง, OEE, คลังอะไหล่ — ถ้าจะแก้ระบบอื่นต้องถามคุณใหญ่ก่อนทุกครั้ง |
 
-> **📌 ข้อยกเว้นที่คุณใหญ่อนุมัติเพิ่มในแชตนี้ (2026-09-10):** อนุญาตให้แก้ไข **System 6 — Leave (`leave.html`)** เพิ่มเติมได้ด้วย (คุณใหญ่ยืนยันโดยตรงในแชตนี้ว่าให้แก้ `leave.html` ได้ นอกเหนือจากขอบเขตเดิมที่จำกัดไว้เฉพาะ System 2)
-> **ไฟล์เพิ่มเติมที่แก้ไขได้:** `leave.html`, `checkin_system/leave_schema*.sql`, `leave_schema_v6_patch.sql`
+> ทุกแชตในตารางนี้: ถ้าจะแก้ไขไฟล์นอกขอบเขตของตัวเอง (รวมไฟล์ shared เช่น `sw.js`/`manifest-*.json`) **ต้องถามคุณใหญ่ก่อนทุกครั้ง**
 
 ---
 
@@ -332,61 +357,7 @@ sessionWarnShown, approvalCountInterval
 
 ## 7. ประวัติการแก้ไข (Changelog)
 
-### 2026-09-11 — leave.html: Realtime แจ้งเตือนหัวหน้า/Admin เมื่อมีคำขอใหม่
-
-**ปัญหาที่พบ:** เดิมเมื่อพนักงานยื่นคำขอลา/Pass ใหม่ LINE แจ้งเตือนไปกลุ่ม HR ตามปกติ แต่ในหน้าเว็บแอป (หน้า "อนุมัติคำขอ" / Dashboard) หัวหน้างานหรือ Admin ที่ล็อกอินค้างอยู่ **ไม่เห็นคำขอใหม่จนกว่าจะกดรีเฟรชเอง** เพราะไม่มีกลไก realtime ฝั่งผู้อนุมัติ (มีแต่ฝั่งพนักงานที่ subscribe รอฟังผลอนุมัติ/ปฏิเสธผ่าน `emp-notif-{employee_id}` channel เท่านั้น)
-
-**`leave.html` — การเปลี่ยนแปลง:**
-
-**1. เพิ่ม Supabase Broadcast channel ใหม่ `leave-approvers-notif`:**
-- `_broadcastNewRequestToApprovers(kind, r)` — พนักงานเรียกทันทีหลัง insert `leave_requests`/`pass_requests` สำเร็จ (ใน `submitRequest()` และ `submitPassRequest()`) ส่ง payload `{kind, employee_name, department, type_name, days}`
-- `_startApproverRealtime()` / `_stopApproverRealtime()` — หัวหน้า/Admin subscribe channel นี้ตอน `_bootApp()` เมื่อ `can('approve')` เป็นจริง (และ unsubscribe ใน `doLogout()`)
-
-**2. `_onNewApproverRequest(payload)` — ตัวจัดการเมื่อมี broadcast เข้ามา:**
-- ทำงานเฉพาะผู้มีสิทธิ์อนุมัติ (`can('approve')`)
-- Supervisor (ไม่ใช่ admin) จะได้รับแจ้งเฉพาะคำขอแผนกตัวเองเท่านั้น (เทียบ `currentUser.department` — ตรงกับ logic กรองที่ใช้ในหน้าอนุมัติเดิม) ส่วน Admin ได้รับแจ้งทุกแผนก
-- แสดง toast `🔔 คำขอใหม่: ...` ทันที
-- ถ้ากำลังอยู่หน้า `lv-approvals` → re-render อัตโนมัติ, หน้า `lv-pass-approve` → re-render Pass, หน้า `lv-dashboard` → re-render dashboard, หน้าอื่น → อัปเดตแค่ตัวเลข badge (`_refreshApproveBadgeOnly()` / `_refreshPassBadgeOnly()`)
-
-**ไม่ต้องรัน SQL เพิ่ม** — ใช้ Supabase Realtime Broadcast (เหมือน popup แจ้งพนักงานเดิม) ไม่ต้องเปิด Realtime บนตารางเพิ่มเติม (ใช้ broadcast ไม่ใช่ postgres_changes)
-
-**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
-**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
-
----
-
-### 2026-09-02 รอบ 3 — inventory.html: สารตกตะกอน UX + ราคา FIFO ในตารางวัตถุคงเหลือ
-
-**`GitHub/inventory.html` — การเปลี่ยนแปลง:**
-
-**1. สารตกตะกอน stock card — เพิ่ม stat row "เบิก/รับเข้าเดือนนี้":**
-- แต่ละ card แสดง `เบิกเดือนนี้ (มิ.ย.) = XX ถุง` (สีส้ม) + `รับเข้าเดือนนี้ = XX ถุง` (สีน้ำเงิน)
-- ดึงจาก `curWd[ci.id]?.qty` และ `curRcv[ci.id]?.qty` — ข้อมูลเดียวกับ KPI card
-- เพิ่ม separator line `border-t` แยกออกจากส่วน stock
-
-**2. สารตกตะกอน stock card — เพิ่มวันที่ปัจจุบันใน card header:**
-- แสดง `ณ 10 ส.ค. 2569` ชิดขวาของ badge โรงงาน (flex justify-between)
-- คำนวณจาก `new Date()` → แปลงเป็น พ.ศ. อัตโนมัติ
-
-**3. KPI card เบิกจ่าย/รับเข้า — เพิ่มน้ำหนักรวม (กก.):**
-- คำนวณ `totWdKg = Σ(qty × wpkg)` และ `totRcvKg = Σ(qty × wpkg)` per item
-- แสดงใต้ตัวเลข ถุง เช่น `21.0 ถุง` → `525 กก.`
-- เฉพาะ card "เบิกจ่ายเดือนนี้" และ "รับเข้าเดือนนี้" เท่านั้น
-
-**4. ตารางวัตถุคงเหลือ — คอลัมน์ "ราคาต่อหน่วย" ใช้ FIFO lot จริง:**
-- เดิม: `i.unit_price` (ราคา master — ไม่อัปเดตเมื่อรับล็อตใหม่)
-- ใหม่: คำนวณ weighted average จาก `_lotsMap[i.id]` ที่มี `remaining_qty > 0`
-  - `avgP = Σ(remaining_qty × unit_cost) / Σ(remaining_qty)`
-  - Fallback เป็น `i.unit_price` ถ้าไม่มีล็อตเหลือ
-- Tooltip `title` บอกว่าเป็น "ราคาเฉลี่ย FIFO lot ปัจจุบัน" หรือ "ราคา master"
-- **ไม่กระทบ logic การเบิก** — `calcFifoCost()` ยังคง FIFO จริง (ล็อตเก่าก่อน)
-
-**ไม่ต้องรัน SQL เพิ่ม** — เป็น JavaScript frontend ทั้งหมด
-
-**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `CLAUDE.md`
-**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅
-
----
+> **📌 System 6 — Leave:** Changelog/รายละเอียดฟีเจอร์ย้ายไป **`LEAVE.md`** แล้ว (2026-09-15) — Section นี้เหลือเฉพาะเรื่องที่กระทบหลายระบบพร้อมกัน
 
 ### 2026-09-08 — index.html: วิเคราะห์รายวัน + แก้ material_types + groundwater + drone sort
 
@@ -620,173 +591,6 @@ sessionWarnShown, approvalCountInterval
 
 ---
 
-### 2026-08-22 — leave.html: หน้า Login ใหม่ + Realtime Popup + LINE Security มีรูป
-
-**`leave.html` — การเปลี่ยนแปลงหลัก:**
-
-**1. หน้า Login ออกแบบใหม่ (Supervisor + Employee):**
-- แสดง avatar วงกลม 84px (รูปภาพหรือ emoji placeholder) ด้านบน ก่อน login
-- ใต้วงกลม: ชื่อ / รหัสพนักงาน / แผนก — อัปเดตทันทีเมื่อเลือกจาก dropdown ค้นหา
-- ปุ่ม "ถัดไป" → ซ่อน search wrap → แสดง PIN step (profile ยังอยู่ด้านบน)
-- Helper functions: `_supFillProfile()`, `_supResetProfile()`, `_empFillProfile()`, `_empResetProfile()`
-- Mobile CSS: avatar เล็กลง (72px), padding ลดลง, responsive บน 480px
-
-**2. Realtime Popup แจ้งพนักงานทันที (Supabase Broadcast):**
-- `_startNotifRealtime()` — subscribe channel `emp-notif-{employee_id}` เมื่อพนักงาน login
-- `_stopNotifRealtime()` — unsubscribe เมื่อ logout
-- `_sendBroadcastNotif(employeeId, payload)` — supervisor ส่ง broadcast หลัง approve/reject
-- `_showSingleNotifPopup({icon, label, detail, status, note})` — modal popup แสดงทันที
-- เรียก broadcast จาก: `dashApprove()`, `approveRequest()`, `rejectRequest()`, `approvePass()`, `rejectPass()`
-- `checkLeaveStatusNotifications()` — ตรวจ leave_requests + pass_requests ที่ missed ตอน login
-- ใช้ Supabase Broadcast (ไม่ใช่ postgres_changes) — ไม่ต้องการ RLS auth
-
-> **⚠️ ต้องเปิด Realtime ใน Supabase Dashboard:**
-> Table Editor → เลือกตาราง → Disable Realtime → เปิดเป็น Enable (หรือตรวจว่าเปิดอยู่แล้ว)
-
-**3. LINE Security การ์ดมีรูปพนักงาน:**
-- Root cause: `sendPassLineNotify('approved')` ถูกเรียกจาก supervisor → `currentEmp = null` → `photo_url` ว่าง
-- Fix: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน `submitPassRequest()` payload → เก็บลง `pass_requests` ตั้งแต่แรก
-- `approvePass()`: ลบ DB lookup แยก (`checkin_employees`) ออก — ใช้ `data.photo_url` จาก SELECT ได้เลย
-
-> **⚠️ ต้องรัน SQL:**
-> ```sql
-> ALTER TABLE pass_requests ADD COLUMN IF NOT EXISTS photo_url TEXT;
-> ```
-
-**`_loadSupRemembered()` — Bug fix:**
-- แก้ไข: ใช้ `u?.employee_id` แทน `u?.id` (หลังจาก supervisor ย้ายมาใช้ `checkin_employees`)
-
-**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
-**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
-**ยังต้องทำ:** รัน SQL (photo_url patch) + Deploy Edge Function + Upload GitHub Pages
-
----
-
-### 2026-08-17 — LINE 3 OA + รูปโปรไฟล์ใน LINE Card
-
-**เป้าหมาย:** แยก LINE OA 3 บัญชี เพื่อแบ่ง quota 200 msg/เดือน และแยกกลุ่มแจ้งเตือน
-
-**LINE OA ที่สร้างใหม่:**
-- **Sanon HR** → กลุ่ม "Sanon HR 2" — Leave requests (pending) + Pass requests (pending)
-- **Sanon Security** → กลุ่ม "รปภ สานนท์" — Pass requests (approved)
-
-**Supabase Secrets (ครบทั้ง 6):**
-- `LINE_CHANNEL_TOKEN` / `LINE_GROUP_ID` — OA ผลิต → กลุ่มผลิต (เดิม)
-- `LINE_CHANNEL_TOKEN_HR` / `LINE_GROUP_ID_HR` = `C35db76ecdc10af3e1fef08821131ffbf` — OA HR
-- `LINE_CHANNEL_TOKEN_SECURITY` / `LINE_GROUP_ID_SECURITY` = `Cb48b8d0469f371b84292eed2b1320959` — OA รปภ.
-
-**`line-notify_index.txt` — การเปลี่ยนแปลง:**
-- เพิ่มตัวแปร `LINE_TOKEN_HR`, `LINE_TOKEN_SEC`, `LINE_GROUP_ID_HR`, `LINE_GROUP_ID_SEC`
-- `buildLeaveRequestCard()`: header เปลี่ยนเป็น `layout: "horizontal"` — มีรูปโปรไฟล์ (`photo_url`) ขนาด 60px ทรงกลมมุมขวา
-- `buildPassRequestCard()`: เช่นเดียวกัน (ทั้ง pending และ approved mode)
-- Postback handler: เปลี่ยน profile lookup จาก `LINE_TOKEN` → `LINE_TOKEN_HR || LINE_TOKEN` (แสดงชื่อผู้อนุมัติถูกต้อง)
-- Leave routing: ใช้ `LINE_TOKEN_HR || LINE_TOKEN` + `LINE_GROUP_ID_HR || LINE_GROUP_ID`
-- Pass approved routing: ใช้ `LINE_TOKEN_SEC` → กลุ่ม รปภ.
-
-**`leave.html` — การเปลี่ยนแปลง:**
-- `sendLineNotify()`: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน payload
-- `sendPassLineNotify()`: เพิ่ม `photo_url: currentEmp?.photo_url || null` ใน payload
-
-**ทดสอบแล้ว ✅:**
-- Leave request → Sanon HR 2 ✅
-- Pass pending → Sanon HR 2 ✅
-- Pass approved → รปภ สานนท์ ✅
-- กด อนุมัติ/ไม่อนุมัติ ใน LINE → อัปเดต DB ทันที ✅
-
-**⏳ สิ่งที่ยังต้องทำ:**
-- Deploy `line-notify_index.txt` ล่าสุด (มีรูปโปรไฟล์) ใน Supabase
-- Upload `leave.html` ขึ้น GitHub Pages
-
-**ไฟล์ที่แก้ไข:** `line-notify_index.txt`, `leave.html`, `CLAUDE.md`
-**Copy ไป GitHub/:** `line-notify_index.txt` ✅ | `leave.html` ✅ | `CLAUDE.md` ✅
-
----
-
-### 2026-08-16 — leave.html: PIN 4 หลัก สำหรับ Employee Mode
-
-**`leave.html` — การเปลี่ยนแปลง:**
-
-**1. PIN Authentication สำหรับ Employee Mode:**
-- `doEmpAccess()`: ดึง `pin_code` จาก DB ก่อน → แสดงขั้นตอน PIN แทนการ login ทันที
-- `_showPinStep(pinCode)`: ซ่อน search form + access button → แสดง `#pin-step`
-  - ถ้า `pin_code = null` → โหมด "ตั้ง PIN ครั้งแรก" (มี confirm boxes)
-  - ถ้ามี PIN → โหมด "ยืนยัน PIN" (auto-submit เมื่อใส่ครบ 4 หลัก)
-- `_submitPin()`: ตรวจสอบหรือบันทึก PIN → เรียก `_proceedEmpLogin()`
-- `_backToEmpSelect()`: ปุ่มย้อนกลับ — คืน search form ปกติ
-- Inline handlers: `_pinIn()`, `_pinKd()`, `_pincIn()`, `_pincKd()` — auto-advance + backspace navigation
-- `_shakePins()` — animation เขย่าเมื่อ PIN ผิด
-
-**2. เปลี่ยน PIN (พนักงาน):**
-- ปุ่ม "🔐 เปลี่ยน PIN" ในหน้า Dashboard (เฉพาะ `currentMode === 'employee'`)
-- `changePinModal()` + `saveNewPin()` — modal ป้อน PIN ใหม่ + ยืนยัน
-- PIN boxes ใน modal มี auto-advance เหมือนกัน (`_npIn/Kd`, `_npcIn/Kd`)
-
-**3. Admin รีเซ็ต PIN:**
-- Card ใหม่ "🔐 รีเซ็ต PIN พนักงาน" ในหน้าตั้งค่าระบบ
-- `searchResetPin()` — ค้นหาพนักงาน แสดงสถานะ PIN (ตั้งแล้ว/ยังไม่มี)
-- `selectResetPinEmp()` — เลือกจากผลค้นหาหลายรายการ
-- `doResetPin()` — set `pin_code = NULL` → พนักงานต้องตั้งใหม่เมื่อ login ครั้งต่อไป
-
-**`leave_schema_v5_patch.sql` — SQL ใหม่:**
-- `ALTER TABLE checkin_employees ADD COLUMN IF NOT EXISTS pin_code text DEFAULT NULL;`
-
-**`doLogout()`:** reset `_empPinHash`, ซ่อน `#pin-step`, คืน `#btn-emp-access`, enable `emp-search`
-
-**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`, `leave_schema_v5_patch.sql`
-**Copy ไป GitHub/:** `leave.html` ✅ | `leave_schema_v5_patch.sql` ✅ | `CLAUDE.md` ✅
-
----
-
-### 2026-08-16 (เพิ่มเติม) — leave.html: รูปโปรไฟล์พนักงานใน Dashboard
-
-**`leave.html` — การเปลี่ยนแปลง:**
-
-**รูปโปรไฟล์พนักงานใน Dashboard (Employee mode):**
-- `renderDashboard()`: เพิ่มรูปโปรไฟล์ขนาด 72×72px ทรงกลมที่มุมขวาบนของ Greeting area
-- ดึง `photo_url` จาก `currentEmp.photo_url` — ซิ้งข้อมูลจาก `checkin_employees` ตารางเดียวกับ System 4 (ไม่ต้องดึงข้อมูลเพิ่ม)
-- ถ้า session เก่าไม่มี `photo_url` → auto-fetch จาก DB 1 ครั้ง (แก้ปัญหาพนักงานที่ login ไว้ก่อนเพิ่มรูปใน System 4)
-- ถ้า URL โหลดไม่ได้ → `onerror` fallback แสดง avatar 👤 สีฟ้าแทน
-- เฉพาะ `currentMode === 'employee'` เท่านั้น (Supervisor/Admin ไม่มีรูป)
-- ย้ายปุ่ม "🔐 เปลี่ยน PIN" ไปอยู่ใต้ชื่อ/วันที่ (ซ้ายล่าง) เพื่อให้รูปอยู่ขวา
-
-**ไฟล์ที่แก้ไข:** `leave.html`, `CLAUDE.md`
-**Copy ไป GitHub/:** `leave.html` ✅ | `CLAUDE.md` ✅
-
----
-
-### 2026-08-15 (เย็น) — leave.html: Username Autocomplete + Pass/Leave LINE Notification
-
-**`leave.html` — การเปลี่ยนแปลง:**
-- เพิ่ม `<datalist id="lg-user-list">` + `list="lg-user-list"` ใน input username login
-- เพิ่ม `saveRecentLvUser(username)` — บันทึก username ใน `localStorage._sn_lv_recent_users` (max 10, dedup)
-- เพิ่ม `loadRecentLvUsers()` — โหลด datalist ตอนแสดงหน้า login
-- เรียก `saveRecentLvUser()` ใน `doLogin()` หลัง login สำเร็จ
-
-**`line-notify_index.txt` (Edge Function) — การเปลี่ยนแปลง:**
-- เพิ่ม `buildLeaveRequestCard()` — Flex Card สีตามประเภทลา (sick/personal/annual ฯลฯ) แสดงชื่อ/แผนก/วันที่/จำนวนวัน/เหตุผล — ส่งเฉพาะ `status=pending`
-- เพิ่ม `buildPassRequestCard(r, isPending)` — 2 โหมด: pending (🟠 แจ้งหัวหน้า) / approved walk-in (🔵 แจ้งยาม)
-- เพิ่ม handler `leave_requests` + `pass_requests` ใน main serve()
-- ยืนยัน: Edge Function ใช้ **LINE Messaging API** (`api.line.me/v2/bot/message/push`) แล้ว — ไม่ใช่ LINE Notify ที่ปิดไปแล้ว
-
-**⏳ สิ่งที่ต้องทำพรุ่งนี้ก่อน deploy:**
-1. รัน SQL ใน Supabase (ตามลำดับ):
-   - `leave_schema.sql`
-   - `leave_schema_v2_patch.sql`
-   - `leave_schema_v3_patch.sql`
-   - `pass_schema.sql` ← ใหม่
-   - `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` ← สำหรับ System 5
-2. ตั้งค่า LINE Official Account:
-   - สร้าง LINE OA → ได้ Channel Access Token
-   - เพิ่ม Bot เข้ากลุ่ม → ได้ Group ID
-   - ตั้ง Supabase Secrets: `LINE_CHANNEL_TOKEN` + `LINE_GROUP_ID`
-3. Deploy Edge Function `line-notify` (วาง code จาก `line-notify_index.txt`)
-4. Upload GitHub/ → GitHub Pages
-
-**ไฟล์ที่แก้ไข:** `leave.html`, `line-notify_index.txt`, `CLAUDE.md`
-**Copy ไป GitHub/:** `leave.html` ✅ | `line-notify_index.txt` ✅ | `CLAUDE.md` ⏳
-
----
-
 ### 2026-08-14 — meeting.html: No-login Public Booking + Admin Login มุมขวาบน
 
 **`meeting.html` — การเปลี่ยนแปลงหลัก:**
@@ -875,66 +679,7 @@ sessionWarnShown, approvalCountInterval
 
 ---
 
-### 2026-08-05 — inventory.html: Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน
-
-**`GitHub/inventory.html` — การเปลี่ยนแปลงหลัก:**
-
-**1. แก้ราคาสารตกตะกอน (สารตกตะกอน cost bug):**
-- Root cause: `priceShow = wpkg*ac` ใน stock card และ `valTotal = kgTotal*ac` ใน annual report — คูณ wpkg ซ้อน เพราะ `ac` เป็น ฿/ถุงอยู่แล้ว
-- แก้ stock card (บรรทัด ~2291): `wpkg>0&&ac>0?fmtNum(wpkg*ac,0)` → `ac>0?fmtNum(ac,0)` (แสดงราคา/ถุงตรงๆ)
-- แก้ annual report (บรรทัด ~2703): `valTotal = kgTotal*ac` → `valTotal = stock*ac` (bags × ฿/bag = ฿ ถูกต้อง)
-- แก้ label (บรรทัด ~2709): `บ./กก.` → `บ./ถุง` ให้ตรงกับหน่วยจริง
-- ราคาใน `aggRows()` ใช้ FIFO lot price จริง (`r.unit_cost || r.unit_price || itemPrice`) ไม่เฉลี่ยถ่วงน้ำหนักผิด
-
-**2. Dashboard redesign (inv-dashboard):**
-- Filter bar: เปลี่ยนจากช่วง 30 วัน → dropdown เดือน/ปี (พุทธศักราช)
-- แทนที่ canvas chart-movement → ตาราง movement 25 รายการล่าสุด (id=dash-mvmt-body)
-- KPI cards ใหม่: icon + colored bg + left border (enterprise style)
-- Top 10 เบิกสูงสุด: medals 🥇🥈🥉 + progress bar
-- ลบ `destroyChart('mvmt')` เพราะไม่มี canvas แล้ว
-
-**3. เพิ่มวันที่เบิกใน LINE Notification:**
-- `saveWithdraw()`: เพิ่ม `withdraw_date: qs('#wo-date')?.value || todayISO()` ใน fetch payload
-- `line-notify_index.txt` → `buildInventoryCard()`: เพิ่ม `row("📅", \`วันที่เบิก: ...\`)` อ่านจาก `r.withdraw_date` ก่อน fallback `r.created_at`
-
-**4. Withdraw modal — filter + search (Bug #2 re-applied):**
-- `_woAllItems` global state, `woFilterItems()` function
-- Filter bar: dropdown ประเภท + input ค้นหาชื่อ/รหัส (substring match)
-- Scanner: clear filter ก่อน select item ที่สแกนได้
-
-**5. Report page — auto-load:**
-- ลบปุ่ม "แสดงผล" — filter inputs ทุกตัวมี `onchange="loadReport()"`
-
-**6. ประวัติการเบิก — month filter:**
-- `_woMonthFilter`, `woFilterMonth()`, `_woApplyFilters()`
-- Dropdown เดือนใน filter bar (auto-populate จากข้อมูล), `data-month` ใน `<tr>`
-
-**ไฟล์ที่แก้ไข:** `GitHub/inventory.html`, `line-notify_index.txt`
-**Copy ไป GitHub/:** `inventory.html` ✅ | `CLAUDE.md` ✅ | `line-notify_index.txt` ⏳ (ต้อง deploy ใน Supabase)
-**ยังไม่ได้ upload ขึ้น GitHub Pages** — รอ upload
-
----
-
-### 2026-08-05 — pm.html: เรียงรายการ PM ตามสถานะ + เพิ่มคอลัมน์วันที่ PM ล่าสุด
-
-**`pm.html` — `fillItemOpts()` แก้ใหม่:**
-- Dropdown "ประเภท PM" ใน modal บันทึก PM เรียงลำดับตามสถานะ:
-  - 🔴 เกินกำหนด (remaining ≤ 0) → แสดงก่อน
-  - 🟡 ใกล้ถึงกำหนด (0 < remaining ≤ alert_threshold) → แสดงกลาง
-  - 🟢 ปกติ → แสดงท้าย
-- ใช้ `<optgroup>` แบ่งหมวดให้เห็นชัด
-- แสดงจำนวน ชม./กม. คงเหลือในชื่อ option เช่น `Apex Hydrocyclone ทรายหยาบ (-229 ชม.)`
-- คำนวณจาก `last_pm_meter + interval_value - current_meter`
-
-**`pm.html` — `renderLogPage()` แก้ใหม่:**
-- Query เพิ่ม `pm_items(last_pm_date, interval_value)` ผ่าน foreign key join
-- เพิ่มคอลัมน์ **"วันที่ PM ล่าสุด"** ระหว่าง "ประเภท PM" กับ "Meter ที่ทำ"
-- แสดง `pm_items.last_pm_date` ของรายการ PM นั้น (วันที่ทำ PM ครั้งล่าสุดตาม record)
-- เพิ่ม colspan จาก 8 → 9 (รวมคอลัมน์ใหม่)
-- เปลี่ยนหัวคอลัมน์แรกจาก "วันที่" → "วันที่บันทึก" ให้ชัดเจนขึ้น
-
-**ไฟล์ที่แก้ไข:** `pm.html`
-**Copy ไป GitHub/:** `pm.html` ✅
+> 📌 **2026-08-05 — pm.html:** เรียงรายการ PM ตามสถานะ + เพิ่มคอลัมน์วันที่ PM ล่าสุด — รายละเอียดย้ายไปที่ **`PM.md`** Section 11 (Changelog) ตามนโยบายแยกไฟล์ 2026-09-15
 
 ---
 
@@ -1060,20 +805,6 @@ sessionWarnShown, approvalCountInterval
 
 ---
 
-### 2026-08-01 (ช่วงบ่าย) — inventory.html: Revert Loading Screen + normCat Filter Fix
-
-**`GitHub/inventory.html` — แก้ไข:**
-- **Revert loading screen**: ย้อนกลับ version ก่อนมี excavator loading screen (ทำให้ระบบพัง เพราะ `hideSplash()` ไม่ได้ define)
-- **normCat() function** (บรรทัด 3422): เพิ่มฟังก์ชัน normalize whitespace — `/\s+/g` แก้ทั้ง double space, non-breaking space, ฯลฯ
-- **renderBalanceTable() filter** (บรรทัด 3434): เปลี่ยนจาก `.trim()` → `normCat()` ทั้งสองฝั่ง — แก้ปัญหา filter "Filter Press CDE", "ปั้มน้ำ 6/4 CDE RYLF6SKP" ไม่เจอ
-- **withdraw modal filter** (บรรทัด 3925–3929): เพิ่ม dropdown ประเภท + search box ก่อน dropdown วัสดุ — แก้ปัญหา 74 รายการไม่มี filter
-- **`_woAllItems`** (บรรทัด 269): เพิ่ม global state สำหรับ cache วัสดุใน modal
-- **`woFilterItems()`** (บรรทัด 3874): เพิ่มฟังก์ชัน filter dropdown วัสดุตามประเภท/ค้นหา
-
-**`CLAUDE.md`:** อัปเดต status board + changelog
-
----
-
 ### 2026-08-01 — LINE Notification Fix + Mobile System Switcher
 
 **`line_webhook.sql` — trigger enrichment:**
@@ -1151,15 +882,7 @@ sessionWarnShown, approvalCountInterval
 - Deploy Edge Function `pm-daily` — ส่ง LINE Flex Card แจ้ง PM เกินกำหนด/ใกล้ถึง แยกตามโรงงาน
 - `pm_cron.sql`: ตั้ง pg_cron job `pm-daily-notify` ทุกวันจันทร์ 07:00 (ไทย)
 
-**inventory.html — ปุ่มยกเลิกยอดเบิก:**
-- เพิ่มฟังก์ชัน `cancelWithdraw(id)` — เปลี่ยน status → `rejected` (trigger คืนสต็อกอัตโนมัติ) + คืน FIFO lots
-- เพิ่มคอลัมน์ "จัดการ" ในตารางรายงาน (ยอดเคลื่อนไหว/สรุปเบิก) แสดงปุ่ม "ยกเลิก" เฉพาะ Manager ขึ้นไป
-
-**inventory.html — สิทธิ์เบิกตามโรงงาน (allowed_factories):**
-- SQL: `ALTER TABLE inventory_items ADD COLUMN allowed_factories text[]` (`allowed_factories.sql`)
-- `openItemModal()`: เพิ่ม checkbox โรงงาน CDE/Propel/Sanon1/Sanon2 ต่อวัสดุ (ไม่เลือก = ของส่วนกลาง)
-- `saveItem()`: บันทึก `allowed_factories` array ลง DB
-- Modal เบิก: User ทั่วไป → เห็นเฉพาะวัสดุที่โรงงานตัวเองมีสิทธิ์ / Admin+Manager → เห็นทั้งหมด
+> รายละเอียด `inventory.html` วันเดียวกัน (ปุ่มยกเลิกยอดเบิก + สิทธิ์เบิกตามโรงงาน) ย้ายไปอยู่ใน `INVENTORY.md` แล้ว
 
 ---
 
@@ -1262,21 +985,13 @@ let _pmRepairs   = [];
 - Summary line: `⚡ ค่าไฟฟ้ารวม 4 โรงงาน X บาท`
 - Section ใหม่ใน PDF: "⚡ ค่าไฟฟ้าโรงงาน" — KPI cards + ตาราง ค่าไฟ/ผลิต/บาท/ตัน ต่อโรงงาน (ซ่อนอัตโนมัติถ้าไม่มีข้อมูล)
 
-**Print Color Fix (inventory.html):**
-- เพิ่ม `print-color-adjust:exact!important` ทุก popup window (สารตกตะกอน, QR/Label, PO Form, Main CSS)
-- แก้ root cause: background class ต้องมี `!important` และ `*{print-color-adjust}` ต้องอยู่ใน rule เดียวกัน
-- เพิ่ม class ที่ขาดหาย: `text-teal-700`, `text-orange-700`, `bg-green-200`, utility layout ฯลฯ
-
-**inventory.html — UX:**
-- ลบปุ่ม "+ บันทึกรายการ" ออกจาก inv-chem (ดึงข้อมูลจากระบบเบิกโดยตรง ไม่ต้องกรอกซ้ำ)
-
 **index.html — UI ค่าไฟฟ้า Dashboard:**
 - KPI cards: gradient อิ่มสีขึ้น (opacity 55%), border สว่างขึ้น, top glow bar, corner glow, ตัวเลข 30px + text-shadow
 - Chart card + Rank card: พื้นหลัง `rgba(15,23,42,.6)` แยกจาก content ชัดเจน
 - Ranking: medal icon (🥇🥈🥉), progress bar มี glow, แสดง "ดีที่สุด/สูงสุด"
 - Badge %: มี border + background เข้มขึ้น อ่านง่าย
 
-### 2026-07-16 — Security + inventory.html UX + index.html PDF
+### 2026-07-16 — Security + index.html PDF
 
 **Supabase Security (RLS):**
 - เปิด Row Level Security (RLS) ครบทุกตาราง ทั้ง System 1 และ System 2
@@ -1289,55 +1004,13 @@ let _pmRepairs   = [];
 - เพิ่ม column `factory text` และ `department text` ใน `app_users`
 - SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS factory text, ADD COLUMN IF NOT EXISTS department text;`
 - Settings → ผู้ใช้งาน: เพิ่มปุ่ม "โรงงาน/ฝ่าย" ต่อ user → `openUserFactoryModal()` → `saveUserFactory()`
-- Modal เบิกวัสดุ: pre-fill โรงงาน + ฝ่ายจาก `currentUser.factory` / `currentUser.department` อัตโนมัติ
-
-**inventory.html — UX/Layout:**
-- ย้ายเมนู "สารตกตะกอน" ขึ้นมาอยู่ลำดับ 2 (ถัดจากภาพรวมคลัง)
-- Bottom nav มือถือ: icon `w-5→w-6`, font `10px→11px`, padding เพิ่ม
-- Dashboard filter โรงงาน: เปลี่ยนจาก dropdown → toggle buttons (ทั้งหมด/CDE/Propel) + `dashSetFac()`
-- Dashboard layout: filter fluid บน mobile, chart `lg:grid-cols-2`, canvas มีความสูงคงที่
-- Modal เบิกวัสดุ: `#modal-box` mobile เพิ่ม `overflow-x:hidden; width:100vw; max-width:100vw` — แก้ scroll แนวนอน
-- ปุ่มสแกนใน modal: `flex-shrink-0`, ซ่อน text บน mobile (`hidden sm:inline`)
-- Settings → ผู้ใช้งาน: บันทึกสิทธิ์/โรงงานเสร็จแล้วค้างอยู่ tab `users` (ไม่กลับหน้าแรก)
-- Settings → ผู้ใช้งาน: เพิ่มคอลัมน์ โรงงาน / ฝ่ายกลุ่มงาน ในตาราง
-
-**inventory.html — รายงานประจำปีสารตกตะกอน:**
-- สูตร บาท/ตัน เปลี่ยนเป็น `ค่าใช้จ่ายเบิกจริง (qty × pricePerBag) ÷ ตันผลิต`
-- track `cost` ใน `chemAgg` โดยตรงจาก transaction (`unit_cost` → `unit_price` → item `unit_price`)
-- เพิ่ม `CHEM_OV` (hardcode override) สำหรับปี 2026 CDE/Propel เดือน ม.ค.–มิ.ย. ตามรายงาน Excel
-- `buildUsageTable` ใช้ `dKg`/`dCost` (override หรือ DB) สำหรับคอลัมน์รวมและ kgT/btT
+- Modal เบิกวัสดุ: pre-fill โรงงาน + ฝ่ายจาก `currentUser.factory` / `currentUser.department` อัตโนมัติ (รายละเอียดฝั่ง inventory.html ดู `INVENTORY.md`)
 
 **index.html — PDF Executive Report:**
 - เพิ่ม `print-color-adjust:exact` และ `-webkit-print-color-adjust:exact` ใน CSS ของหน้ารายงาน
 - เพิ่มใน `@media print` ด้วย — ทำให้สีพื้นหลังและตัวอักษรออกมาครบเมื่อ Save PDF
 
-### 2026-07-13 — inventory.html: FIFO + QR/Barcode + Layout
-
-**Layout & UX:**
-- Sidebar sticky (`position: sticky; top: 0; height: 100vh`) — ไม่เลื่อนตามหน้า
-- ซ่อน scrollbar sidebar (`scrollbar-width: none; ::-webkit-scrollbar { display: none }`)
-- Outer wrapper `h-screen overflow-hidden` — กันไม่ให้ scroll ทั้งหน้า
-- `#page-content` เป็น scroll container (`overflow-y: auto`)
-- Topbar `flex-shrink-0` — ค้างบนสุดของ main-content
-- `.tbl-wrap` — แต่ละตารางมี scroll container เอง (`overflow: auto; max-height: calc(100vh - 200px)`)
-- `thead th { position: sticky; top: 0; }` — หัวตารางทุกตารางค้างอยู่กับที่
-
-**FIFO Lot Tracking:**
-- สร้าง `inventory_lots` table (ไฟล์ `lot_tracking.sql`)
-- เพิ่ม column `lot_no`, `unit_cost`, `lot_breakdown` ใน `inventory_transactions`
-- `_lotsMap` global state — cache lots ต่อ item_id เรียงตาม received_date ASC
-- `loadLots()` — โหลด lots ที่ `remaining_qty > 0` ที่ bootstrap
-- `calcFifoCost(item_id, qty)` — คำนวณต้นทุน FIFO คืน `{breakdown, totalCost, shortage}`
-- `genLotNo(dateStr)` — สร้าง LOT-YYYYMMDD-XXX อัตโนมัติ
-- Modal รับเข้า: เพิ่มช่อง Lot No (auto-gen) + บังคับระบุราคา/หน่วย
-- `saveStockIn()`: insert `inventory_lots` ต่อ lot
-- Modal เบิก: แสดง FIFO breakdown (`#wo-fifo`) เมื่อใส่จำนวน
-- `saveWithdraw()`: หัก `remaining_qty` ใน lots ทันทีเมื่ออนุมัติ
-- `showStockCheckModal()`: แสดง lots ทั้งหมดที่เหลือ (เน้น lot แรกสีน้ำเงิน = ถูกเบิกก่อน)
-
-**QR / Label:**
-- เพิ่ม filter **โรงงาน** (`#qr-factory`) กรองจาก `item.location`
-- Grid filter ปรับเป็น `grid-cols-2 sm:grid-cols-3` รองรับ filter ใหม่
+### 2026-07-13 — index.html: Landing Page Card Style (System 2/3 entry cards)
 
 **index.html (Landing Page):**
 - System 2 (Inventory): เปลี่ยนจาก `<a>` ทั้งก้อน → การ์ด + ปุ่ม "เข้าสู่ระบบ" สีเขียว
@@ -1345,11 +1018,7 @@ let _pmRepairs   = [];
 - System 3 (PM): เปลี่ยนจาก link → การ์ด Gradient `amber-500 → orange-600` + ปุ่ม "เข้าสู่ระบบ" ขาว
 - ทั้ง 3 ระบบมีสไตล์ Gradient card เหมือนกัน
 
-**แนวคิด FIFO ที่ตกลงกัน:**
-- วัสดุชนิดเดียวกัน = 1 item, 1 QR Code ไม่เปลี่ยน
-- แต่ละรอบที่รับเข้า = 1 Lot พร้อม unit_cost ของตัวเอง
-- เบิกออก = FIFO (ของเก่าออกก่อน) คำนวณต้นทุนตาม lot จริง
-- ถ้าใช้ข้ามล็อต (Lot 1 หมดกลางเดือน ต่อ Lot 2) → ระบบแบ่ง breakdown อัตโนมัติ
+> รายละเอียด FIFO/QR/Layout ของ `inventory.html` วันเดียวกัน ย้ายไปอยู่ใน `INVENTORY.md` แล้ว
 
 ### 2026-07-12 — Mobile UX + PDF Report + Bottom Nav
 
