@@ -1408,6 +1408,20 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
   refreshIcons();
 };
 
+function siFilterItems(){
+  const fac = qs('#si-factory')?.value || '';
+  const sel = qs('#si-item');
+  if(!sel) return;
+  const filtered = !fac ? _invItems : _invItems.filter(i=>{
+    if(!i.allowed_factories || i.allowed_factories.length===0) return true; // ของส่วนกลาง — แสดงทุกโรงงาน
+    return i.allowed_factories.includes(fac);
+  });
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">-- เลือกวัสดุ --</option>' +
+    filtered.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+  sel.value = filtered.some(i=>String(i.id)===String(curVal)) ? curVal : '';
+  siItemChange();
+}
 function siItemChange(){
   const o=qs('#si-item')?.selectedOptions[0];
   if(qs('#si-unit')) qs('#si-unit').value=o?.dataset.unit||'';
@@ -4030,8 +4044,8 @@ function openStockInModal(preItem=null) {
       <div class="grid grid-cols-2 gap-3">
         <div><label class="text-xs text-gray-500 mb-1 block">วันที่ <span class="text-red-500">*</span></label>
           <input id="si-date" type="date" value="${todayISO()}" required class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" onchange="siGenLot()"/></div>
-        <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน</label>
-          <select id="si-factory" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน <span class="text-gray-400 font-normal">(กรองรายการวัสดุ)</span></label>
+          <select id="si-factory" onchange="siFilterItems()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             <option value="">-- ทุกโรง --</option>${facOpts}</select></div>
         <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">ผู้จำหน่าย</label>
           <select id="si-supplier" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
