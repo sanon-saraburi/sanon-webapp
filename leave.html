@@ -363,6 +363,7 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
         <div style="font-size:12px;font-weight:600;color:#1e293b;" id="topbar-user-name"></div>
         <div style="font-size:11px;color:#94a3b8;" id="topbar-user-dept"></div>
       </div>
+      <button id="btn-notif-toggle" class="btn btn-outline btn-sm" style="display:none;" onclick="_toggleDesktopNotifPermission()" title="เปิด/ปิดการแจ้งเตือน Desktop เมื่อมีคำขอใหม่">🔔</button>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">ออกจากระบบ</button>
     </div>
   </div>
@@ -408,15 +409,15 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
       <div class="sb-section" id="sb-sec-approve" style="display:none;">
         <div class="sb-label">จัดการ</div>
         <div class="sb-link" id="sb-lv-approvals" onclick="navigateTo('lv-approvals')">
-          <span class="ic">✅</span> อนุมัติคำขอ
+          <span class="ic">✅</span> อนุมัติคำขอลา
           <span id="sb-badge-approve" style="display:none;background:#ef4444;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
         </div>
         <div class="sb-link" id="sb-lv-pass-approve" onclick="navigateTo('lv-pass-approve')">
-          <span class="ic">🔑</span> อนุมัติ Pass
+          <span class="ic">🔑</span> อนุมัติออกนอกบริษัท
           <span id="sb-badge-pass" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
         </div>
         <div class="sb-link" id="sb-lv-ot-approve" onclick="navigateTo('lv-ot-approve')">
-          <span class="ic">🔑</span> อนุมัติโอที
+          <span class="ic">🔑</span> อนุมัติ OT
           <span id="sb-badge-ot" style="display:none;background:#f59e0b;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
         </div>
         <div class="sb-link" id="sb-lv-all" onclick="navigateTo('lv-all')">
@@ -1250,9 +1251,9 @@ function _overlayClick(e) { if(e.target.id==='modal-overlay') closeModal(); }
 // ─────────────────────────────────────────────────────────────
 const PAGE_TITLES = {
   'lv-dashboard':'แดชบอร์ด','lv-request':'ยื่นคำขอลา','lv-my-hist':'ประวัติของฉัน',
-  'lv-approvals':'อนุมัติคำขอ','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
-  'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติอนุญาต','lv-pass-approve':'อนุมัติ Pass',
-  'lv-ot':'ขอทำโอที','lv-ot-hist':'ประวัติโอทีของฉัน','lv-ot-approve':'อนุมัติโอที'
+  'lv-approvals':'อนุมัติคำขอลา','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
+  'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติอนุญาต','lv-pass-approve':'อนุมัติออกนอกบริษัท',
+  'lv-ot':'ขอทำโอที','lv-ot-hist':'ประวัติโอทีของฉัน','lv-ot-approve':'อนุมัติ OT'
 };
 function navigateTo(page) {
   currentPage = page;
@@ -1525,11 +1526,11 @@ async function renderNewRequest() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label class="form-label">วันเริ่มลา <span style="color:#ef4444;">*</span></label>
-          <input type="date" id="req-start" class="form-control" value="${today}" min="${today}" onchange="_calcDays()">
+          <input type="date" id="req-start" class="form-control" value="${today}" onchange="_calcDays()">
         </div>
         <div class="form-group">
           <label class="form-label">วันสิ้นสุด <span style="color:#ef4444;">*</span></label>
-          <input type="date" id="req-end"   class="form-control" value="${today}" min="${today}" onchange="_calcDays()">
+          <input type="date" id="req-end"   class="form-control" value="${today}" onchange="_calcDays()">
         </div>
       </div>
 
@@ -3146,31 +3147,53 @@ async function sendOtLineNotify(otId, r, event) {
 // ─────────────────────────────────────────────────────────────
 // SECTION 12 — Report
 // ─────────────────────────────────────────────────────────────
-let _reportData = []; // cache สำหรับ export
+let _reportData     = []; // cache สำหรับ export — การลา
+let _passReportData = []; // cache สำหรับ export — ออกนอกบริษัท
+let _otReportData   = []; // cache สำหรับ export — โอที
 let _reportYear = thisYear();
+
+// คำนวณนาทีระหว่างเวลาออก-กลับ (ออกนอกบริษัท) — กันกรณีข้ามเที่ยงคืน
+function _passMinutesBetween(outStr, retStr) {
+  if (!outStr || !retStr) return 0;
+  const [oh,om] = outStr.split(':').map(Number);
+  const [rh,rm] = retStr.split(':').map(Number);
+  let mins = (rh*60+rm) - (oh*60+om);
+  if (mins < 0) mins += 24*60;
+  return mins;
+}
 
 async function renderReport() {
   if(!can('viewAll')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
 
   const year = _reportYear;
-  const { data } = await sb.from('leave_requests').select('*')
-    .eq('status','approved')
-    .gte('start_date',`${year}-01-01`).lte('start_date',`${year}-12-31`)
-    .order('department').order('employee_name');
+  const yStart = `${year}-01-01`, yEnd = `${year}-12-31`;
 
-  _reportData = data||[];
+  const [leaveRes, passRes, otRes] = await Promise.all([
+    sb.from('leave_requests').select('*').eq('status','approved')
+      .gte('start_date',yStart).lte('start_date',yEnd)
+      .order('department').order('employee_name'),
+    sb.from('pass_requests').select('*').eq('status','approved')
+      .gte('request_date',yStart).lte('request_date',yEnd)
+      .order('department').order('employee_name'),
+    sb.from('ot_requests').select('*').eq('status','approved')
+      .gte('ot_date',yStart).lte('ot_date',yEnd)
+      .order('department').order('employee_name')
+  ]);
 
-  // Group by department
-  const byDept = {};
+  _reportData     = leaveRes.data||[];
+  _passReportData = passRes.data||[];
+  _otReportData   = otRes.data||[];
+
+  // ── 1) รายงานการลา — group by แผนก/พนักงาน ──
+  const byDeptLeave = {};
   _reportData.forEach(r=>{
     const d=r.department||'ไม่ระบุแผนก';
-    if(!byDept[d]) byDept[d]={};
-    if(!byDept[d][r.employee_name]) byDept[d][r.employee_name]={sick:0,personal:0,annual:0,out:0,total:0};
-    byDept[d][r.employee_name][r.type_code||'other'] = (byDept[d][r.employee_name][r.type_code||'other']||0)+Number(r.days);
-    byDept[d][r.employee_name].total += Number(r.days);
+    if(!byDeptLeave[d]) byDeptLeave[d]={};
+    if(!byDeptLeave[d][r.employee_name]) byDeptLeave[d][r.employee_name]={sick:0,personal:0,annual:0,out:0,total:0};
+    byDeptLeave[d][r.employee_name][r.type_code||'other'] = (byDeptLeave[d][r.employee_name][r.type_code||'other']||0)+Number(r.days);
+    byDeptLeave[d][r.employee_name].total += Number(r.days);
   });
-
-  const sections = Object.entries(byDept).map(([dept,emps])=>{
+  const leaveSections = Object.entries(byDeptLeave).map(([dept,emps])=>{
     const rows = Object.entries(emps).map(([name,days])=>`
       <tr>
         <td>${esc(name)}</td>
@@ -3190,6 +3213,58 @@ async function renderReport() {
     </div>`;
   }).join('');
 
+  // ── 2) รายงานออกนอกบริษัท (Pass) — group by แผนก/พนักงาน ──
+  const byDeptPass = {};
+  _passReportData.forEach(r=>{
+    const d=r.department||'ไม่ระบุแผนก';
+    if(!byDeptPass[d]) byDeptPass[d]={};
+    if(!byDeptPass[d][r.employee_name]) byDeptPass[d][r.employee_name]={count:0,minutes:0};
+    byDeptPass[d][r.employee_name].count += 1;
+    byDeptPass[d][r.employee_name].minutes += _passMinutesBetween(r.out_time, r.expected_return);
+  });
+  const passSections = Object.entries(byDeptPass).map(([dept,emps])=>{
+    const rows = Object.entries(emps).map(([name,v])=>`
+      <tr>
+        <td>${esc(name)}</td>
+        <td style="font-weight:600;">${v.count} ครั้ง</td>
+        <td style="font-weight:700;">${(v.minutes/60).toFixed(1)} ชม. (${v.minutes} นาที)</td>
+      </tr>`).join('');
+    return `
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>ชื่อ</th><th>จำนวนครั้ง</th><th>รวมเวลาออกนอก</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── 3) รายงานโอที (OT) — group by แผนก/พนักงาน ──
+  const byDeptOt = {};
+  _otReportData.forEach(r=>{
+    const d=r.department||'ไม่ระบุแผนก';
+    if(!byDeptOt[d]) byDeptOt[d]={};
+    if(!byDeptOt[d][r.employee_name]) byDeptOt[d][r.employee_name]={count:0,hours:0};
+    byDeptOt[d][r.employee_name].count += 1;
+    byDeptOt[d][r.employee_name].hours += Number(r.actual_hours ?? r.estimated_hours ?? 0);
+  });
+  const otSections = Object.entries(byDeptOt).map(([dept,emps])=>{
+    const rows = Object.entries(emps).map(([name,v])=>`
+      <tr>
+        <td>${esc(name)}</td>
+        <td style="font-weight:600;">${v.count} ครั้ง</td>
+        <td style="font-weight:700;">${v.hours.toFixed(1)} ชม.</td>
+      </tr>`).join('');
+    return `
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>ชื่อ</th><th>จำนวนครั้ง</th><th>รวมชั่วโมงโอที</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      </div>
+    </div>`;
+  }).join('');
+
   // Year selector
   const curYear = thisYear();
   const yearOpts = [curYear, curYear-1, curYear-2].map(y=>
@@ -3199,45 +3274,104 @@ async function renderReport() {
   <div style="max-width:900px;">
     <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
-        <h2 style="font-size:18px;font-weight:700;margin:0;">📊 รายงานการลา</h2>
-        <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">เฉพาะคำขอที่ได้รับการอนุมัติ</p>
+        <h2 style="font-size:18px;font-weight:700;margin:0;">📊 สรุปรายงานประจำปี</h2>
+        <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">เฉพาะคำขอที่ได้รับการอนุมัติ — ครอบคลุมทุกหัวข้อ: การลา, ออกนอกบริษัท, โอที</p>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <select class="form-control" style="width:auto;" onchange="_reportYear=parseInt(this.value);renderReport();">
           ${yearOpts}
         </select>
-        <button class="btn btn-success btn-sm" onclick="exportReportCSV()">📥 Export CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="exportReportExcel()">📊 Export Excel</button>
+        <button class="btn btn-primary btn-sm" onclick="exportReportExcel()">📊 Export Excel (ทุกหัวข้อ)</button>
       </div>
     </div>
-    ${sections||'<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลการลาที่อนุมัติในปีนี้</p></div>'}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">📋 รายงานการลา</h3>
+      <button class="btn btn-success btn-sm" onclick="exportReportCSV()">📥 CSV</button>
+    </div>
+    ${leaveSections||'<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลการลาที่อนุมัติในปีนี้</p></div>'}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">🔑 รายงานออกนอกบริษัท</h3>
+      <button class="btn btn-success btn-sm" onclick="exportPassReportCSV()">📥 CSV</button>
+    </div>
+    ${passSections||'<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลออกนอกบริษัทที่อนุมัติในปีนี้</p></div>'}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">⏱️ รายงานโอที</h3>
+      <button class="btn btn-success btn-sm" onclick="exportOtReportCSV()">📥 CSV</button>
+    </div>
+    ${otSections||'<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลโอทีที่อนุมัติในปีนี้</p></div>'}
   </div>`;
 }
 
 function exportReportCSV() {
-  if(!_reportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
+  if(!_reportData.length) { showToast('ไม่มีข้อมูลการลา','info'); return; }
   const rows = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
   _reportData.forEach(r=>{
     rows.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,r.days,r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
   });
+  _downloadCSV(rows, `leave_report_${_reportYear}.csv`);
+}
+
+function exportPassReportCSV() {
+  if(!_passReportData.length) { showToast('ไม่มีข้อมูลออกนอกบริษัท','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','วันที่','เวลาออก','เวลากลับ(คาด)','นาทีที่ใช้','สถานะ','ผู้อนุมัติ']];
+  _passReportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.reason_name||'',r.request_date,r.out_time?.slice(0,5)||'',r.expected_return?.slice(0,5)||'',_passMinutesBetween(r.out_time,r.expected_return),'อนุมัติ',r.approver_name||'']);
+  });
+  _downloadCSV(rows, `pass_report_${_reportYear}.csv`);
+}
+
+function exportOtReportCSV() {
+  if(!_otReportData.length) { showToast('ไม่มีข้อมูลโอที','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','เหตุผล','สถานะ','ผู้อนุมัติ']];
+  _otReportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.reason||'','อนุมัติ',r.approver_name||'']);
+  });
+  _downloadCSV(rows, `ot_report_${_reportYear}.csv`);
+}
+
+function _downloadCSV(rows, filename) {
   const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const bom = '﻿';
   const blob = new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`leave_report_${_reportYear}.csv`; a.click();
+  a.download=filename; a.click();
 }
 
 function exportReportExcel() {
-  if(!_reportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
-  const wsData = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
-  _reportData.forEach(r=>{
-    wsData.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,Number(r.days),r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
-  });
+  if(!_reportData.length && !_passReportData.length && !_otReportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols']=[{wch:12},{wch:20},{wch:16},{wch:14},{wch:12},{wch:12},{wch:8},{wch:30},{wch:10},{wch:16},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws,`ลา ${_reportYear+543}`);
-  XLSX.writeFile(wb,`leave_report_${_reportYear}.xlsx`);
+
+  // Sheet 1 — การลา
+  const leaveData = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
+  _reportData.forEach(r=>{
+    leaveData.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,Number(r.days),r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
+  });
+  const wsLeave=XLSX.utils.aoa_to_sheet(leaveData);
+  wsLeave['!cols']=[{wch:12},{wch:20},{wch:16},{wch:14},{wch:12},{wch:12},{wch:8},{wch:30},{wch:10},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,wsLeave,`ลา ${_reportYear+543}`);
+
+  // Sheet 2 — ออกนอกบริษัท
+  const passData = [['รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','วันที่','เวลาออก','เวลากลับ(คาด)','นาทีที่ใช้','สถานะ','ผู้อนุมัติ']];
+  _passReportData.forEach(r=>{
+    passData.push([r.employee_id,r.employee_name,r.department||'',r.reason_name||'',r.request_date,r.out_time?.slice(0,5)||'',r.expected_return?.slice(0,5)||'',_passMinutesBetween(r.out_time,r.expected_return),'อนุมัติ',r.approver_name||'']);
+  });
+  const wsPass=XLSX.utils.aoa_to_sheet(passData);
+  wsPass['!cols']=[{wch:12},{wch:20},{wch:16},{wch:20},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,wsPass,`ออกนอกบริษัท ${_reportYear+543}`);
+
+  // Sheet 3 — โอที
+  const otData = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','เหตุผล','สถานะ','ผู้อนุมัติ']];
+  _otReportData.forEach(r=>{
+    otData.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.reason||'','อนุมัติ',r.approver_name||'']);
+  });
+  const wsOt=XLSX.utils.aoa_to_sheet(otData);
+  wsOt['!cols']=[{wch:12},{wch:20},{wch:16},{wch:12},{wch:10},{wch:10},{wch:8},{wch:30},{wch:10},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,wsOt,`โอที ${_reportYear+543}`);
+
+  XLSX.writeFile(wb,`summary_report_${_reportYear}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -4161,6 +4295,8 @@ async function _bootApp() {
   document.getElementById('sb-lv-ot-approve').style.display  = 'none';
   const bnApv = document.getElementById('bn-lv-approvals');
   if(bnApv) bnApv.style.display='none';
+  const notifToggleBtn = document.getElementById('btn-notif-toggle');
+  if(notifToggleBtn) notifToggleBtn.style.display='none';
 
   // Show sections based on role
   if(can('approve')) {
@@ -4168,6 +4304,7 @@ async function _bootApp() {
     if(bnApv) bnApv.style.display='';
     document.getElementById('sb-lv-pass-approve').style.display='';
     document.getElementById('sb-lv-ot-approve').style.display='';
+    if(notifToggleBtn) notifToggleBtn.style.display='';
   }
   if(can('admin')) {
     document.getElementById('sb-sec-admin').style.display='';
@@ -4190,6 +4327,10 @@ async function _bootApp() {
   // แจ้งเตือนหัวหน้า/Admin: realtime เมื่อมีคำขอใหม่เข้ามา — ไม่ต้องรีเฟรชหน้าจอเองอีกต่อไป
   if (can('approve')) {
     _startApproverRealtime();
+    _requestDesktopNotifPermission();
+    _updateNotifToggleIcon();
+    // สรุปคำขอที่รออนุมัติอยู่แล้ว ณ ตอนเข้าสู่ระบบ — กันกรณีคำขอเข้ามาตอนที่ยังไม่ได้เปิดหน้าเว็บ
+    setTimeout(() => _checkApproverPendingSummary(), 800);
   }
 }
 
@@ -4316,6 +4457,108 @@ function _stopApproverRealtime() {
   if (_approverNotifChannel) { sb.removeChannel(_approverNotifChannel); _approverNotifChannel = null; }
 }
 
+// ─────────────────────────────────────────────────────────────
+// หัวหน้า/Admin — Desktop Notification (เด้งแจ้งเตือนแม้สลับแท็บ/ย่อหน้าต่าง)
+// ─────────────────────────────────────────────────────────────
+function _requestDesktopNotifPermission() {
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(() => _updateNotifToggleIcon());
+    }
+  } catch (_) { /* บางเบราว์เซอร์/มือถือไม่รองรับ — ไม่ขัดการทำงานหลัก */ }
+}
+
+function _toggleDesktopNotifPermission() {
+  if (!('Notification' in window)) { showToast('เบราว์เซอร์นี้ไม่รองรับ Desktop Notification', 'error'); return; }
+  if (Notification.permission === 'granted') {
+    showToast('เปิดการแจ้งเตือน Desktop อยู่แล้ว ✅', 'info');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    showToast('การแจ้งเตือนถูกบล็อกไว้ — กรุณาเปิดสิทธิ์แจ้งเตือนของเว็บนี้จากการตั้งค่าเบราว์เซอร์', 'error', 5000);
+    return;
+  }
+  Notification.requestPermission().then(p => {
+    _updateNotifToggleIcon();
+    if (p === 'granted') showToast('เปิดการแจ้งเตือน Desktop สำเร็จ ✅', 'success');
+    else showToast('ไม่ได้รับอนุญาตให้แจ้งเตือน', 'info');
+  });
+}
+
+function _updateNotifToggleIcon() {
+  const btn = document.getElementById('btn-notif-toggle');
+  if (!btn || !('Notification' in window)) return;
+  btn.textContent = Notification.permission === 'granted' ? '🔔' : '🔕';
+  btn.title = Notification.permission === 'granted'
+    ? 'เปิดการแจ้งเตือน Desktop อยู่ — คลิกเพื่อตรวจสอบ'
+    : 'คลิกเพื่อเปิดการแจ้งเตือน Desktop เมื่อมีคำขอใหม่';
+}
+
+function _showDesktopNotification(title, body) {
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    // ถ้ากำลังเปิดแท็บนี้อยู่และโฟกัสหน้าจออยู่แล้ว ให้ toast/popup ในหน้าเว็บทำหน้าที่แทน ไม่ต้องเด้งซ้ำ
+    if (document.visibilityState === 'visible' && document.hasFocus()) return;
+    const n = new Notification(title, { body: body || '', icon: 'icon-192.png' });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch (_) { /* ไม่ขัดการทำงานหลัก */ }
+}
+
+// หัวหน้า/Admin — สรุปคำขอที่ "รออนุมัติอยู่แล้ว" ตอนเข้าสู่ระบบ (ไม่ใช่แค่คำขอใหม่ที่เข้ามาระหว่างเปิดหน้าเว็บ)
+async function _checkApproverPendingSummary() {
+  if (!can('approve')) return;
+  try {
+    if (document.getElementById('approver-pending-modal')) return;
+    const dept = (!can('admin') && currentUser?.department) ? currentUser.department : null;
+    const today = new Date().toISOString().slice(0,10);
+
+    let lq = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
+    if (dept) lq = lq.eq('department', dept);
+    let pq = sb.from('pass_requests').select('pass_id', { count: 'exact', head: true }).eq('status','pending').gte('request_date', today);
+    if (dept) pq = pq.eq('department', dept);
+    let oq = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
+    if (dept) oq = oq.eq('department', dept);
+
+    const [lRes, pRes, oRes] = await Promise.all([lq, pq, oq]);
+    const lc = lRes.count||0, pc = pRes.count||0, oc = oRes.count||0;
+    const total = lc + pc + oc;
+    if (total === 0) return;
+    if (document.getElementById('approver-pending-modal')) return;
+
+    const rows = [];
+    if (lc>0) rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;" onclick="document.getElementById('approver-pending-modal').remove();navigateTo('lv-approvals');">
+      <span style="font-size:13px;font-weight:600;">📋 คำขอลา</span>
+      <span style="background:#ef4444;color:#fff;border-radius:20px;font-size:12px;font-weight:700;padding:2px 10px;">${lc}</span>
+    </div>`);
+    if (pc>0) rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;" onclick="document.getElementById('approver-pending-modal').remove();navigateTo('lv-pass-approve');">
+      <span style="font-size:13px;font-weight:600;">🚪 ขอออกนอกบริษัท</span>
+      <span style="background:#f59e0b;color:#fff;border-radius:20px;font-size:12px;font-weight:700;padding:2px 10px;">${pc}</span>
+    </div>`);
+    if (oc>0) rows.push(`<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;" onclick="document.getElementById('approver-pending-modal').remove();navigateTo('lv-ot-approve');">
+      <span style="font-size:13px;font-weight:600;">⏱️ คำขอโอที</span>
+      <span style="background:#f59e0b;color:#fff;border-radius:20px;font-size:12px;font-weight:700;padding:2px 10px;">${oc}</span>
+    </div>`);
+
+    const modal = document.createElement('div');
+    modal.id = 'approver-pending-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;width:100%;max-width:380px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;font-size:16px;font-weight:700;">🔔 มีคำขอรออนุมัติ ${total} รายการ</h3>
+          <button onclick="document.getElementById('approver-pending-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+        </div>
+        ${rows.join('')}
+        <button onclick="document.getElementById('approver-pending-modal').remove()" style="width:100%;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:4px;">ปิด</button>
+      </div>`;
+    document.body.appendChild(modal);
+
+    _showDesktopNotification(`🔔 มีคำขอรออนุมัติ ${total} รายการ`, `ลา ${lc} · Pass ${pc} · OT ${oc}`);
+  } catch (_) { /* ไม่ขัดการทำงานหลัก */ }
+}
+
 // พนักงาน — ส่ง Broadcast แจ้งหัวหน้า/Admin ทันทีที่ยื่นคำขอใหม่ (เรียกหลัง insert สำเร็จ)
 function _broadcastNewRequestToApprovers(kind, r) {
   try {
@@ -4344,6 +4587,7 @@ function _onNewApproverRequest(payload) {
                    : payload?.kind === 'ot'   ? '⏱️ คำขอโอที'
                    : '📋 คำขอลา';
   showToast(`🔔 คำขอใหม่: ${kindLabel} — ${payload?.employee_name||''}${payload?.department?` (${payload.department})`:''}`, 'info', 6000);
+  _showDesktopNotification(`🔔 คำขอใหม่: ${kindLabel}`, `${payload?.employee_name||''}${payload?.department?` (${payload.department})`:''}`);
 
   if (payload?.kind === 'pass') {
     if (currentPage === 'lv-pass-approve') renderPassApprovals();

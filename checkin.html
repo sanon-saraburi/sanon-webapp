@@ -374,6 +374,7 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-sec">ข้อมูลการลา-โอที</div>
         <div class="sb-item perm-sup" onclick="nav('ck-leave-summary')">📅 <span>สรุปการลาประจำเดือน</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-leave-history')">📂 <span>ประวัติการลาทั้งหมด</span></div>
+        <div class="sb-item perm-sup" onclick="nav('ck-pass-summary')">🚪 <span>สรุปออกนอกบริษัท</span></div>
         <div class="sb-item perm-sup" onclick="nav('ck-ot-summary')">⏱️ <span>สรุปโอที</span></div>
         <div class="sb-sec">ข้อมูล</div>
         <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
@@ -674,12 +675,13 @@ const CK_PERM_MENUS = [
   { id:'ck-users',          label:'🔑 จัดการผู้ใช้',         group:'Admin'       },
   { id:'ck-leave-summary',  label:'📅 สรุปการลาประจำเดือน',  group:'ข้อมูลการลา-โอที' },
   { id:'ck-leave-history',  label:'📂 ประวัติการลาทั้งหมด',  group:'ข้อมูลการลา-โอที' },
+  { id:'ck-pass-summary',   label:'🚪 สรุปออกนอกบริษัท',    group:'ข้อมูลการลา-โอที' },
   { id:'ck-ot-summary',     label:'⏱️ สรุปโอที',            group:'ข้อมูลการลา-โอที' },
 ];
 const CK_ROLE_PERMS = {
   guard:      ['ck-guard','ck-visitor','ck-pass'],
-  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-leave-summary','ck-leave-history','ck-ot-summary'],
-  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users','ck-leave-summary','ck-leave-history','ck-ot-summary'],
+  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-leave-summary','ck-leave-history','ck-pass-summary','ck-ot-summary'],
+  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users','ck-leave-summary','ck-leave-history','ck-pass-summary','ck-ot-summary'],
 };
 
 function ckCanAccess(page) {
@@ -708,6 +710,7 @@ const PAGE_TITLES = {
   'ck-users':         'จัดการผู้ใช้',
   'ck-leave-summary': 'สรุปการลาประจำเดือน',
   'ck-leave-history': 'ประวัติการลาทั้งหมด',
+  'ck-pass-summary':  'สรุปออกนอกบริษัท',
   'ck-ot-summary':    'สรุปโอที',
 };
 
@@ -743,6 +746,7 @@ function nav(page) {
   else if (page === 'ck-users')        renderUsers();
   else if (page === 'ck-leave-summary') renderLeaveSummary();
   else if (page === 'ck-leave-history') renderLeaveHistory();
+  else if (page === 'ck-pass-summary')  renderPassSummary();
   else if (page === 'ck-ot-summary')    renderOtSummary();
 }
 
@@ -2877,19 +2881,19 @@ async function renderPassGate() {
     <div style="background:#fff;border:1px solid ${r.status==='out'?'#3b82f6':'#e2e8f0'};border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;${r.status==='out'?'box-shadow:0 0 0 2px #bfdbfe;':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
-          <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
-          <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+          <div style="font-weight:700;font-size:14px;color:#0f172a;">${escHtml(r.employee_name)}</div>
+          <div style="font-size:11px;color:#94a3b8;">${escHtml(r.department||'—')}</div>
         </div>
         <span style="background:${STATUS_COLOR[r.status]}22;color:${STATUS_COLOR[r.status]};border-radius:6px;padding:3px 10px;font-size:12px;font-weight:600;">${STATUS_LABEL[r.status]||r.status}</span>
       </div>
       <div style="display:flex;gap:16px;font-size:13px;color:#374151;flex-wrap:wrap;">
-        <span>📌 ${esc(r.reason_name)}</span>
+        <span>📌 ${escHtml(r.reason_name)}</span>
         <span>⏰ ออก: ${r.out_time?.slice(0,5)}</span>
         <span>🔙 กลับ: ~${r.expected_return?.slice(0,5)}</span>
         ${r.actual_out?`<span style="color:#3b82f6;">🚪 ออกจริง: ${new Date(r.actual_out).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</span>`:''}
         ${r.actual_return?`<span style="color:#6d28d9;">🏭 กลับจริง: ${new Date(r.actual_return).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</span>`:''}
       </div>
-      ${r.note?`<div style="font-size:12px;color:#64748b;">📝 ${esc(r.note)}</div>`:''}
+      ${r.note?`<div style="font-size:12px;color:#64748b;">📝 ${escHtml(r.note)}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:4px;">
         ${r.status==='approved'?`
           <button class="btn-filter" onclick="passGateScan(${r.pass_id},'out')" style="background:#3b82f6;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:'Kanit',sans-serif;">
@@ -4340,6 +4344,8 @@ let _lhMonth = new Date().getMonth() + 1; // 1-12
 let _lhDept  = '';
 let _lhStatus = '';
 let _lhSearch = '';
+let _lhEmpId   = ''; // กรองเฉพาะพนักงานคนเดียว (มาจากการคลิกชื่อในหน้าสรุปการลา)
+let _lhEmpName = '';
 let _lhData  = [];
 
 const TH_MONTHS = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -4370,7 +4376,8 @@ async function renderLeaveHistory() {
   let q = sb.from('leave_requests').select('*').order('start_date',{ascending:false});
   if (_lhStatus) q = q.eq('status', _lhStatus);
   if (_lhDept)   q = q.eq('department', _lhDept);
-  if (_lhSearch) q = q.ilike('employee_name', `%${_lhSearch}%`);
+  if (_lhEmpId)       q = q.eq('employee_id', _lhEmpId);
+  else if (_lhSearch) q = q.ilike('employee_name', `%${_lhSearch}%`);
   const { data: rows } = await q.limit(500);
   _lhData = rows || [];
 
@@ -4380,7 +4387,7 @@ async function renderLeaveHistory() {
     const half = r.half_day === 'am' ? ' (ครึ่งเช้า)' : r.half_day === 'pm' ? ' (ครึ่งบ่าย)' : '';
     return `<tr>
       <td style="white-space:nowrap;font-size:12px;color:#64748b;">${r.employee_id||'-'}</td>
-      <td style="font-weight:600;">${r.employee_name||'-'}</td>
+      <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_lhEmpId='${r.employee_id}';_lhEmpName='${(r.employee_name||'').replace(/'/g,"\\'")}';renderLeaveHistory()" title="คลิกดูเฉพาะประวัติของพนักงานคนนี้">${r.employee_name||'-'}</td>
       <td><span style="background:#e2e8f0;border-radius:6px;padding:2px 7px;font-size:11px;">${r.department||'-'}</span></td>
       <td style="font-size:12px;">${r.type_name||'-'}</td>
       <td style="white-space:nowrap;font-size:12px;">${fmtDate(r.start_date)}${r.start_date!==r.end_date?` – ${fmtDate(r.end_date)}`:''}</td>
@@ -4393,6 +4400,11 @@ async function renderLeaveHistory() {
 
   c.innerHTML = `
   <div style="max-width:1100px;">
+    ${_lhEmpId ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;font-size:13px;color:#1e40af;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span>📌 กำลังกรองเฉพาะพนักงาน: <b>${_lhEmpName}</b> (${_lhData.length} รายการ)</span>
+      <button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="_lhEmpId='';_lhEmpName='';renderLeaveHistory()">✕ ล้างตัวกรองพนักงาน</button>
+    </div>` : ''}
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;">
       <select class="form-control" style="width:140px;" onchange="_lhDept=this.value;renderLeaveHistory()">
         <option value="">ทุกแผนก</option>${deptOpts}
@@ -4404,9 +4416,9 @@ async function renderLeaveHistory() {
         <option value="rejected"  ${_lhStatus==='rejected' ?'selected':''}>ปฏิเสธ</option>
         <option value="cancelled" ${_lhStatus==='cancelled'?'selected':''}>ยกเลิก</option>
       </select>
-      <input class="form-control" style="width:170px;" placeholder="ค้นหาชื่อพนักงาน..."
+      ${!_lhEmpId ? `<input class="form-control" style="width:170px;" placeholder="ค้นหาชื่อพนักงาน..."
         value="${_lhSearch}" oninput="_lhSearch=this.value" onkeydown="if(event.key==='Enter')renderLeaveHistory()">
-      <button class="btn btn-primary btn-sm" onclick="renderLeaveHistory()">🔍 ค้นหา</button>
+      <button class="btn btn-primary btn-sm" onclick="renderLeaveHistory()">🔍 ค้นหา</button>` : ''}
       <button class="btn btn-success btn-sm" onclick="exportLeaveHistoryCSV()" style="margin-left:auto;">📥 Export CSV</button>
     </div>
     <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
@@ -4515,7 +4527,7 @@ async function renderLeaveSummary() {
   const sections = Object.entries(byDept).map(([dept, emps]) => {
     const rows = emps.map(e => `<tr>
       <td style="font-size:11px;color:#64748b;">${e.eid}</td>
-      <td style="font-weight:600;">${e.ename}</td>
+      <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_goToEmployeeLeaveHistory('${e.eid}','${e.ename.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดการลารายบุคคล">${e.ename}</td>
       <td>${e.sick    ? `<b style="color:#ef4444;">${e.sick}</b>`    : '<span style="color:#cbd5e1;">-</span>'}</td>
       <td>${e.personal? `<b style="color:#f59e0b;">${e.personal}</b>`: '<span style="color:#cbd5e1;">-</span>'}</td>
       <td>${e.annual  ? `<b style="color:#22c55e;">${e.annual}</b>`  : '<span style="color:#cbd5e1;">-</span>'}</td>
@@ -4566,10 +4578,229 @@ async function renderLeaveSummary() {
       <button class="btn btn-success btn-sm" onclick="exportLeaveSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
     </div>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:12px;color:#166534;margin-bottom:14px;">
-      📌 แสดงเฉพาะการลาที่ <b>อนุมัติแล้ว</b> และ Pass ที่ <b>อนุมัติ/ออก/กลับ</b> ในเดือน <b>${TH_MONTHS[_lsMonth]} ${_lsYear+543}</b>
+      📌 แสดงเฉพาะการลาที่ <b>อนุมัติแล้ว</b> และ Pass ที่ <b>อนุมัติ/ออก/กลับ</b> ในเดือน <b>${TH_MONTHS[_lsMonth]} ${_lsYear+543}</b> · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดรายการลาเป็นรายบุคคล
     </div>
     ${empList.length ? sections : '<div style="text-align:center;padding:40px;color:#94a3b8;">ไม่มีข้อมูลการลาในเดือนนี้</div>'}
   </div>`;
+}
+
+// คลิกชื่อพนักงานในหน้า "สรุปการลาประจำเดือน" → ไปหน้า "ประวัติการลาทั้งหมด" กรองเฉพาะพนักงานคนนั้น
+function _goToEmployeeLeaveHistory(eid, ename) {
+  _lhEmpId   = eid;
+  _lhEmpName = ename;
+  _lhSearch  = '';
+  nav('ck-leave-history');
+}
+
+// ---- สรุปออกนอกบริษัท (ดึงจาก pass_requests — System 6 leave.html) ----
+let _psYear  = new Date().getFullYear();
+let _psMonth = new Date().getMonth() + 1;
+let _psDept  = '';
+
+// คำนวณนาทีระหว่างเวลาออก-กลับ (กันกรณีข้ามเที่ยงคืน)
+function _passMinutesBetween(outStr, retStr) {
+  if (!outStr || !retStr) return 0;
+  const [oh,om] = outStr.split(':').map(Number);
+  const [rh,rm] = retStr.split(':').map(Number);
+  let mins = (rh*60+rm) - (oh*60+om);
+  if (mins < 0) mins += 24*60;
+  return mins;
+}
+
+async function renderPassSummary() {
+  const c = document.getElementById('page-content');
+  c.innerHTML = '<div class="log-empty">กำลังโหลดข้อมูล...</div>';
+
+  const y = _psYear, m = _psMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10); // วันสุดท้ายของเดือน
+
+  const [deptRes, passRes] = await Promise.all([
+    sb.from('checkin_employees').select('department').order('department'),
+    sb.from('pass_requests').select('employee_id,employee_name,department,reason_name,out_time,expected_return,status')
+      .gte('request_date', mStart).lte('request_date', mEnd)
+  ]);
+
+  const deptSet = [...new Set((deptRes.data||[]).map(d=>d.department).filter(Boolean))];
+  const deptOpts = deptSet.map(d=>`<option value="${d}" ${d===_psDept?'selected':''}>${d}</option>`).join('');
+
+  const passRows = passRes.data || [];
+
+  // Group by employee — นับ approved/out/returned เป็น "อนุมัติแล้ว" รวมเวลา, แยกนับ pending ต่างหาก
+  const empMap = {};
+  const add = (eid, ename, dept) => {
+    if (!empMap[eid]) empMap[eid] = { eid, ename, dept, approvedCount:0, approvedMinutes:0, pendingCount:0 };
+  };
+  passRows.forEach(r => {
+    if (_psDept && r.department !== _psDept) return;
+    add(r.employee_id, r.employee_name, r.department);
+    if (['approved','out','returned'].includes(r.status)) {
+      empMap[r.employee_id].approvedCount += 1;
+      empMap[r.employee_id].approvedMinutes += _passMinutesBetween(r.out_time, r.expected_return);
+    } else if (r.status === 'pending') {
+      empMap[r.employee_id].pendingCount += 1;
+    }
+  });
+
+  const empList = Object.values(empMap).sort((a,b)=>a.dept.localeCompare(b.dept,'th')||a.ename.localeCompare(b.ename,'th'));
+
+  const byDept = {};
+  empList.forEach(e => { (byDept[e.dept]||(byDept[e.dept]=[])).push(e); });
+
+  const sections = Object.entries(byDept).map(([dept, emps]) => {
+    const rows = emps.map(e => `<tr>
+      <td style="font-size:11px;color:#64748b;">${e.eid}</td>
+      <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_showPassEmployeeDetail('${e.eid}','${e.ename.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดออกนอกบริษัทรายวัน">${e.ename}</td>
+      <td style="text-align:center;">${e.approvedCount || '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td style="text-align:center;font-weight:700;color:#0f766e;">${e.approvedMinutes ? (e.approvedMinutes/60).toFixed(1) : '<span style="color:#cbd5e1;">-</span>'}</td>
+      <td style="text-align:center;">${e.pendingCount ? `<b style="color:#f59e0b;">${e.pendingCount}</b>` : '<span style="color:#cbd5e1;">-</span>'}</td>
+    </tr>`).join('');
+    const totMinutes = emps.reduce((s,e)=>s+e.approvedMinutes,0);
+    return `
+    <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-bottom:16px;">
+      <div style="background:#1e293b;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <span style="color:#fff;font-size:14px;font-weight:700;">🏭 ${dept}</span>
+        <span style="background:rgba(255,255,255,.15);color:#fff;border-radius:8px;font-size:11px;padding:2px 8px;">${emps.length} คน</span>
+        ${totMinutes ? `<span style="background:#0f766e60;color:#5eead4;border-radius:8px;font-size:11px;padding:2px 8px;margin-left:auto;">รวม ${(totMinutes/60).toFixed(1)} ชม.</span>` : ''}
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;">
+            <th style="padding:8px 12px;text-align:left;">รหัส</th>
+            <th style="padding:8px 12px;text-align:left;">ชื่อ-นามสกุล</th>
+            <th style="padding:8px 12px;text-align:center;">🚪 จำนวนครั้ง (อนุมัติ)</th>
+            <th style="padding:8px 12px;text-align:center;">🚪 ชั่วโมงรวม (อนุมัติ)</th>
+            <th style="padding:8px 12px;text-align:center;">⏳ รออนุมัติ (ครั้ง)</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  const monthOpts = _leaveMonthOpts(_psYear, _psMonth);
+
+  c.innerHTML = `
+  <div style="max-width:1000px;">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center;">
+      <select class="form-control" style="width:150px;" onchange="const p=this.value.split('-');_psYear=+p[0];_psMonth=+p[1];renderPassSummary()">
+        ${monthOpts}
+      </select>
+      <select class="form-control" style="width:150px;" onchange="_psDept=this.value;renderPassSummary()">
+        <option value="">ทุกแผนก</option>${deptOpts}
+      </select>
+      <button class="btn btn-success btn-sm" onclick="exportPassSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+    </div>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:10px 14px;font-size:12px;color:#115e59;margin-bottom:14px;">
+      📌 ชั่วโมงรวมนับเฉพาะคำขอที่ <b>อนุมัติแล้ว/กำลังออก/กลับแล้ว</b> ในเดือน <b>${TH_MONTHS[_psMonth]} ${_psYear+543}</b> — คำนวณจากเวลาออก→เวลากลับที่คาดไว้ · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดรายวัน
+    </div>
+    ${empList.length ? sections : '<div style="text-align:center;padding:40px;color:#94a3b8;">ไม่มีข้อมูลออกนอกบริษัทในเดือนนี้</div>'}
+  </div>`;
+}
+
+// พนักงานรายบุคคล — คลิกชื่อเพื่อดูรายละเอียดออกนอกบริษัทรายวัน (วันที่/เวลา/สถานะ/ผู้อนุมัติ)
+async function _showPassEmployeeDetail(eid, ename) {
+  const y = _psYear, m = _psMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
+
+  const existing = document.getElementById('pass-emp-detail-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'pass-emp-detail-modal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `<div class="modal-box" style="width:100%;max-width:640px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>🚪 รายละเอียดออกนอกบริษัท — ${escHtml(ename)}</span>
+      <button onclick="document.getElementById('pass-emp-detail-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin:-8px 0 12px;">เดือน ${TH_MONTHS[m]} ${y+543}</div>
+    <div id="pass-emp-detail-body"><div class="log-empty">กำลังโหลดข้อมูล...</div></div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  const { data, error } = await sb.from('pass_requests')
+    .select('pass_id,request_date,out_time,expected_return,actual_out,actual_return,reason_name,status,approver_name,approved_at,reject_note,note')
+    .eq('employee_id', eid)
+    .gte('request_date', mStart).lte('request_date', mEnd)
+    .order('request_date');
+
+  const body = document.getElementById('pass-emp-detail-body');
+  if (!body) return; // ปิด modal ไปแล้วระหว่างรอข้อมูล
+  if (error) { body.innerHTML = '<div style="color:#dc2626;font-size:13px;">โหลดข้อมูลไม่สำเร็จ: '+escHtml(error.message||'')+'</div>'; return; }
+
+  const rows = data || [];
+  if (!rows.length) { body.innerHTML = '<div style="text-align:center;padding:24px;color:#94a3b8;">ไม่มีข้อมูลออกนอกบริษัทของพนักงานคนนี้ในเดือนนี้</div>'; return; }
+
+  const STATUS_BADGE = {
+    approved: '<span style="background:#dcfce7;color:#166534;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">✅ อนุมัติ (รอออก)</span>',
+    out:      '<span style="background:#dbeafe;color:#1e40af;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">🚪 กำลังออก</span>',
+    returned: '<span style="background:#ede9fe;color:#5b21b6;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">🏭 กลับแล้ว</span>',
+    pending:  '<span style="background:#fef3c7;color:#92400e;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">⏳ รออนุมัติ</span>',
+    rejected: '<span style="background:#fee2e2;color:#991b1b;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">❌ ปฏิเสธ</span>'
+  };
+
+  let totalMinutes = 0;
+  const trs = rows.map(r => {
+    const mins = _passMinutesBetween(r.out_time, r.expected_return);
+    if (['approved','out','returned'].includes(r.status)) totalMinutes += mins;
+    const actualInfo = (r.actual_out || r.actual_return)
+      ? `<br><span style="font-size:10px;color:#94a3b8;">จริง: ${r.actual_out?new Date(r.actual_out).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'-'} → ${r.actual_return?new Date(r.actual_return).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'ยังไม่กลับ'}</span>`
+      : '';
+    const approverInfo = ['approved','out','returned'].includes(r.status)
+      ? `${escHtml(r.approver_name||'-')}${r.approved_at ? `<br><span style="font-size:10px;color:#94a3b8;">${r.approved_at.slice(0,10)}</span>` : ''}`
+      : (r.status === 'rejected' ? `<span style="font-size:11px;color:#dc2626;">${escHtml(r.reject_note||'-')}</span>` : '<span style="color:#cbd5e1;">-</span>');
+    return `<tr>
+      <td style="font-size:12px;padding:6px 8px;">${r.request_date}</td>
+      <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">${(r.out_time||'').slice(0,5)} → ${(r.expected_return||'').slice(0,5)}${actualInfo}</td>
+      <td style="font-size:12px;padding:6px 8px;text-align:center;font-weight:700;color:#0f766e;">${(mins/60).toFixed(1)}</td>
+      <td style="font-size:12px;padding:6px 8px;">${STATUS_BADGE[r.status]||r.status}</td>
+      <td style="font-size:12px;padding:6px 8px;">${approverInfo}</td>
+    </tr>
+    <tr><td></td><td colspan="4" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📌 ${escHtml(r.reason_name||'-')}${r.note?` · 📝 ${escHtml(r.note)}`:''}</td></tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="background:#f0fdfa;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#115e59;">
+      รวมชั่วโมงที่อนุมัติแล้วในเดือนนี้: <b>${(totalMinutes/60).toFixed(1)} ชม.</b> (${rows.filter(r=>['approved','out','returned'].includes(r.status)).length} ครั้ง จากทั้งหมด ${rows.length} รายการ)
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;">
+          <th style="padding:6px 8px;text-align:left;">วันที่</th>
+          <th style="padding:6px 8px;text-align:left;">เวลา (คาด)</th>
+          <th style="padding:6px 8px;text-align:center;">ชั่วโมง</th>
+          <th style="padding:6px 8px;text-align:left;">สถานะ</th>
+          <th style="padding:6px 8px;text-align:left;">ผู้อนุมัติ / หมายเหตุ</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+}
+
+function exportPassSummaryCSV() {
+  const rows = [['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','จำนวนครั้ง(อนุมัติ)','ชั่วโมงรวม(อนุมัติ)','รออนุมัติ(ครั้ง)']];
+  const y = _psYear, m = _psMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
+  sb.from('pass_requests').select('employee_id,employee_name,department,out_time,expected_return,status')
+    .gte('request_date', mStart).lte('request_date', mEnd)
+    .then(({data}) => {
+      const em = {};
+      const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,approvedCount:0,approvedMinutes:0,pendingCount:0}; };
+      (data||[]).forEach(r=>{
+        add2(r.employee_id,r.employee_name,r.department);
+        if (['approved','out','returned'].includes(r.status)) { em[r.employee_id].approvedCount+=1; em[r.employee_id].approvedMinutes+=_passMinutesBetween(r.out_time,r.expected_return); }
+        else if (r.status==='pending') { em[r.employee_id].pendingCount+=1; }
+      });
+      const sorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th'));
+      const csvRows = [rows[0], ...sorted.map(e=>[e.eid,e.ename,e.dept,e.approvedCount,(e.approvedMinutes/60).toFixed(1),e.pendingCount])];
+      const csv = csvRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
+      a.download=`pass_summary_${y}_${String(m).padStart(2,'0')}.csv`; a.click();
+    });
 }
 
 // ---- สรุปโอที (ดึงจาก ot_requests — System 6 leave.html) ----
@@ -4623,7 +4854,7 @@ async function renderOtSummary() {
   const sections = Object.entries(byDept).map(([dept, emps]) => {
     const rows = emps.map(e => `<tr>
       <td style="font-size:11px;color:#64748b;">${e.eid}</td>
-      <td style="font-weight:600;">${e.ename}</td>
+      <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_showOtEmployeeDetail('${e.eid}','${e.ename.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดโอทีรายวัน">${e.ename}</td>
       <td style="text-align:center;">${e.approvedCount || '<span style="color:#cbd5e1;">-</span>'}</td>
       <td style="text-align:center;font-weight:700;color:#0f766e;">${e.approvedHours ? e.approvedHours.toFixed(1) : '<span style="color:#cbd5e1;">-</span>'}</td>
       <td style="text-align:center;">${e.pendingCount ? `<b style="color:#f59e0b;">${e.pendingCount}</b>` : '<span style="color:#cbd5e1;">-</span>'}</td>
@@ -4665,10 +4896,88 @@ async function renderOtSummary() {
       <button class="btn btn-success btn-sm" onclick="exportOtSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
     </div>
     <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:10px 14px;font-size:12px;color:#115e59;margin-bottom:14px;">
-      📌 ชั่วโมงรวมนับเฉพาะคำขอโอทีที่ <b>อนุมัติแล้ว</b> ในเดือน <b>${TH_MONTHS[_osMonth]} ${_osYear+543}</b> — ใช้ชั่วโมงจริง (actual_hours) ถ้ามี มิฉะนั้นใช้ชั่วโมงประมาณการ
+      📌 ชั่วโมงรวมนับเฉพาะคำขอโอทีที่ <b>อนุมัติแล้ว</b> ในเดือน <b>${TH_MONTHS[_osMonth]} ${_osYear+543}</b> — ใช้ชั่วโมงจริง (actual_hours) ถ้ามี มิฉะนั้นใช้ชั่วโมงประมาณการ · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดโอทีรายวัน
     </div>
     ${empList.length ? sections : '<div style="text-align:center;padding:40px;color:#94a3b8;">ไม่มีข้อมูลโอทีในเดือนนี้</div>'}
   </div>`;
+}
+
+// พนักงานรายบุคคล — คลิกชื่อเพื่อดูรายละเอียดโอทีรายวัน (วันที่/เวลา/ชั่วโมง/สถานะ/ผู้อนุมัติ)
+// ขอบเขตเวลาตรงกับตัวกรองเดือน/ปีของหน้าสรุปโอที (_osYear/_osMonth)
+async function _showOtEmployeeDetail(eid, ename) {
+  const y = _osYear, m = _osMonth;
+  const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
+  const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
+
+  const existing = document.getElementById('ot-emp-detail-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ot-emp-detail-modal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `<div class="modal-box" style="width:100%;max-width:640px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>⏱️ รายละเอียดโอที — ${escHtml(ename)}</span>
+      <button onclick="document.getElementById('ot-emp-detail-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin:-8px 0 12px;">เดือน ${TH_MONTHS[m]} ${y+543}</div>
+    <div id="ot-emp-detail-body"><div class="log-empty">กำลังโหลดข้อมูล...</div></div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  const { data, error } = await sb.from('ot_requests')
+    .select('ot_id,ot_date,start_time,end_time,request_type,estimated_hours,actual_hours,status,reason,approver_name,approved_at,reject_note,is_holiday')
+    .eq('employee_id', eid)
+    .gte('ot_date', mStart).lte('ot_date', mEnd)
+    .order('ot_date');
+
+  const body = document.getElementById('ot-emp-detail-body');
+  if (!body) return; // ปิด modal ไปแล้วระหว่างรอข้อมูล
+  if (error) { body.innerHTML = '<div style="color:#dc2626;font-size:13px;">โหลดข้อมูลไม่สำเร็จ: '+escHtml(error.message||'')+'</div>'; return; }
+
+  const rows = data || [];
+  if (!rows.length) { body.innerHTML = '<div style="text-align:center;padding:24px;color:#94a3b8;">ไม่มีข้อมูลโอทีของพนักงานคนนี้ในเดือนนี้</div>'; return; }
+
+  const STATUS_BADGE = {
+    approved: '<span style="background:#dcfce7;color:#166534;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">✅ อนุมัติ</span>',
+    pending:  '<span style="background:#fef3c7;color:#92400e;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">⏳ รออนุมัติ</span>',
+    rejected: '<span style="background:#fee2e2;color:#991b1b;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">❌ ปฏิเสธ</span>'
+  };
+
+  let totalHours = 0;
+  const trs = rows.map(r => {
+    const hrs = Number(r.actual_hours ?? r.estimated_hours) || 0;
+    if (r.status === 'approved') totalHours += hrs;
+    const approverInfo = r.status === 'approved'
+      ? `${escHtml(r.approver_name||'-')}${r.approved_at ? `<br><span style="font-size:10px;color:#94a3b8;">${r.approved_at.slice(0,10)}</span>` : ''}`
+      : (r.status === 'rejected' ? `<span style="font-size:11px;color:#dc2626;">${escHtml(r.reject_note||'-')}</span>` : '<span style="color:#cbd5e1;">-</span>');
+    return `<tr>
+      <td style="font-size:12px;padding:6px 8px;">${r.ot_date}</td>
+      <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">${(r.start_time||'').slice(0,5)} → ${(r.end_time||'').slice(0,5)}${r.is_holiday?' <span style="font-size:10px;color:#7c3aed;">(วันหยุด)</span>':''}</td>
+      <td style="font-size:12px;padding:6px 8px;text-align:center;font-weight:700;color:#0f766e;">${hrs.toFixed(1)}</td>
+      <td style="font-size:12px;padding:6px 8px;">${STATUS_BADGE[r.status]||r.status}</td>
+      <td style="font-size:12px;padding:6px 8px;">${approverInfo}</td>
+    </tr>
+    ${r.reason ? `<tr><td></td><td colspan="4" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📝 ${escHtml(r.reason)}</td></tr>` : ''}`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="background:#f0fdfa;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#115e59;">
+      รวมชั่วโมงที่อนุมัติแล้วในเดือนนี้: <b>${totalHours.toFixed(1)} ชม.</b> (${rows.filter(r=>r.status==='approved').length} ครั้ง จากทั้งหมด ${rows.length} รายการ)
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;">
+          <th style="padding:6px 8px;text-align:left;">วันที่</th>
+          <th style="padding:6px 8px;text-align:left;">เวลา</th>
+          <th style="padding:6px 8px;text-align:center;">ชั่วโมง</th>
+          <th style="padding:6px 8px;text-align:left;">สถานะ</th>
+          <th style="padding:6px 8px;text-align:left;">ผู้อนุมัติ / หมายเหตุ</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
 }
 
 function exportOtSummaryCSV() {
