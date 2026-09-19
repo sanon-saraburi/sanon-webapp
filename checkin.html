@@ -3969,7 +3969,10 @@ async function renderUsers() {
         <div class="card-title">⏱ กำหนดเวลาพักตามเหตุผล</div>
         <span class="badge b-gray" style="font-size:11px;">Admin only</span>
       </div>
-      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">ตั้งได้ 2 ระดับต่อเหตุผล — ระดับ 1 = เริ่มนับว่าเกิน, ระดับ 2 = ขั้นรุนแรง (เว้นว่าง = ไม่ใช้)</p>
+      <p style="font-size:12px;color:#64748b;margin-bottom:4px;">ตั้งได้ 2 ระดับต่อเหตุผล — ระดับ 1 = เริ่มนับว่าเกิน, ระดับ 2 = ขั้นรุนแรง (เว้นว่าง = ไม่ใช้)</p>
+      <p style="font-size:11px;color:#0369a1;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;margin-bottom:12px;">
+        🔗 ตารางนี้ใช้ข้อมูลชุดเดียวกับหน้า "กำหนดเวลาออกนอกบริษัทตามเหตุผล" ใน leave.html (ตาราง <code>pass_reasons</code>) — แก้ไขที่นี่หรือฝั่งขออนุมัติออกนอกบริษัทจะเห็นผลเหมือนกันทั้งสองระบบ
+      </p>
       <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -3986,7 +3989,7 @@ async function renderUsers() {
       </div>
       <div style="margin-top:12px;display:flex;align-items:center;gap:12px;">
         <button onclick="saveReasonRules()" style="background:#1a3a5c;color:#fff;border:none;font-size:13px;padding:9px 20px;border-radius:8px;">💾 บันทึกกฎเวลาพัก</button>
-        <button onclick="resetReasonRules()" style="font-size:12px;color:#64748b;border-color:#e2e8f0;padding:9px 16px;">↺ คืนค่าเริ่มต้น</button>
+        <button onclick="resetReasonRules()" style="font-size:12px;color:#64748b;border-color:#e2e8f0;padding:9px 16px;">↺ โหลดค่าล่าสุด</button>
         <span id="rr-save-msg" style="font-size:12px;color:#16a34a;display:none;">✓ บันทึกแล้ว</span>
       </div>
     </div>`:''}`;
@@ -4052,11 +4055,43 @@ function _labelOpts(selected='') {
     + LABEL_OPTS.map(l=>`<option value="${escHtml(l)}"${l===selected?' selected':''}>${escHtml(l)}</option>`).join('');
 }
 
-// เพิ่มแถวใหม่ในตาราง reason rules
-function addReasonRow(name='', r1={}, r2={}) {
+// ── เหตุผลพัก ใช้แหล่งข้อมูลเดียวกับ pass_reasons ของ leave.html (เชื่อมโยงกันตั้งแต่ 2026-09-19) ──
+let _ckPassReasonsRaw = []; // เก็บข้อมูลดิบจาก pass_reasons (มี reason_id) สำหรับหน้า settings นี้
+
+// แปลงแถวจาก pass_reasons → {opts:[name,...], rules:{name:[{min,label},...]}} ที่ใช้ทั่วทั้งไฟล์
+function _buildReasonRulesFromPassReasons(rows) {
+  const opts = [];
+  const rules = {};
+  (rows||[]).filter(r => r.is_active !== false).forEach(r => {
+    opts.push(r.name);
+    const arr = [];
+    if (r.level1_minutes && r.level1_status) arr.push({ min: +r.level1_minutes, label: r.level1_status });
+    if (r.level2_minutes && r.level2_status) arr.push({ min: +r.level2_minutes, label: r.level2_status });
+    if (!arr.length && r.max_minutes) arr.push({ min: +r.max_minutes, label: 'เกินกำหนด' }); // กันกรณียังไม่เคยตั้ง level1/2
+    arr.sort((a, b) => a.min - b.min);
+    if (arr.length) rules[r.name] = arr;
+  });
+  return { opts, rules };
+}
+
+// โหลด reasonOpts/reasonRules ที่ใช้งานจริง (badge, dropdown สแกนออก) จาก pass_reasons สด ๆ
+async function _loadReasonRulesFromPassReasons() {
+  try {
+    const { data, error } = await sb.from('pass_reasons').select('*').order('sort_order');
+    if (error) throw error;
+    const { opts, rules } = _buildReasonRulesFromPassReasons(data);
+    if (opts.length) { reasonOpts = opts; reasonRules = rules; }
+  } catch (e) {
+    // เชื่อมต่อ pass_reasons ไม่ได้ → ใช้ค่า default ที่ตั้งไว้ในโค้ดไปก่อน กันหน้าเว็บพัง
+  }
+}
+
+// เพิ่มแถวใหม่ในตาราง reason rules — reasonId = reason_id จริงใน pass_reasons (null = แถวที่เพิ่งเพิ่ม ยังไม่บันทึก)
+function addReasonRow(reasonId = null, name = '', r1 = {}, r2 = {}) {
   const tbody = document.getElementById('rr-tbody');
   if (!tbody) return;
   const tr = document.createElement('tr');
+  tr.dataset.reasonId = reasonId || '';
   tr.innerHTML = `
     <td><input type="text" class="rr-name" value="${escHtml(name)}" placeholder="ชื่อเหตุผล"
       style="width:110px;padding:5px 8px;font-size:13px;"></td>
@@ -4066,63 +4101,97 @@ function addReasonRow(name='', r1={}, r2={}) {
     <td><input type="number" class="rr-2-min" value="${r2.min||''}" placeholder="นาที"
       min="1" max="9999" style="width:65px;padding:5px 8px;font-size:13px;"></td>
     <td><select class="rr-2-lbl" style="padding:5px 8px;font-size:13px;min-width:110px;">${_labelOpts(r2.label||'')}</select></td>
-    <td><button onclick="this.closest('tr').remove()"
+    <td><button onclick="_deleteReasonRow(${reasonId || 'null'}, this)"
       style="color:#dc2626;background:#fff5f5;border-color:#fecaca;padding:5px 10px;font-size:12px;border-radius:6px;">🗑 ลบ</button></td>`;
   tbody.appendChild(tr);
 }
 
-// เรนเดอร์แถวทั้งหมดจาก reasonOpts + reasonRules ปัจจุบัน
-function initReasonTable() {
+// ลบเหตุผลทันที (ถ้ามี reason_id แปลว่ามีอยู่ใน DB จริง → ลบถาวรพร้อม confirm ก่อนเสมอ)
+async function _deleteReasonRow(reasonId, btnEl) {
+  if (reasonId) {
+    if (!confirm('ลบเหตุผลนี้ออกจากระบบถาวร?\nมีผลทั้งฝั่ง "พัก" ในหน้านี้ และฝั่ง "ขอออกนอกบริษัท" ใน leave.html')) return;
+    const { error } = await sb.from('pass_reasons').delete().eq('reason_id', reasonId);
+    if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+    await _loadReasonRulesFromPassReasons();
+  }
+  btnEl.closest('tr')?.remove();
+}
+
+// เรนเดอร์แถวทั้งหมดจาก pass_reasons สด ๆ (โหลดใหม่ทุกครั้งที่เข้าหน้านี้/หลังบันทึก)
+async function initReasonTable() {
   const tbody = document.getElementById('rr-tbody');
   if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px;">กำลังโหลด...</td></tr>';
+  const { data, error } = await sb.from('pass_reasons').select('*').order('sort_order');
+  if (error) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#dc2626;padding:16px;">โหลดข้อมูลไม่สำเร็จ: ' + escHtml(error.message || '') + '</td></tr>';
+    return;
+  }
+  _ckPassReasonsRaw = data || [];
   tbody.innerHTML = '';
-  reasonOpts.forEach(r => {
-    const rules = reasonRules[r]||[];
-    addReasonRow(r, rules[0]||{}, rules[1]||{});
+  _ckPassReasonsRaw.forEach(r => {
+    const r1 = r.level1_minutes ? { min: r.level1_minutes, label: r.level1_status || '' }
+             : (r.max_minutes ? { min: r.max_minutes, label: 'เกินกำหนด' } : {});
+    const r2 = r.level2_minutes ? { min: r.level2_minutes, label: r.level2_status || '' } : {};
+    addReasonRow(r.reason_id, r.name, r1, r2);
   });
 }
 
 async function saveReasonRules() {
   const tbody = document.getElementById('rr-tbody');
-  if (!tbody) { return; }
-  const rules = {};
-  const newReasonOpts = [];
+  if (!tbody) return;
+  let ok = 0;
+  const failed = [];
 
-  Array.from(tbody.rows).forEach(tr=>{
+  for (const tr of Array.from(tbody.rows)) {
+    const reasonId = tr.dataset.reasonId ? +tr.dataset.reasonId : null;
     const name = tr.querySelector('.rr-name')?.value.trim();
-    const m1   = parseInt(tr.querySelector('.rr-1-min')?.value)||0;
-    const l1   = tr.querySelector('.rr-1-lbl')?.value||'';
-    const m2   = parseInt(tr.querySelector('.rr-2-min')?.value)||0;
-    const l2   = tr.querySelector('.rr-2-lbl')?.value||'';
-    if (!name) return;
-    newReasonOpts.push(name);
-    const arr = [];
-    if (m1 && l1) arr.push({min:m1, label:l1});
-    if (m2 && l2) arr.push({min:m2, label:l2});
-    arr.sort((a,b)=>a.min-b.min);
-    if (arr.length) rules[name] = arr;
-  });
+    if (!name) continue;
+    const m1raw = tr.querySelector('.rr-1-min')?.value;
+    const l1    = tr.querySelector('.rr-1-lbl')?.value || null;
+    const m2raw = tr.querySelector('.rr-2-min')?.value;
+    const l2    = tr.querySelector('.rr-2-lbl')?.value || null;
+    const m1 = m1raw ? parseInt(m1raw) : null;
+    const m2 = m2raw ? parseInt(m2raw) : null;
 
-  await sb.from('checkin_config').upsert([
-    {key:'reason_list',  value: newReasonOpts},
-    {key:'reason_rules', value: rules},
-  ],{onConflict:'key'});
+    const orig = _ckPassReasonsRaw.find(r => r.reason_id === reasonId);
+    const payload = {
+      name,
+      icon: orig?.icon || '📋',
+      max_minutes: m1 || orig?.max_minutes || 60,
+      level1_minutes: m1, level1_status: l1,
+      level2_minutes: m2, level2_status: l2,
+      requires_approval: orig?.requires_approval ?? true,
+      is_active: orig?.is_active ?? true,
+      sort_order: orig?.sort_order ?? 99
+    };
 
-  reasonOpts  = newReasonOpts;
-  reasonRules = {...DEFAULT_REASON_RULES, ...rules};
+    let error;
+    if (reasonId) {
+      ({ error } = await sb.from('pass_reasons').update(payload).eq('reason_id', reasonId));
+    } else {
+      ({ error } = await sb.from('pass_reasons').insert([payload]));
+    }
+    if (error) failed.push(name); else ok++;
+  }
+
+  await _loadReasonRulesFromPassReasons(); // sync reasonOpts/reasonRules ที่ใช้จริงในหน้าอื่นทันที
+  await initReasonTable();                 // re-render ตารางด้วยข้อมูลล่าสุด (รวม reason_id ของแถวที่เพิ่งเพิ่ม)
+
   const msg = document.getElementById('rr-save-msg');
-  if (msg) { msg.style.display='inline'; setTimeout(()=>msg.style.display='none',2500); }
+  if (msg) {
+    msg.textContent = failed.length ? `⚠ บันทึกสำเร็จ ${ok} รายการ — ล้มเหลว: ${failed.join(', ')}` : '✓ บันทึกแล้ว';
+    msg.style.color = failed.length ? '#dc2626' : '#16a34a';
+    msg.style.display = 'inline';
+    setTimeout(() => msg.style.display = 'none', 3000);
+  }
 }
 
+// เดิมคือ "คืนค่าเริ่มต้น" — ตอนนี้ pass_reasons เป็นแหล่งข้อมูลเดียวที่ leave.html ก็ใช้ร่วมกัน จึงไม่มี
+// "ค่าเริ่มต้นของระบบนี้" แยกต่างหากอีกต่อไป ปุ่มนี้จึงเปลี่ยนเป็นโหลดค่าล่าสุดจาก DB แทน (ยกเลิกการแก้ไขที่ยังไม่บันทึก)
 async function resetReasonRules() {
-  if (!confirm('รีเซ็ตเป็นค่าเริ่มต้น?')) return;
-  await sb.from('checkin_config').upsert([
-    {key:'reason_list',  value: REASON_OPTS_DEFAULT},
-    {key:'reason_rules', value: DEFAULT_REASON_RULES},
-  ],{onConflict:'key'});
-  reasonOpts  = [...REASON_OPTS_DEFAULT];
-  reasonRules = JSON.parse(JSON.stringify(DEFAULT_REASON_RULES));
-  initReasonTable();  // re-render table ไม่ต้อง re-render ทั้งหน้า
+  if (!confirm('ยกเลิกการแก้ไขที่ยังไม่บันทึก แล้วโหลดค่าล่าสุดจากระบบใหม่?')) return;
+  await initReasonTable();
 }
 
 const ROLE_LABEL = {admin:'Admin',supervisor:'Supervisor',guard:'Guard'};
@@ -4596,6 +4665,7 @@ function _goToEmployeeLeaveHistory(eid, ename) {
 let _psYear  = new Date().getFullYear();
 let _psMonth = new Date().getMonth() + 1;
 let _psDept  = '';
+let _psDetailCtx = null; // {eid, ename} ของ modal รายละเอียดที่เปิดอยู่ล่าสุด (ใช้ refresh หลังแก้ไข/ลบ)
 
 // คำนวณนาทีระหว่างเวลาออก-กลับ (กันกรณีข้ามเที่ยงคืน)
 function _passMinutesBetween(outStr, retStr) {
@@ -4700,6 +4770,7 @@ async function renderPassSummary() {
 
 // พนักงานรายบุคคล — คลิกชื่อเพื่อดูรายละเอียดออกนอกบริษัทรายวัน (วันที่/เวลา/สถานะ/ผู้อนุมัติ)
 async function _showPassEmployeeDetail(eid, ename) {
+  _psDetailCtx = { eid, ename };
   const y = _psYear, m = _psMonth;
   const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
   const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
@@ -4742,6 +4813,8 @@ async function _showPassEmployeeDetail(eid, ename) {
     rejected: '<span style="background:#fee2e2;color:#991b1b;border-radius:20px;font-size:11px;font-weight:700;padding:2px 10px;">❌ ปฏิเสธ</span>'
   };
 
+  const isAdmin = currentUser?.role === 'admin';
+
   let totalMinutes = 0;
   const trs = rows.map(r => {
     const mins = _passMinutesBetween(r.out_time, r.expected_return);
@@ -4752,14 +4825,20 @@ async function _showPassEmployeeDetail(eid, ename) {
     const approverInfo = ['approved','out','returned'].includes(r.status)
       ? `${escHtml(r.approver_name||'-')}${r.approved_at ? `<br><span style="font-size:10px;color:#94a3b8;">${r.approved_at.slice(0,10)}</span>` : ''}`
       : (r.status === 'rejected' ? `<span style="font-size:11px;color:#dc2626;">${escHtml(r.reject_note||'-')}</span>` : '<span style="color:#cbd5e1;">-</span>');
+    const actionCell = isAdmin ? `
+      <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">
+        <button onclick="_editPassRecord(${r.pass_id})" title="แก้ไข" style="font-size:11px;padding:3px 7px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;margin-right:4px;">✏️</button>
+        <button onclick="_deletePassRecord(${r.pass_id})" title="ลบ" style="font-size:11px;padding:3px 7px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;">🗑️</button>
+      </td>` : '';
     return `<tr>
       <td style="font-size:12px;padding:6px 8px;">${r.request_date}</td>
       <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">${(r.out_time||'').slice(0,5)} → ${(r.expected_return||'').slice(0,5)}${actualInfo}</td>
       <td style="font-size:12px;padding:6px 8px;text-align:center;font-weight:700;color:#0f766e;">${(mins/60).toFixed(1)}</td>
       <td style="font-size:12px;padding:6px 8px;">${STATUS_BADGE[r.status]||r.status}</td>
       <td style="font-size:12px;padding:6px 8px;">${approverInfo}</td>
+      ${actionCell}
     </tr>
-    <tr><td></td><td colspan="4" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📌 ${escHtml(r.reason_name||'-')}${r.note?` · 📝 ${escHtml(r.note)}`:''}</td></tr>`;
+    <tr><td></td><td colspan="${isAdmin?5:4}" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📌 ${escHtml(r.reason_name||'-')}${r.note?` · 📝 ${escHtml(r.note)}`:''}</td></tr>`;
   }).join('');
 
   body.innerHTML = `
@@ -4774,10 +4853,83 @@ async function _showPassEmployeeDetail(eid, ename) {
           <th style="padding:6px 8px;text-align:center;">ชั่วโมง</th>
           <th style="padding:6px 8px;text-align:left;">สถานะ</th>
           <th style="padding:6px 8px;text-align:left;">ผู้อนุมัติ / หมายเหตุ</th>
+          ${isAdmin?'<th style="padding:6px 8px;text-align:left;">จัดการ</th>':''}
         </tr></thead>
         <tbody>${trs}</tbody>
       </table>
-    </div>`;
+    </div>
+    ${isAdmin?'<div style="font-size:11px;color:#94a3b8;margin-top:8px;">🔒 แก้ไข/ลบ มองเห็นเฉพาะผู้ดูแลระบบ (Admin)</div>':''}`;
+}
+
+// ── แก้ไข / ลบ รายการออกนอกบริษัท (Admin เท่านั้น) ──
+async function _editPassRecord(passId) {
+  if (currentUser?.role !== 'admin') { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขได้'); return; }
+
+  const { data: r, error } = await sb.from('pass_requests').select('*').eq('pass_id', passId).single();
+  if (error || !r) { alert('ไม่พบข้อมูล: ' + (error?.message||'')); return; }
+
+  document.getElementById('pass-edit-modal')?.remove();
+
+  const STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ (รอออก)', out:'กำลังออก', returned:'กลับแล้ว', rejected:'ปฏิเสธ' };
+  const statusOpts = Object.keys(STATUS_TH).map(s =>
+    `<option value="${s}" ${r.status===s?'selected':''}>${STATUS_TH[s]}</option>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'pass-edit-modal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `<div class="modal-box" style="width:100%;max-width:400px;">
+    <div class="modal-title">✏️ แก้ไขคำขอออกนอกบริษัท</div>
+    <div style="font-size:12px;color:#64748b;margin:-8px 0 12px;">${escHtml(r.employee_name)} · ${escHtml(r.reason_name||'')}</div>
+    <div class="form-field"><label class="lbl">วันที่</label><input type="date" id="pe-date" value="${r.request_date}"></div>
+    <div class="form-field"><label class="lbl">เวลาออก</label><input type="time" id="pe-out" value="${(r.out_time||'').slice(0,5)}"></div>
+    <div class="form-field"><label class="lbl">เวลากลับ (คาด)</label><input type="time" id="pe-ret" value="${(r.expected_return||'').slice(0,5)}"></div>
+    <div class="form-field"><label class="lbl">สถานะ</label><select id="pe-status">${statusOpts}</select></div>
+    <div class="form-field"><label class="lbl">หมายเหตุ</label><input type="text" id="pe-note" value="${escHtml(r.note||'')}"></div>
+    <div class="form-err" id="pe-err"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="_savePassEdit(${passId})">บันทึก</button>
+      <button onclick="document.getElementById('pass-edit-modal').remove()">ยกเลิก</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function _savePassEdit(passId) {
+  const date   = document.getElementById('pe-date').value;
+  const out    = document.getElementById('pe-out').value;
+  const ret    = document.getElementById('pe-ret').value;
+  const status = document.getElementById('pe-status').value;
+  const note   = document.getElementById('pe-note').value.trim();
+  const err    = document.getElementById('pe-err');
+
+  if (!date || !out || !ret) { err.textContent = 'กรุณาระบุวันที่และเวลาให้ครบ'; return; }
+
+  const payload = { request_date: date, out_time: out, expected_return: ret, status, note: note || null };
+  if (status === 'approved') {
+    payload.approver_name = currentUser?.full_name || currentUser?.name || currentUser?.username || 'Admin';
+    payload.approved_at   = new Date().toISOString();
+  }
+
+  const { error } = await sb.from('pass_requests').update(payload).eq('pass_id', passId);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+
+  document.getElementById('pass-edit-modal')?.remove();
+  alert('แก้ไขเรียบร้อย ✅');
+  if (_psDetailCtx) _showPassEmployeeDetail(_psDetailCtx.eid, _psDetailCtx.ename);
+  renderPassSummary();
+}
+
+async function _deletePassRecord(passId) {
+  if (currentUser?.role !== 'admin') { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบได้'); return; }
+  if (!confirm('ลบรายการออกนอกบริษัทนี้ถาวร?\nไม่สามารถกู้คืนได้')) return;
+
+  const { error } = await sb.from('pass_requests').delete().eq('pass_id', passId);
+  if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+
+  alert('ลบรายการเรียบร้อย');
+  if (_psDetailCtx) _showPassEmployeeDetail(_psDetailCtx.eid, _psDetailCtx.ename);
+  renderPassSummary();
 }
 
 function exportPassSummaryCSV() {
@@ -5036,19 +5188,18 @@ async function bootApp() {
   document.getElementById('scanner-tag').textContent = `รปภ.: ${currentUser.name}`;
   applyPermissions(currentUser.role);
   startClock();
-  // โหลด config จาก DB (gate_names + reason_rules)
+  // โหลด config จาก DB (gate_names)
   try {
     const { data } = await sb.from('checkin_config').select('key,value')
-      .in('key',['gate_names','reason_rules','reason_list']);
+      .in('key',['gate_names']);
     (data||[]).forEach(row=>{
-      if (row.key==='gate_names'  && row.value) gateNames   = {...gateNames, ...row.value};
-      if (row.key==='reason_rules'&& row.value) reasonRules = {...DEFAULT_REASON_RULES, ...row.value};
-      if (row.key==='reason_list' && Array.isArray(row.value) && row.value.length)
-        reasonOpts = row.value;
+      if (row.key==='gate_names' && row.value) gateNames = {...gateNames, ...row.value};
     });
     // ตรวจ currentGate ว่ายังอยู่ใน gateNames ไหม
     if (!gateNames[currentGate]) currentGate = Object.keys(gateNames).sort()[0];
   } catch(e) {}
+  // เหตุผลพัก + เวลากำหนด — ใช้แหล่งข้อมูลเดียวกับ pass_reasons ของ leave.html (เชื่อมโยงกัน 2026-09-19)
+  await _loadReasonRulesFromPassReasons();
   _startGuardRealtime();
   // ถ้า refresh → กลับหน้าเดิม, ถ้า login ใหม่ → ไป ck-guard
   const lastPage = sessionStorage.getItem('_sn_ck_lastpage');

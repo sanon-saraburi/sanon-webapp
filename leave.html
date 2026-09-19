@@ -3390,7 +3390,7 @@ async function loadPassTimeRulesEditor() {
 function _renderPassRulesTable() {
   const el = document.getElementById('pass-rules-tbody');
   if (!el) return;
-  const STATUSES = ['สาย', 'เกินกำหนด', 'ลาครึ่งวัน'];
+  const STATUSES = ['สาย', 'เกินกำหนด', 'ลาครึ่งวัน', 'ลาเต็มวัน', 'ไม่อนุญาต']; // ตรงกับ LABEL_OPTS ใน checkin.html (เชื่อมข้อมูล pass_reasons ร่วมกัน 2026-09-19)
   const statusOpts = (val) => `<option value="">-- ไม่ใช้ --</option>` +
     STATUSES.map(s => `<option value="${s}" ${val===s?'selected':''}>${s}</option>`).join('');
 
@@ -3765,9 +3765,12 @@ async function renderSettings() {
         <div class="card-title">⏱ กำหนดเวลาออกนอกบริษัทตามเหตุผล</div>
         <span style="font-size:11px;color:#94a3b8;">Admin only</span>
       </div>
-      <p style="font-size:12px;color:#64748b;margin:0 0 12px;">
+      <p style="font-size:12px;color:#64748b;margin:0 0 4px;">
         <b>"เวลาสูงสุดที่อนุญาต"</b> คือค่าที่พนักงานเห็นในหน้ายื่นคำขอออกนอกบริษัท (การ์ดแต่ละเหตุผล) —
         ส่วน <b>"แจ้งเตือนเมื่อเกิน"</b> เป็นขั้นขั้นที่ 2 (ทางเลือก) สำหรับติดป้ายสถานะเมื่อใช้เวลาเกินกว่านี้ (เว้นว่าง = ไม่ใช้)
+      </p>
+      <p style="font-size:11px;color:#0369a1;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;margin-bottom:12px;">
+        🔗 ตารางนี้ใช้ข้อมูลชุดเดียวกับหน้า "กำหนดเวลาพักตามเหตุผล" ใน checkin.html (ตาราง <code>pass_reasons</code>) — แก้ไขที่นี่หรือฝั่ง checkin.html จะเห็นผลเหมือนกันทั้งสองระบบ
       </p>
       <div class="tbl-wrap">
         <table style="table-layout:fixed;font-size:12px;">
