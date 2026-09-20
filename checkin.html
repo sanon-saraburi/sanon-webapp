@@ -14,6 +14,8 @@
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sanon-webapp/sw.js',{scope:'/sanon-webapp/'}).catch(()=>{});});}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<!-- ใช้ xlsx-js-style (fork ของ SheetJS ที่ยังคง API เดิมทุกอย่าง แต่เพิ่มการเขียนสีพื้นหลัง/ฟอนต์ลงไฟล์ .xlsx ได้ — SheetJS รุ่นฟรีมาตรฐานเขียนสไตล์ไม่ได้) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
@@ -65,6 +67,12 @@ label.lbl{font-size:12px;color:#64748b;display:block;margin-bottom:4px;}
 .sb-brand{font-size:15px;font-weight:600;}
 .sb-sub{font-size:11px;opacity:.55;margin-top:3px;}
 .sb-menu{padding:8px 0;flex:1;}
+/* แต่ละหมวดหมู่มีพื้นหลังสีต่างกัน (โทนอ่อน ทับบนพื้นเข้มของ sidebar) เพื่อแยกหมวดชัดเจน ลดความสับสน */
+.sb-group{padding:4px 0;margin:2px 0;border-left:3px solid transparent;}
+.sb-g1{background:rgba(96,165,250,.10);border-left-color:rgba(96,165,250,.5);}   /* ฟ้า   — บันทึกเข้า-ออก ผ่านรปภ. */
+.sb-g2{background:rgba(45,212,191,.10);border-left-color:rgba(45,212,191,.5);}   /* เขียวมิ้นท์ — รายงานเข้า-ออก ผ่านป้อม รปภ. */
+.sb-g3{background:rgba(251,191,36,.10);border-left-color:rgba(251,191,36,.5);}   /* เหลือง — ข้อมูลการลา-โอที ประจำเดือน */
+.sb-g4{background:rgba(167,139,250,.10);border-left-color:rgba(167,139,250,.5);} /* ม่วง   — จัดการระบบ */
 .sb-sec{font-size:10px;color:rgba(255,255,255,.35);padding:10px 16px 3px;
   letter-spacing:.06em;text-transform:uppercase;}
 .sb-item{display:flex;align-items:center;gap:10px;padding:10px 16px;
@@ -364,25 +372,34 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-sub">ระบบงานบุคคล</div>
       </div>
       <div class="sb-menu">
-        <div class="sb-sec">หน้าหลัก</div>
-        <div class="sb-item" onclick="nav('ck-guard')">🔍 <span>บันทึกเข้า-ออก</span></div>
-        <div class="sb-item" onclick="nav('ck-supervisor')">📊 <span>Dashboard</span></div>
-        <div class="sb-item" onclick="nav('ck-visitor')">🏢 <span>บุคคลภายนอก</span></div>
-        <div class="sb-item" onclick="nav('ck-pass')">🚪 <span>Pass ออกนอก
-          <span id="ck-pass-badge" style="display:none;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;padding:0 5px;margin-left:4px;"></span>
-        </span></div>
-        <div class="sb-sec">ข้อมูลการลา-โอที</div>
-        <div class="sb-item perm-sup" onclick="nav('ck-leave-summary')">📅 <span>สรุปการลาประจำเดือน</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-leave-history')">📂 <span>ประวัติการลาทั้งหมด</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-pass-summary')">🚪 <span>สรุปออกนอกบริษัท</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-ot-summary')">⏱️ <span>สรุปโอที</span></div>
-        <div class="sb-sec">ข้อมูล</div>
-        <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-stats')">📊 <span>สถิติรายเดือน</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-employees')">👥 <span>จัดการพนักงาน</span></div>
-        <div class="sb-item perm-sup" onclick="nav('ck-timecard')">🕐 <span>บัตรตอก</span></div>
-        <div class="sb-item perm-admin" onclick="nav('ck-tc-settings')">⚙️ <span>ตั้งค่า OT</span></div>
-        <div class="sb-item perm-admin" onclick="nav('ck-users')">🔑 <span>จัดการผู้ใช้</span></div>
+        <div class="sb-group sb-g1">
+          <div class="sb-sec">บันทึกเข้า-ออก ผ่านรปภ.</div>
+          <div class="sb-item" onclick="nav('ck-guard')">🔍 <span>บันทึกเข้า-ออก</span></div>
+          <div class="sb-item" onclick="nav('ck-supervisor')">📊 <span>Dashboard</span></div>
+          <div class="sb-item" onclick="nav('ck-visitor')">🏢 <span>บุคคลภายนอก</span></div>
+          <div class="sb-item" onclick="nav('ck-pass')">🚪 <span>Pass ออกนอก
+            <span id="ck-pass-badge" style="display:none;background:#f59e0b;color:#fff;border-radius:10px;font-size:10px;padding:0 5px;margin-left:4px;"></span>
+          </span></div>
+        </div>
+        <div class="sb-group sb-g2">
+          <div class="sb-sec">รายงานเข้า-ออก ผ่านป้อม รปภ.</div>
+          <div class="sb-item perm-sup" onclick="nav('ck-report')">📋 <span>รายงาน</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-stats')">📊 <span>สถิติรายเดือนเข้าออกบริษัท</span></div>
+        </div>
+        <div class="sb-group sb-g3">
+          <div class="sb-sec">ข้อมูลการลา - โอที ประจำเดือน</div>
+          <div class="sb-item perm-sup" onclick="nav('ck-leave-summary')">📅 <span>สรุปการลาประจำเดือน</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-leave-history')">📂 <span>ประวัติการลาทั้งหมด</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-pass-summary')">🚪 <span>สรุปออกนอกบริษัท</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-ot-summary')">⏱️ <span>สรุปโอที</span></div>
+        </div>
+        <div class="sb-group sb-g4">
+          <div class="sb-sec">จัดการระบบ</div>
+          <div class="sb-item perm-sup" onclick="nav('ck-employees')">👥 <span>จัดการพนักงาน</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-timecard')">🕐 <span>บัตรตอก</span></div>
+          <div class="sb-item perm-admin" onclick="nav('ck-tc-settings')">⚙️ <span>ตั้งค่า OT</span></div>
+          <div class="sb-item perm-admin" onclick="nav('ck-users')">🔑 <span>จัดการผู้ใช้</span></div>
+        </div>
       </div>
       <div class="sb-footer">
         <div class="sb-user-name" id="sb-name"></div>
@@ -666,13 +683,13 @@ const CK_PERM_MENUS = [
   { id:'ck-guard',     label:'🔍 บันทึกเข้า-ออก',  group:'หน้าหลัก' },
   { id:'ck-visitor',   label:'🏢 บุคคลภายนอก',     group:'หน้าหลัก' },
   { id:'ck-pass',      label:'🚪 Pass ออกนอก',     group:'หน้าหลัก' },
-  { id:'ck-supervisor',label:'📊 Dashboard',       group:'ข้อมูล' },
-  { id:'ck-report',    label:'📋 รายงาน',          group:'ข้อมูล' },
-  { id:'ck-stats',     label:'📈 สถิติรายเดือน',   group:'ข้อมูล' },
-  { id:'ck-employees', label:'👥 จัดการพนักงาน',   group:'ข้อมูล' },
-  { id:'ck-timecard',    label:'🕐 บัตรตอก',        group:'ข้อมูล' },
-  { id:'ck-tc-settings',    label:'⚙️ ตั้งค่า OT',           group:'Admin'       },
-  { id:'ck-users',          label:'🔑 จัดการผู้ใช้',         group:'Admin'       },
+  { id:'ck-supervisor',label:'📊 Dashboard',       group:'หน้าหลัก' },
+  { id:'ck-report',    label:'📋 รายงาน',          group:'รายงานเข้า-ออก' },
+  { id:'ck-stats',     label:'📈 สถิติรายเดือนเข้าออกบริษัท',   group:'รายงานเข้า-ออก' },
+  { id:'ck-employees', label:'👥 จัดการพนักงาน',   group:'จัดการระบบ' },
+  { id:'ck-timecard',    label:'🕐 บัตรตอก',        group:'จัดการระบบ' },
+  { id:'ck-tc-settings',    label:'⚙️ ตั้งค่า OT',           group:'จัดการระบบ'       },
+  { id:'ck-users',          label:'🔑 จัดการผู้ใช้',         group:'จัดการระบบ'       },
   { id:'ck-leave-summary',  label:'📅 สรุปการลาประจำเดือน',  group:'ข้อมูลการลา-โอที' },
   { id:'ck-leave-history',  label:'📂 ประวัติการลาทั้งหมด',  group:'ข้อมูลการลา-โอที' },
   { id:'ck-pass-summary',   label:'🚪 สรุปออกนอกบริษัท',    group:'ข้อมูลการลา-โอที' },
@@ -703,7 +720,7 @@ const PAGE_TITLES = {
   'ck-visitor':    'บุคคลภายนอก',
   'ck-pass':       'Pass ออกนอกบริเวณ',
   'ck-report':     'รายงาน',
-  'ck-stats':      'สถิติรายเดือน / รายแผนก',
+  'ck-stats':      'สถิติรายเดือนเข้าออกบริษัท / รายแผนก',
   'ck-employees':  'จัดการพนักงาน',
   'ck-timecard':     'บัตรตอก',
   'ck-tc-settings':   'ตั้งค่า OT',
@@ -1832,7 +1849,7 @@ async function renderReport() {
               <option value="ACTIVE">ออกอยู่</option>
             </select></div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
-            <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
+            <button onclick="exportReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ Excel</button>
           </div>
         </div>
         <div id="rp-summary" style="margin-bottom:14px;"></div>
@@ -1861,7 +1878,7 @@ async function renderReport() {
               <option value="OUT">ออกแล้ว</option>
             </select></div>
           <div style="display:flex;gap:8px;align-items:flex-end;">
-            <button onclick="exportVisitorReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ CSV</button>
+            <button onclick="exportVisitorReport()" style="padding:9px 14px;background:#16a34a;color:#fff;border:none;height:38px;border-radius:6px;cursor:pointer;font-family:inherit;">⬇ Excel</button>
           </div>
         </div>
         <div id="vp-summary" style="margin-bottom:14px;"></div>
@@ -1929,13 +1946,19 @@ async function loadReport() {
 
   if (!rows.length) { document.getElementById('rp-table').innerHTML='<div class="log-empty">ไม่พบข้อมูลในช่วงที่เลือก</div>'; return; }
 
+  const isAdmin = currentUser?.role === 'admin';
+
   document.getElementById('rp-table').innerHTML=`
     <div class="tbl-wrap" style="max-height:50vh;"><table>
       <thead><tr><th>วันที่</th><th>พนักงาน</th><th>แผนก</th><th>เหตุผล</th>
-        <th>เวลาออก</th><th>ประตูออก</th><th>เวลากลับ</th><th>ประตูกลับ</th><th>รวม(นาที)</th><th>สถานะ</th></tr></thead>
+        <th>เวลาออก</th><th>ประตูออก</th><th>เวลากลับ</th><th>ประตูกลับ</th><th>รวม(นาที)</th><th>สถานะ</th>${isAdmin?'<th>จัดการ</th>':''}</tr></thead>
       <tbody>${rows.map(s=>{
         const emp=s.checkin_employees||{};
         const badge=getStatusBadge(s.reason,s.duration_min,s.status,s.checkout_time);
+        const actionCell = isAdmin ? `<td style="white-space:nowrap;">
+            <button onclick="_editLunchSession(${s.session_id})" title="แก้ไข" style="font-size:11px;padding:3px 7px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;margin-right:4px;">✏️</button>
+            <button onclick="_deleteLunchSession(${s.session_id})" title="ลบ" style="font-size:11px;padding:3px 7px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;cursor:pointer;">🗑️</button>
+          </td>` : '';
         return `<tr><td style="white-space:nowrap;">${fmtDate(s.session_date)}</td>
           <td><div class="emp-name">${escHtml(emp.name||'')}</div><div class="emp-dept">${emp.employee_id||''}</div></td>
           <td>${escHtml(emp.department||'')}</td>
@@ -1945,14 +1968,160 @@ async function loadReport() {
           <td>${s.checkin_time?fmtTime(s.checkin_time)+' น.':'-'}</td>
           <td>${gateName(s.checkin_gate||'-')}</td>
           <td>${s.duration_min?Math.round(s.duration_min):'-'}</td>
-          <td>${badge}</td></tr>`;}).join('')}
-      </tbody></table></div>`;
+          <td>${badge}</td>${actionCell}</tr>`;}).join('')}
+      </tbody></table></div>
+    ${isAdmin?'<div style="font-size:11px;color:#94a3b8;margin-top:8px;">🔒 แก้ไข/ลบ มองเห็นเฉพาะผู้ดูแลระบบ (Admin)</div>':''}`;
 }
 
-function exportReport() {
+// ── แก้ไข / ลบ รายการพัก (checkin_lunch_sessions) — Admin เท่านั้น ──
+async function _editLunchSession(sessionId) {
+  if (currentUser?.role !== 'admin') { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขได้'); return; }
+  const r = _rpData.find(x => x.session_id === sessionId);
+  if (!r) { alert('ไม่พบข้อมูล (อาจถูกกรอง/รีเฟรชไปแล้ว) — ลองรีเฟรชตารางแล้วลองใหม่'); return; }
+
+  document.getElementById('lunch-edit-modal')?.remove();
+
+  const toLocalInput = (s) => s ? s.replace(' ', 'T').slice(0, 16) : '';
+  const reasonOptsHtml = reasonOpts.map(rs =>
+    `<option value="${escHtml(rs)}" ${rs === r.reason ? 'selected' : ''}>${escHtml(rs)}</option>`).join('');
+  const gateOptsHtml = (sel) => `<option value="" ${!sel?'selected':''}>-- ไม่ระบุ --</option>` +
+    Object.keys(gateNames).sort().map(k =>
+      `<option value="${k}" ${k === sel ? 'selected' : ''}>${escHtml(gateName(k))}</option>`).join('');
+  const STATUS_TH = { ACTIVE: 'ออกอยู่', RETURNED: 'กลับแล้ว', OVERDUE: 'เกินกำหนด' };
+  const statusOptsHtml = Object.keys(STATUS_TH).map(s =>
+    `<option value="${s}" ${s === r.status ? 'selected' : ''}>${STATUS_TH[s]}</option>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'lunch-edit-modal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `<div class="modal-box" style="width:100%;max-width:420px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">✏️ แก้ไขรายการพัก</div>
+    <div style="font-size:12px;color:#64748b;margin:-8px 0 12px;">${escHtml(r.checkin_employees?.name || '')}</div>
+    <div class="form-field"><label class="lbl">วันที่</label><input type="date" id="le-date" value="${r.session_date}"></div>
+    <div class="form-field"><label class="lbl">เหตุผล</label><select id="le-reason">${reasonOptsHtml}</select></div>
+    <div class="form-field"><label class="lbl">เวลาออก</label><input type="datetime-local" id="le-out" value="${toLocalInput(r.checkout_time)}"></div>
+    <div class="form-field"><label class="lbl">ประตูออก</label><select id="le-out-gate">${gateOptsHtml(r.checkout_gate)}</select></div>
+    <div class="form-field"><label class="lbl">เวลากลับ (เว้นว่าง = ยังไม่กลับ)</label><input type="datetime-local" id="le-in" value="${toLocalInput(r.checkin_time)}"></div>
+    <div class="form-field"><label class="lbl">ประตูกลับ</label><select id="le-in-gate">${gateOptsHtml(r.checkin_gate)}</select></div>
+    <div class="form-field"><label class="lbl">สถานะ</label><select id="le-status">${statusOptsHtml}</select></div>
+    <div class="form-err" id="le-err"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="_saveLunchSessionEdit(${sessionId})">บันทึก</button>
+      <button onclick="document.getElementById('lunch-edit-modal').remove()">ยกเลิก</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function _saveLunchSessionEdit(sessionId) {
+  const date    = document.getElementById('le-date').value;
+  const reason  = document.getElementById('le-reason').value;
+  const outVal  = document.getElementById('le-out').value;
+  const outGate = document.getElementById('le-out-gate').value || null;
+  const inVal   = document.getElementById('le-in').value;
+  const inGate  = document.getElementById('le-in-gate').value || null;
+  const status  = document.getElementById('le-status').value;
+  const err     = document.getElementById('le-err');
+
+  if (!date || !outVal) { err.textContent = 'กรุณาระบุวันที่และเวลาออก'; return; }
+
+  const checkoutTime = outVal.replace('T', ' ') + ':00';
+  const checkinTime  = inVal ? inVal.replace('T', ' ') + ':00' : null;
+  let durationMin = null;
+  if (checkinTime) {
+    durationMin = Math.round((new Date(checkinTime.replace(' ', 'T')) - new Date(checkoutTime.replace(' ', 'T'))) / 60000);
+    if (durationMin < 0) { err.textContent = 'เวลากลับต้องไม่ก่อนเวลาออก'; return; }
+  }
+
+  const payload = {
+    session_date: date, reason,
+    checkout_time: checkoutTime, checkout_gate: outGate,
+    checkin_time: checkinTime, checkin_gate: inGate,
+    duration_min: durationMin, status
+  };
+
+  const { error } = await sb.from('checkin_lunch_sessions').update(payload).eq('session_id', sessionId);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+
+  document.getElementById('lunch-edit-modal')?.remove();
+  alert('แก้ไขเรียบร้อย ✅');
+  loadReport();
+}
+
+async function _deleteLunchSession(sessionId) {
+  if (currentUser?.role !== 'admin') { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบได้'); return; }
+  if (!confirm('ลบรายการพักนี้ถาวร?\nไม่สามารถกู้คืนได้')) return;
+
+  const { error } = await sb.from('checkin_lunch_sessions').delete().eq('session_id', sessionId);
+  if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+
+  alert('ลบรายการเรียบร้อย');
+  loadReport();
+}
+
+// ============================================================
+// EXCEL EXPORT HELPERS (ใช้ไลบรารี xlsx-js-style — เข้ากันได้กับ API ของ SheetJS ที่ leave.html ใช้
+// แต่เพิ่มความสามารถเขียนสีพื้นหลังเซลล์ลงไฟล์ .xlsx ได้ ซึ่ง SheetJS รุ่นฟรีมาตรฐานทำไม่ได้)
+// ============================================================
+// ทำให้เซลล์ที่ระบุ (แถว/คอลัมน์ แบบ 0-based ไม่นับหัวตาราง) มีพื้นหลังสี — cols:'all' = ทำทั้งแถว
+function _applyRowHighlight(ws, highlight) {
+  if (!highlight) return;
+  const { rowFlags, cols, rgb } = highlight;
+  let colIndices = cols;
+  if (cols === 'all') {
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    colIndices = [];
+    for (let c = range.s.c; c <= range.e.c; c++) colIndices.push(c);
+  }
+  rowFlags.forEach((flag, i) => {
+    if (!flag) return;
+    const r = i + 1; // +1 เพราะแถวที่ 0 ในชีตคือหัวตาราง (header)
+    colIndices.forEach(c => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) return;
+      ws[addr].s = Object.assign({}, ws[addr].s, { fill: { patternType:'solid', fgColor:{ rgb }, bgColor:{ rgb } } });
+    });
+  });
+}
+
+// วันหยุด = วันอาทิตย์ หรือวันที่อยู่ในตารางวันหยุดนักขัตฤกษ์ (leave_holidays — ตารางเดียวกับที่ leave.html ใช้)
+async function _getHolidaySet() {
+  const { data, error } = await sb.from('leave_holidays').select('date');
+  return new Set(error ? [] : (data||[]).map(h=>h.date));
+}
+function _isHolidayDate(dateStr, holidaySet) {
+  if (!dateStr) return false;
+  const dow = new Date(dateStr + 'T00:00:00').getDay(); // 0 = อาทิตย์
+  return dow === 0 || holidaySet.has(dateStr);
+}
+// สร้าง workbook 1 ชีต แล้วดาวน์โหลดเป็น .xlsx ทันที
+// highlight (ไม่บังคับ) = { rowFlags:[boolean ต่อแถวข้อมูล], cols:[ดัชนีคอลัมน์ที่จะทำสี], rgb:'RRGGBB' }
+function _downloadXlsx(sheetName, header, dataRows, colWidths, filename, highlight) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  if (colWidths) ws['!cols'] = colWidths.map(w=>({wch:w}));
+  _applyRowHighlight(ws, highlight);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0,31)); // ชื่อชีตของ Excel ยาวได้ไม่เกิน 31 ตัวอักษร
+  XLSX.writeFile(wb, filename);
+}
+// สร้าง workbook หลายชีตในไฟล์เดียว แล้วดาวน์โหลด — sheets = [{name, header, rows, colWidths, highlight}]
+function _downloadXlsxMulti(sheets, filename) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(s => {
+    const ws = XLSX.utils.aoa_to_sheet([s.header, ...s.rows]);
+    if (s.colWidths) ws['!cols'] = s.colWidths.map(w=>({wch:w}));
+    _applyRowHighlight(ws, s.highlight);
+    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0,31));
+  });
+  XLSX.writeFile(wb, filename);
+}
+
+async function exportReport() {
   if (!_rpData.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
-  const rows=[['วันที่','รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','เวลาออก','ประตูออก','เวลากลับ','ประตูกลับ','รวม(นาที)','สถานะ']];
-  _rpData.forEach(s=>{
+  const holidaySet = await _getHolidaySet();
+  const header=['วันที่','รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','เวลาออก','ประตูออก','เวลากลับ','ประตูกลับ','รวม(นาที)','สถานะ'];
+  const dataRows = _rpData.map(s=>{
     const e=s.checkin_employees||{};
     // สถานะจาก reason rules (ไม่ใช้แค่ s.status)
     const statusText = s.status==='RETURNED'
@@ -1962,18 +2131,16 @@ function exportReport() {
           return 'กลับแล้ว';
         })()
       : s.status==='OVERDUE' ? 'เกินกำหนด' : 'ออกอยู่';
-    rows.push([s.session_date,e.employee_id||'',e.name||'',e.department||'',
+    return [s.session_date,e.employee_id||'',e.name||'',e.department||'',
       s.reason||'',fmtTime(s.checkout_time),gateName(s.checkout_gate||''),
       s.checkin_time?fmtTime(s.checkin_time):'',
       gateName(s.checkin_gate||''),
-      s.duration_min?Math.round(s.duration_min):'',statusText]);
+      s.duration_min?Math.round(s.duration_min):'',statusText];
   });
-  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`checkin_report_${todayStr()}.csv`;
-  a.click();
+  const holidayFlags = _rpData.map(s => _isHolidayDate(s.session_date, holidaySet));
+  _downloadXlsx('รายงานเข้า-ออก', header, dataRows,
+    [12,12,20,16,16,10,12,10,12,10,12], `checkin_report_${todayStr()}.xlsx`,
+    { rowFlags:holidayFlags, cols:'all', rgb:'FFC7CE' });
 }
 
 // ============================================================
@@ -3115,27 +3282,24 @@ async function loadVisitorReport() {
       </tbody></table></div>`;
 }
 
-function exportVisitorReport() {
+async function exportVisitorReport() {
   if (!_vpData.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
-  const rows=[['วันที่','ชื่อ','เลขบัตร','บริษัท/สถาบัน','จุดประสงค์','ประเภท','จำนวนคน','เวลาเข้า','ประตูเข้า','เวลาออก','ประตูออก','สถานะ']];
-  _vpData.forEach(r=>{
-    rows.push([
-      r.session_date, r.name||'', r.id_card||'', r.company||'', r.visit_purpose||'',
-      r.visit_type==='appointment'?'นัดหมาย':'Walk-in',
-      r.person_count||1,
-      r.checkin_time?fmtTime(r.checkin_time):'',
-      gateName(r.gate_in||''),
-      r.checkout_time?fmtTime(r.checkout_time):'',
-      gateName(r.gate_out||''),
-      r.status==='OUT'?'ออกแล้ว':'อยู่ในโรงงาน'
-    ]);
-  });
-  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`visitor_report_${todayStr()}.csv`;
-  a.click();
+  const holidaySet = await _getHolidaySet();
+  const header=['วันที่','ชื่อ','เลขบัตร','บริษัท/สถาบัน','จุดประสงค์','ประเภท','จำนวนคน','เวลาเข้า','ประตูเข้า','เวลาออก','ประตูออก','สถานะ'];
+  const dataRows = _vpData.map(r=>[
+    r.session_date, r.name||'', r.id_card||'', r.company||'', r.visit_purpose||'',
+    r.visit_type==='appointment'?'นัดหมาย':'Walk-in',
+    r.person_count||1,
+    r.checkin_time?fmtTime(r.checkin_time):'',
+    gateName(r.gate_in||''),
+    r.checkout_time?fmtTime(r.checkout_time):'',
+    gateName(r.gate_out||''),
+    r.status==='OUT'?'ออกแล้ว':'อยู่ในโรงงาน'
+  ]);
+  const holidayFlags = _vpData.map(r => _isHolidayDate(r.session_date, holidaySet));
+  _downloadXlsx('บุคคลภายนอก', header, dataRows,
+    [12,18,14,20,20,10,8,10,12,10,12,12], `visitor_report_${todayStr()}.xlsx`,
+    { rowFlags:holidayFlags, cols:'all', rgb:'FFC7CE' });
 }
 
 // ============================================================
@@ -3159,11 +3323,11 @@ function renderStats() {
   document.getElementById('page-content').innerHTML=`
     <div class="card" style="margin-bottom:14px;">
       <div class="card-hd">
-        <div class="card-title">📊 สถิติรายเดือน / รายแผนก</div>
+        <div class="card-title">📊 สถิติรายเดือนเข้าออกบริษัท / รายแผนก</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <select id="st-year" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${yearOpts}</select>
-          <select id="st-month" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${monthOpts}</select>
-          <button onclick="loadStats()" style="padding:8px 18px;background:#1a3a5c;color:#fff;border:none;border-radius:6px;font-family:inherit;cursor:pointer;">ดูสถิติ</button>
+          <select id="st-year" onchange="loadStats()" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${yearOpts}</select>
+          <select id="st-month" onchange="loadStats()" style="padding:7px 10px;border-radius:6px;border:1.5px solid #e2e8f0;font-family:inherit;">${monthOpts}</select>
+          <button onclick="loadStats()" style="padding:8px 18px;background:#1a3a5c;color:#fff;border:none;border-radius:6px;font-family:inherit;cursor:pointer;">🔄 รีเฟรช</button>
         </div>
       </div>
       <div id="st-kpi" style="margin-top:4px;"></div>
@@ -4488,7 +4652,7 @@ async function renderLeaveHistory() {
       ${!_lhEmpId ? `<input class="form-control" style="width:170px;" placeholder="ค้นหาชื่อพนักงาน..."
         value="${_lhSearch}" oninput="_lhSearch=this.value" onkeydown="if(event.key==='Enter')renderLeaveHistory()">
       <button class="btn btn-primary btn-sm" onclick="renderLeaveHistory()">🔍 ค้นหา</button>` : ''}
-      <button class="btn btn-success btn-sm" onclick="exportLeaveHistoryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+      <button class="btn btn-success btn-sm" onclick="exportLeaveHistoryCSV()" style="margin-left:auto;">📥 Export Excel</button>
     </div>
     <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
       <div style="padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">
@@ -4515,22 +4679,24 @@ async function renderLeaveHistory() {
   </div>`;
 }
 
-function exportLeaveHistoryCSV() {
+async function exportLeaveHistoryCSV() {
   if (!_lhData.length) { alert('ไม่มีข้อมูล'); return; }
-  const cols = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภทลา','รหัสประเภท','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','ครึ่งวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
-  const rows = [cols, ..._lhData.map(r=>[
+  const holidaySet = await _getHolidaySet();
+  const header = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภทลา','รหัสประเภท','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','ครึ่งวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
+  const dataRows = _lhData.map(r=>[
     r.employee_id||'', r.employee_name||'', r.department||'',
     r.type_name||'', r.type_code||'',
     r.start_date||'', r.end_date||'', r.days||0, r.half_day||'',
     r.reason||'', LEAVE_STATUS_TH[r.status]||r.status||'',
     r.approver_name||'', r.approved_at?(r.approved_at.slice(0,10)):'',
     r.reject_note||''
-  ])];
-  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-  a.download = `leave_history_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+  ]);
+  // ใช้วันเริ่ม (start_date) เป็นตัวเช็ควันหยุด — กรณีลาหลายวันคาบเกี่ยววันหยุดตรงกลาง จะไม่ถูกไฮไลต์
+  const holidayFlags = _lhData.map(r => _isHolidayDate(r.start_date, holidaySet));
+  _downloadXlsx('ประวัติการลา', header, dataRows,
+    [12,20,16,14,10,12,12,8,8,24,10,16,14,20],
+    `leave_history_${new Date().toISOString().slice(0,10)}.xlsx`,
+    { rowFlags:holidayFlags, cols:'all', rgb:'FFC7CE' });
 }
 
 // ---- สรุปการลาประจำเดือน ----
@@ -4644,7 +4810,7 @@ async function renderLeaveSummary() {
       <select class="form-control" style="width:150px;" onchange="_lsDept=this.value;renderLeaveSummary()">
         <option value="">ทุกแผนก</option>${deptOpts}
       </select>
-      <button class="btn btn-success btn-sm" onclick="exportLeaveSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+      <button class="btn btn-success btn-sm" onclick="exportLeaveSummaryCSV()" style="margin-left:auto;">📥 Export Excel</button>
     </div>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:12px;color:#166534;margin-bottom:14px;">
       📌 แสดงเฉพาะการลาที่ <b>อนุมัติแล้ว</b> และ Pass ที่ <b>อนุมัติ/ออก/กลับ</b> ในเดือน <b>${TH_MONTHS[_lsMonth]} ${_lsYear+543}</b> · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดรายการลาเป็นรายบุคคล
@@ -4759,7 +4925,7 @@ async function renderPassSummary() {
       <select class="form-control" style="width:150px;" onchange="_psDept=this.value;renderPassSummary()">
         <option value="">ทุกแผนก</option>${deptOpts}
       </select>
-      <button class="btn btn-success btn-sm" onclick="exportPassSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+      <button class="btn btn-success btn-sm" onclick="exportPassSummaryCSV()" style="margin-left:auto;">📥 Export Excel</button>
     </div>
     <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:10px 14px;font-size:12px;color:#115e59;margin-bottom:14px;">
       📌 ชั่วโมงรวมนับเฉพาะคำขอที่ <b>อนุมัติแล้ว/กำลังออก/กลับแล้ว</b> ในเดือน <b>${TH_MONTHS[_psMonth]} ${_psYear+543}</b> — คำนวณจากเวลาออก→เวลากลับที่คาดไว้ · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดรายวัน
@@ -4932,27 +5098,54 @@ async function _deletePassRecord(passId) {
   renderPassSummary();
 }
 
-function exportPassSummaryCSV() {
-  const rows = [['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','จำนวนครั้ง(อนุมัติ)','ชั่วโมงรวม(อนุมัติ)','รออนุมัติ(ครั้ง)']];
+const PASS_STATUS_TH = { approved:'อนุมัติ (รอออก)', out:'กำลังออก', returned:'กลับแล้ว', pending:'รออนุมัติ', rejected:'ปฏิเสธ' };
+
+async function exportPassSummaryCSV() {
   const y = _psYear, m = _psMonth;
   const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
   const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
-  sb.from('pass_requests').select('employee_id,employee_name,department,out_time,expected_return,status')
-    .gte('request_date', mStart).lte('request_date', mEnd)
-    .then(({data}) => {
-      const em = {};
-      const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,approvedCount:0,approvedMinutes:0,pendingCount:0}; };
-      (data||[]).forEach(r=>{
-        add2(r.employee_id,r.employee_name,r.department);
-        if (['approved','out','returned'].includes(r.status)) { em[r.employee_id].approvedCount+=1; em[r.employee_id].approvedMinutes+=_passMinutesBetween(r.out_time,r.expected_return); }
-        else if (r.status==='pending') { em[r.employee_id].pendingCount+=1; }
-      });
-      const sorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th'));
-      const csvRows = [rows[0], ...sorted.map(e=>[e.eid,e.ename,e.dept,e.approvedCount,(e.approvedMinutes/60).toFixed(1),e.pendingCount])];
-      const csv = csvRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
-      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-      a.download=`pass_summary_${y}_${String(m).padStart(2,'0')}.csv`; a.click();
-    });
+  const [{data}, holidaySet] = await Promise.all([
+    sb.from('pass_requests')
+      .select('employee_id,employee_name,department,request_date,reason_name,out_time,expected_return,actual_out,actual_return,status,approver_name,approved_at,reject_note')
+      .gte('request_date', mStart).lte('request_date', mEnd),
+    _getHolidaySet()
+  ]);
+  let rows = data || [];
+  if (_psDept) rows = rows.filter(r => r.department === _psDept);
+  if (!rows.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
+
+  // ชีต 1 — สรุปรายคน (เหมือนตารางที่แสดงบนหน้าจอ)
+  const em = {};
+  const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,approvedCount:0,approvedMinutes:0,pendingCount:0}; };
+  rows.forEach(r=>{
+    add2(r.employee_id,r.employee_name,r.department);
+    if (['approved','out','returned'].includes(r.status)) { em[r.employee_id].approvedCount+=1; em[r.employee_id].approvedMinutes+=_passMinutesBetween(r.out_time,r.expected_return); }
+    else if (r.status==='pending') { em[r.employee_id].pendingCount+=1; }
+  });
+  const summarySorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th')||a.ename.localeCompare(b.ename,'th'));
+  const summaryHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','จำนวนครั้ง(อนุมัติ)','ชั่วโมงรวม(อนุมัติ)','รออนุมัติ(ครั้ง)'];
+  const summaryRows = summarySorted.map(e=>[e.eid,e.ename,e.dept,e.approvedCount,(e.approvedMinutes/60).toFixed(1),e.pendingCount]);
+
+  // ชีต 2 — รายละเอียดรายครั้ง (1 แถว = คำขอออกนอกบริษัท 1 ครั้ง)
+  const detailSorted = rows.slice().sort((a,b)=>
+    (a.department||'').localeCompare(b.department||'','th') ||
+    (a.employee_name||'').localeCompare(b.employee_name||'','th') ||
+    (a.request_date||'').localeCompare(b.request_date||''));
+  const detailHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','วันที่ยื่นคำขอ','เหตุผล','เวลาออก(คาด)','เวลากลับ(คาด)','เวลาออกจริง','เวลากลับจริง','นาทีที่ใช้(คาด)','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
+  const detailRows = detailSorted.map(r=>[
+    r.employee_id||'', r.employee_name||'', r.department||'', r.request_date||'',
+    r.reason_name||'', r.out_time?r.out_time.slice(0,5):'', r.expected_return?r.expected_return.slice(0,5):'',
+    r.actual_out?fmtTime(r.actual_out):'', r.actual_return?fmtTime(r.actual_return):'',
+    _passMinutesBetween(r.out_time,r.expected_return), PASS_STATUS_TH[r.status]||r.status||'',
+    r.approver_name||'', r.approved_at?r.approved_at.slice(0,10):'', r.reject_note||''
+  ]);
+  const detailHolidayFlags = detailSorted.map(r => _isHolidayDate(r.request_date, holidaySet));
+
+  _downloadXlsxMulti([
+    { name:'สรุปรายคน', header:summaryHeader, rows:summaryRows, colWidths:[12,20,16,16,16,14] },
+    { name:'รายละเอียดรายครั้ง', header:detailHeader, rows:detailRows, colWidths:[12,20,16,14,20,12,12,12,12,14,16,16,14,20],
+      highlight: { rowFlags:detailHolidayFlags, cols:'all', rgb:'FFC7CE' } },
+  ], `pass_summary_${y}_${String(m).padStart(2,'0')}.xlsx`);
 }
 
 // ---- สรุปโอที (ดึงจาก ot_requests — System 6 leave.html) ----
@@ -5045,7 +5238,7 @@ async function renderOtSummary() {
       <select class="form-control" style="width:150px;" onchange="_osDept=this.value;renderOtSummary()">
         <option value="">ทุกแผนก</option>${deptOpts}
       </select>
-      <button class="btn btn-success btn-sm" onclick="exportOtSummaryCSV()" style="margin-left:auto;">📥 Export CSV</button>
+      <button class="btn btn-success btn-sm" onclick="exportOtSummaryCSV()" style="margin-left:auto;">📥 Export Excel</button>
     </div>
     <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:10px 14px;font-size:12px;color:#115e59;margin-bottom:14px;">
       📌 ชั่วโมงรวมนับเฉพาะคำขอโอทีที่ <b>อนุมัติแล้ว</b> ในเดือน <b>${TH_MONTHS[_osMonth]} ${_osYear+543}</b> — ใช้ชั่วโมงจริง (actual_hours) ถ้ามี มิฉะนั้นใช้ชั่วโมงประมาณการ · คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดโอทีรายวัน
@@ -5132,51 +5325,121 @@ async function _showOtEmployeeDetail(eid, ename) {
     </div>`;
 }
 
+const OT_STATUS_TH = { approved:'อนุมัติ', pending:'รออนุมัติ', rejected:'ปฏิเสธ' };
+
 function exportOtSummaryCSV() {
-  const rows = [['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','จำนวนครั้ง(อนุมัติ)','ชั่วโมงรวม(อนุมัติ)','รออนุมัติ(ครั้ง)']];
   const y = _osYear, m = _osMonth;
   const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
   const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
-  sb.from('ot_requests').select('employee_id,employee_name,department,estimated_hours,actual_hours,status')
+  sb.from('ot_requests')
+    .select('employee_id,employee_name,department,ot_date,request_type,start_time,end_time,estimated_hours,actual_hours,is_holiday,reason,status,approver_name,approved_at,reject_note')
     .gte('ot_date', mStart).lte('ot_date', mEnd)
     .then(({data}) => {
+      let rows = data || [];
+      if (_osDept) rows = rows.filter(r => r.department === _osDept);
+      if (!rows.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
+
+      // ชีต 1 — สรุปรายคน (เหมือนตารางที่แสดงบนหน้าจอ)
       const em = {};
       const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,approvedCount:0,approvedHours:0,pendingCount:0}; };
-      (data||[]).forEach(r=>{
+      rows.forEach(r=>{
         add2(r.employee_id,r.employee_name,r.department);
         const hrs = Number(r.actual_hours ?? r.estimated_hours) || 0;
         if (r.status==='approved') { em[r.employee_id].approvedCount+=1; em[r.employee_id].approvedHours+=hrs; }
         else if (r.status==='pending') { em[r.employee_id].pendingCount+=1; }
       });
-      const sorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th'));
-      const csvRows = [rows[0], ...sorted.map(e=>[e.eid,e.ename,e.dept,e.approvedCount,e.approvedHours.toFixed(1),e.pendingCount])];
-      const csv = csvRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
-      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-      a.download=`ot_summary_${y}_${String(m).padStart(2,'0')}.csv`; a.click();
+      const summarySorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th')||a.ename.localeCompare(b.ename,'th'));
+      const summaryHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','จำนวนครั้ง(อนุมัติ)','ชั่วโมงรวม(อนุมัติ)','รออนุมัติ(ครั้ง)'];
+      const summaryRows = summarySorted.map(e=>[e.eid,e.ename,e.dept,e.approvedCount,e.approvedHours.toFixed(1),e.pendingCount]);
+
+      // ชีต 2 — รายละเอียดรายครั้ง (1 แถว = คำขอโอที 1 ครั้ง)
+      const detailSorted = rows.slice().sort((a,b)=>
+        (a.department||'').localeCompare(b.department||'','th') ||
+        (a.employee_name||'').localeCompare(b.employee_name||'','th') ||
+        (a.ot_date||'').localeCompare(b.ot_date||''));
+      const detailHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','วันที่โอที','ประเภท','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมงประมาณการ','ชั่วโมงจริง','วันหยุด/ปกติ','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
+      const detailRows = detailSorted.map(r=>[
+        r.employee_id||'', r.employee_name||'', r.department||'', r.ot_date||'',
+        OT_TYPE_TH[r.request_type]||r.request_type||'',
+        r.start_time?r.start_time.slice(0,5):'', r.end_time?r.end_time.slice(0,5):'',
+        Number(r.estimated_hours)||0, r.actual_hours!=null?Number(r.actual_hours):'',
+        r.is_holiday?'วันหยุด':'วันทำงานปกติ', r.reason||'',
+        OT_STATUS_TH[r.status]||r.status||'', r.approver_name||'',
+        r.approved_at?r.approved_at.slice(0,10):'', r.reject_note||''
+      ]);
+
+      // ทำพื้นหลังสีแดงอ่อนทั้งแถวให้รายการที่เป็น "วันหยุด" (ใช้ค่า is_holiday ที่พนักงานระบุตอนยื่นคำขอ — เป็นข้อมูลยืนยันสำหรับคิดอัตรา OT อยู่แล้ว)
+      const holidayFlags = detailSorted.map(r => !!r.is_holiday);
+
+      _downloadXlsxMulti([
+        { name:'สรุปรายคน', header:summaryHeader, rows:summaryRows, colWidths:[12,20,16,16,16,14] },
+        { name:'รายละเอียดรายครั้ง', header:detailHeader, rows:detailRows, colWidths:[12,20,16,12,12,10,10,14,10,14,20,12,16,14,20],
+          highlight: { rowFlags:holidayFlags, cols:'all', rgb:'FFC7CE' } },
+      ], `ot_summary_${y}_${String(m).padStart(2,'0')}.xlsx`);
     });
 }
 
 function exportLeaveSummaryCSV() {
-  const empMap2 = {}; // rebuild for export
-  // re-use _lhData not available — just export from current rendered data (simplistic)
-  const rows = [['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ลาป่วย(วัน)','ลากิจ(วัน)','พักร้อน(วัน)','ออกนอก(วัน)','อื่นๆ(วัน)','Pass(ครั้ง)','รวมวันลา']];
-  // query again for export
   const y = _lsYear, m = _lsMonth;
   const mStart = `${y}-${String(m).padStart(2,'0')}-01`;
   const mEnd   = new Date(y, m, 0).toISOString().slice(0,10);
   Promise.all([
-    sb.from('leave_requests').select('employee_id,employee_name,department,type_code,days').gte('start_date',mStart).lte('start_date',mEnd).eq('status','approved'),
-    sb.from('pass_requests').select('employee_id,employee_name,department').gte('request_date',mStart).lte('request_date',mEnd).in('status',['approved','out','returned'])
-  ]).then(([lvR, passR]) => {
+    sb.from('leave_requests')
+      .select('employee_id,employee_name,department,type_name,type_code,start_date,end_date,days,half_day,reason,status,approver_name,approved_at')
+      .gte('start_date',mStart).lte('start_date',mEnd).eq('status','approved'),
+    sb.from('pass_requests')
+      .select('employee_id,employee_name,department,request_date,reason_name,out_time,expected_return,status,approver_name,approved_at')
+      .gte('request_date',mStart).lte('request_date',mEnd).in('status',['approved','out','returned']),
+    _getHolidaySet()
+  ]).then(([lvR, passR, holidaySet]) => {
+    let leaveRows = lvR.data || [];
+    let passRows  = passR.data || [];
+    if (_lsDept) { leaveRows = leaveRows.filter(r=>r.department===_lsDept); passRows = passRows.filter(r=>r.department===_lsDept); }
+    if (!leaveRows.length && !passRows.length) { alert('ไม่มีข้อมูลให้ Export'); return; }
+
+    // ชีต 1 — สรุปรายคน (เหมือนตารางที่แสดงบนหน้าจอ)
     const em = {};
     const add2 = (eid,ename,dept)=>{ if(!em[eid]) em[eid]={eid,ename,dept,sick:0,personal:0,annual:0,out:0,other:0,pass:0,total:0}; };
-    (lvR.data||[]).forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); const c2=r.type_code||'other',d=Number(r.days)||0; if(['sick','personal','annual','out'].includes(c2)) em[r.employee_id][c2]+=d; else em[r.employee_id].other+=d; em[r.employee_id].total+=d; });
-    (passR.data||[]).forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); em[r.employee_id].pass+=1; });
-    const sorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th'));
-    const csvRows = [rows[0], ...sorted.map(e=>[e.eid,e.ename,e.dept,e.sick,e.personal,e.annual,e.out,e.other,e.pass,e.total])];
-    const csv = csvRows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
-    a.download=`leave_summary_${y}_${String(m).padStart(2,'0')}.csv`; a.click();
+    leaveRows.forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); const c2=r.type_code||'other',d=Number(r.days)||0; if(['sick','personal','annual','out'].includes(c2)) em[r.employee_id][c2]+=d; else em[r.employee_id].other+=d; em[r.employee_id].total+=d; });
+    passRows.forEach(r=>{ add2(r.employee_id,r.employee_name,r.department); em[r.employee_id].pass+=1; });
+    const summarySorted = Object.values(em).sort((a,b)=>a.dept.localeCompare(b.dept,'th')||a.ename.localeCompare(b.ename,'th'));
+    const summaryHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ลาป่วย(วัน)','ลากิจ(วัน)','พักร้อน(วัน)','ออกนอก(วัน)','อื่นๆ(วัน)','Pass(ครั้ง)','รวมวันลา'];
+    const summaryRows = summarySorted.map(e=>[e.eid,e.ename,e.dept,e.sick,e.personal,e.annual,e.out,e.other,e.pass,e.total]);
+
+    // ชีต 2 — รายละเอียดการลารายครั้ง (1 แถว = คำขอลา 1 ครั้ง)
+    const leaveSorted = leaveRows.slice().sort((a,b)=>
+      (a.department||'').localeCompare(b.department||'','th') ||
+      (a.employee_name||'').localeCompare(b.employee_name||'','th') ||
+      (a.start_date||'').localeCompare(b.start_date||''));
+    const leaveHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','ครึ่งวัน','เหตุผล','ผู้อนุมัติ','วันที่อนุมัติ'];
+    const leaveDetailRows = leaveSorted.map(r=>[
+      r.employee_id||'', r.employee_name||'', r.department||'', r.type_name||'',
+      r.start_date||'', r.end_date||'', Number(r.days)||0, r.half_day||'',
+      r.reason||'', r.approver_name||'', r.approved_at?r.approved_at.slice(0,10):''
+    ]);
+    // ใช้วันเริ่ม (start_date) เป็นตัวเช็ควันหยุด — กรณีลาหลายวันคาบเกี่ยววันหยุดตรงกลาง จะไม่ถูกไฮไลต์
+    const leaveHolidayFlags = leaveSorted.map(r => _isHolidayDate(r.start_date, holidaySet));
+
+    // ชีต 3 — รายละเอียดออกนอกบริษัทรายครั้ง (1 แถว = คำขอออกนอกบริษัท 1 ครั้ง)
+    const passSorted = passRows.slice().sort((a,b)=>
+      (a.department||'').localeCompare(b.department||'','th') ||
+      (a.employee_name||'').localeCompare(b.employee_name||'','th') ||
+      (a.request_date||'').localeCompare(b.request_date||''));
+    const passHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','วันที่','เหตุผล','เวลาออก(คาด)','เวลากลับ(คาด)','นาทีที่ใช้(คาด)','ผู้อนุมัติ','วันที่อนุมัติ'];
+    const passDetailRows = passSorted.map(r=>[
+      r.employee_id||'', r.employee_name||'', r.department||'', r.request_date||'',
+      r.reason_name||'', r.out_time?r.out_time.slice(0,5):'', r.expected_return?r.expected_return.slice(0,5):'',
+      _passMinutesBetween(r.out_time,r.expected_return), r.approver_name||'', r.approved_at?r.approved_at.slice(0,10):''
+    ]);
+    const passHolidayFlags = passSorted.map(r => _isHolidayDate(r.request_date, holidaySet));
+
+    _downloadXlsxMulti([
+      { name:'สรุปรายคน', header:summaryHeader, rows:summaryRows, colWidths:[12,20,16,10,10,10,10,10,10,10] },
+      { name:'รายละเอียดการลา', header:leaveHeader, rows:leaveDetailRows, colWidths:[12,20,16,14,12,12,8,8,24,16,14],
+        highlight: { rowFlags:leaveHolidayFlags, cols:'all', rgb:'FFC7CE' } },
+      { name:'รายละเอียดออกนอกบริษัท', header:passHeader, rows:passDetailRows, colWidths:[12,20,16,12,20,12,12,14,16,14],
+        highlight: { rowFlags:passHolidayFlags, cols:'all', rgb:'FFC7CE' } },
+    ], `leave_summary_${y}_${String(m).padStart(2,'0')}.xlsx`);
   });
 }
 
