@@ -2567,7 +2567,7 @@ async function renderMachinesPage() {
 
   const SOURCE_LABEL = {
     production_cde:'CDE', production_propel:'Propel',
-    production_sanon1:'Sanon1', production_sanon2:'Sanon2', electric_loader:'รถตัก'
+    production_sanon1:'Sanon1', production_sanon2:'Sanon2', production_mobile:'Mobile Plant', electric_loader:'รถตัก'
   };
 
   const machineCards = _pmMachines.length === 0
@@ -2837,6 +2837,7 @@ function machineFormHtml(m) {
           <option value="production_propel" ${m?.sync_source==='production_propel'?'selected':''}>Propel — production_propel.stop_hour</option>
           <option value="production_sanon1" ${m?.sync_source==='production_sanon1'?'selected':''}>Sanon1 — production_sanon1.stop_hour</option>
           <option value="production_sanon2" ${m?.sync_source==='production_sanon2'?'selected':''}>Sanon2 — production_sanon2.stop_hour</option>
+          <option value="production_mobile" ${m?.sync_source==='production_mobile'?'selected':''}>Mobile Plant — production_mobile.stop_hour</option>
           <option value="electric_loader"   ${m?.sync_source==='electric_loader'?'selected':''}>รถตักไฟฟ้า — electric_loader.machine_hour_stop</option>
         </select>
       </div>
@@ -4019,7 +4020,7 @@ async function syncCurrentMeters() {
   const toSync = _pmMachines.filter(m => m.is_active && m.sync_source && m.sync_source !== 'manual');
   if (!toSync.length) return;
 
-  const PROD_TABLES = ['production_cde','production_propel','production_sanon1','production_sanon2'];
+  const PROD_TABLES = ['production_cde','production_propel','production_sanon1','production_sanon2','production_mobile'];
 
   // query แต่ละแหล่งพร้อมกัน
   const tasks = toSync.map(async machine => {
@@ -5006,6 +5007,7 @@ function openAddMeterMachineModal() {
               <option value="production_propel">Propel — production_propel.stop_hour</option>
               <option value="production_sanon1">Sanon1 — production_sanon1.stop_hour</option>
               <option value="production_sanon2">Sanon2 — production_sanon2.stop_hour</option>
+              <option value="production_mobile">Mobile Plant — production_mobile.stop_hour</option>
               <option value="electric_loader">รถตักไฟฟ้า — electric_loader.machine_hour_stop</option>
             </select>
           </div>
