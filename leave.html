@@ -3705,21 +3705,26 @@ async function renderSettings() {
       <td><button class="btn btn-xs btn-outline" onclick="editLeaveType(${t.type_id})">แก้ไข</button></td>
     </tr>`).join('');
 
-  const deptRows = deptSups.map(d=>`
-    <tr>
-      <td>${esc(d.department)}</td>
-      <td>${d.supervisor_name?esc(d.supervisor_name):'<span style="color:#94a3b8;">ยังไม่กำหนด</span>'}</td>
-      <td><button class="btn btn-xs btn-outline" onclick="editDeptSupervisor('${esc(d.department)}')">แก้ไข</button></td>
-    </tr>`).join('');
+  // จัดกลุ่มหัวหน้าตามแผนก — 1 แผนกมีได้หลายคน (หลายแถวใน leave_dept_supervisors)
+  const deptHeadMap = {};
+  depts.forEach(d=>{ deptHeadMap[d] = []; });
+  deptSups.forEach(s=>{ if(!deptHeadMap[s.department]) deptHeadMap[s.department] = []; deptHeadMap[s.department].push(s); });
 
-  // Departments ที่ยังไม่ได้ตั้งหัวหน้า
-  const missingDepts = depts.filter(d=>!deptSups.find(s=>s.department===d));
-  const missingRows  = missingDepts.map(d=>`
+  const deptRows = Object.keys(deptHeadMap).sort((a,b)=>a.localeCompare(b,'th')).map(d=>{
+    const heads = deptHeadMap[d];
+    const headsHtml = heads.length ? heads.map(h=>`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span>${h.supervisor_name?esc(h.supervisor_name):'<span style="color:#94a3b8;">(ไม่ระบุชื่อ)</span>'}</span>
+        <button class="btn btn-xs btn-outline" onclick="editDeptSupervisor('${esc(d)}',${h.id})">แก้ไข</button>
+        <button class="btn btn-xs btn-danger" onclick="deleteDeptSupervisor(${h.id},'${esc(d)}')">ลบ</button>
+      </div>`).join('') : '<span style="color:#94a3b8;">ยังไม่กำหนด</span>';
+    return `
     <tr>
-      <td>${esc(d)}</td>
-      <td><span style="color:#94a3b8;">ยังไม่กำหนด</span></td>
-      <td><button class="btn btn-xs btn-primary" onclick="editDeptSupervisor('${esc(d)}')">+ กำหนด</button></td>
-    </tr>`).join('');
+      <td style="vertical-align:top;">${esc(d)}</td>
+      <td style="vertical-align:top;">${headsHtml}</td>
+      <td style="vertical-align:top;"><button class="btn btn-xs btn-primary" onclick="editDeptSupervisor('${esc(d)}',null)">+ เพิ่มหัวหน้า</button></td>
+    </tr>`;
+  }).join('');
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:900px;">
@@ -3839,8 +3844,7 @@ async function renderSettings() {
         <table><thead><tr><th>แผนก</th><th>หัวหน้า</th><th></th></tr></thead>
         <tbody>
           ${deptRows}
-          ${missingRows||''}
-          ${!deptRows&&!missingRows?'<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูลแผนก</td></tr>':''}
+          ${!deptRows?'<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px;">ไม่มีข้อมูลแผนก</td></tr>':''}
         </tbody></table>
       </div>
     </div>
@@ -4203,43 +4207,71 @@ async function saveLeaveType(id) {
   renderSettings();
 }
 
-async function editDeptSupervisor(dept) {
+async function editDeptSupervisor(dept, id) {
   // Load supervisors from app_users (same as System 1/2/3)
   const { data: supList } = await sb.from('app_users').select('id,username,full_name,department')
     .in('role',['admin','supervisor']).eq('status','active');
-  const { data: cur } = await sb.from('leave_dept_supervisors').select('*').eq('department',dept).single();
+  // id ถูกส่งมา = แก้ไขหัวหน้าคนที่มีอยู่แล้ว, id เป็น null = เพิ่มหัวหน้าคนใหม่ให้แผนกนี้
+  let cur = null;
+  if (id) {
+    const { data } = await sb.from('leave_dept_supervisors').select('*').eq('id', id).maybeSingle();
+    cur = data;
+  }
 
   const opts = (supList||[]).map(u=>`<option value="${u.id}" data-name="${esc(u.full_name||u.username)}" ${cur?.supervisor_id===u.id?'selected':''}>${esc(u.full_name||u.username)} (${u.username})</option>`).join('');
 
   openModal(`
-    <div class="modal-hd"><span class="modal-title">👔 กำหนดหัวหน้า: ${esc(dept)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-hd"><span class="modal-title">👔 ${id?'แก้ไข':'เพิ่ม'}หัวหน้า: ${esc(dept)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
     <div class="form-group">
       <label class="form-label">หัวหน้าแผนก</label>
       <select id="ds-sup" class="form-control"><option value="">-- เลือกหัวหน้า --</option>${opts}</select>
     </div>
     <div class="form-group">
-      <label class="form-label">LINE Notify Token (เฉพาะแผนกนี้) — เว้นว่างใช้ token หลัก</label>
+      <label class="form-label">LINE Notify Token (เฉพาะคนนี้) — เว้นว่างใช้ token หลัก</label>
       <input id="ds-token" class="form-control" type="text" value="${esc(cur?.line_token||'')}" placeholder="">
     </div>
     <div id="ds-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary" onclick="saveDeptSupervisor('${esc(dept)}')" style="flex:1;justify-content:center;">บันทึก</button>
+      <button class="btn btn-primary" onclick="saveDeptSupervisor('${esc(dept)}',${id?id:'null'})" style="flex:1;justify-content:center;">บันทึก</button>
       <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
     </div>`);
 }
 
-async function saveDeptSupervisor(dept) {
+async function saveDeptSupervisor(dept, id) {
   const sel   = document.getElementById('ds-sup');
   const supId = sel.value;
   const supName = supId ? sel.options[sel.selectedIndex].dataset.name : '';
   const token = document.getElementById('ds-token').value.trim();
+  const errEl = document.getElementById('ds-err');
+  if (!supId) { if (errEl) errEl.textContent = 'กรุณาเลือกหัวหน้าแผนก'; return; }
 
-  await sb.from('leave_dept_supervisors').upsert({
-    department:dept, supervisor_id:supId||null, supervisor_name:supName||null, line_token:token||null
-  },{onConflict:'department'});
+  let error;
+  if (id) {
+    // แก้ไขหัวหน้าคนที่มีอยู่แล้ว (update ตาม id)
+    ({ error } = await sb.from('leave_dept_supervisors').update({
+      supervisor_id:supId, supervisor_name:supName, line_token:token||null
+    }).eq('id', id));
+  } else {
+    // เพิ่มหัวหน้าคนใหม่ให้แผนกนี้ (insert แถวใหม่ — ต้องรัน leave_schema_v7_patch.sql ก่อน ถ้าแผนกนี้มีหัวหน้าอยู่แล้ว)
+    ({ error } = await sb.from('leave_dept_supervisors').insert({
+      department:dept, supervisor_id:supId, supervisor_name:supName, line_token:token||null
+    }));
+  }
+
+  if (error) {
+    if (errEl) errEl.textContent = 'บันทึกไม่สำเร็จ — อาจต้องรัน leave_schema_v7_patch.sql ใน Supabase ก่อน (' + error.message + ')';
+    return;
+  }
 
   closeModal();
   showToast('บันทึกเรียบร้อย','success');
+  renderSettings();
+}
+
+async function deleteDeptSupervisor(id, dept) {
+  if (!confirm(`ลบหัวหน้าคนนี้ออกจากแผนก "${dept}" หรือไม่?`)) return;
+  await sb.from('leave_dept_supervisors').delete().eq('id', id);
+  showToast('ลบเรียบร้อย','info');
   renderSettings();
 }
 
