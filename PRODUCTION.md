@@ -4,7 +4,7 @@
 
 ---
 
-## 0. สถานะล่าสุด (อัปเดต 2026-09-15)
+## 0. สถานะล่าสุด (อัปเดต 2026-09-22)
 
 ✅ ใช้งานจริง — Dashboard ทุกเมนู (CDE/Propel/Sanon1/Sanon2/Mobile Plant), Executive Dashboard, รายงานรายปี (dash-annual: Dashboard + PDF + PPTX Export ทุกโรงงาน), ค่าไฟฟ้า, PDF Report, SSO, Mobile/Desktop System Switcher 6 ระบบ, LINE แจ้งเตือนจาก JS, Export CSV ทุกโรงงาน, Mobile Plant (โรงงานที่ 5 — Dashboard + ยอดผลิต + Approval ครบ), เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน, วิเคราะห์รายวัน (กราฟ/ตาราง/Breakdown ครบทุกโรงงาน + auto-detect วันล่าสุดที่มีข้อมูล), material_types (is_feed_material + is_product), groundwater_usage (ผู้บันทึก), drone factory sort ตามลำดับ CDE→Propel→Sanon1→Sanon2→Mobile Plant
 
@@ -177,6 +177,45 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 ---
 
 ## 11. Changelog
+
+### 2026-09-22 — ปรับขนาดหน้า Dashboard (พื้นหลังเข้ม) ให้เหมาะกับจอมือถือ
+
+**ที่มา:** หน้า Dashboard ทุกหน้าที่ใช้ธีมพื้นหลังเข้ม (CDE/Propel/Sanon1/Sanon2/Mobile Plant/ค่าไฟฟ้า/ยอดขาย/รถตักไฟฟ้า/น้ำบาดาล ฯลฯ) ใช้ font-size/padding/ความสูงกราฟเท่ากับจอ Desktop เมื่อดูบนมือถือหน้าจอแคบกว่ามาก ทำให้รู้สึกเหมือน "ซูมเข้ามาเยอะ"
+
+**แก้ไข (CSS ใน `<style>` หลัก บรรทัด ~159, มีผลเฉพาะจอ ≤640px และเฉพาะภายใน `.dash-dark-bg`):**
+- ลด padding การ์ด (`.dash-dark-card`) จาก 20px → 14px
+- ลดขนาดตัวเลขใหญ่ (`text-2xl`) จาก 24px → 19px และหัวข้อ (`text-xl`, `h2.text-lg`) ให้เล็กลงตามสัดส่วน
+- ลดระยะห่างระหว่างการ์ดในกริด (`gap-4`/`gap-5`/`gap-6`) ให้กระชับขึ้น
+- ลดความสูงพื้นที่กราฟ (`h-72`/`h-64`/`h-56` และ inline height 320px/270px) ให้พอดีจอมือถือ ลดการเลื่อนหน้าจอ
+
+**ขอบเขต:** เป็น CSS scope เฉพาะ `.dash-dark-bg` เท่านั้น ไม่กระทบฟอร์มกรอกข้อมูล/ตาราง/หน้าอื่นที่ไม่ใช่ Dashboard
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-20 — หน้าค่าไฟฟ้าดึงรายชื่อโรงงานอัตโนมัติจากตาราง `factories`
+
+**ที่มา:** เดิมหน้า "ค่าไฟฟ้า" (Dashboard + จัดการ) ใช้รายชื่อโรงงาน hardcode ไว้ในโค้ด (`ELEC_FACTORIES` มีแค่ CDE/Propel/Sanon1/Sanon2) เพิ่มโรงงานใหม่ที่เมนู "จัดการ → โรงงาน" (เช่น Mobile Plant) แล้วไม่โผล่ในฟอร์มค่าไฟฟ้า ต้องแก้โค้ดเองทุกครั้ง
+
+**แก้ไข (บรรทัด ~10268 เป็นต้นไป):**
+- เปลี่ยน `ELEC_FACTORIES`/`ELEC_PROD_TABLES` จาก `const` hardcode → `let` + ฟังก์ชัน `ensureElecFactoriesLoaded()` ที่ดึงรายชื่อโรงงานจากตาราง `factories` (เฉพาะ `status = active`) มาสร้าง key/label/สีให้อัตโนมัติ (cache 60 วิ กันยิง query ถี่)
+- โรงงานเดิม (CDE/Propel/Sanon1/Sanon2/Mobile Plant) ยังใช้สีเดิมตาม `ELEC_KNOWN_META` เพื่อความต่อเนื่องของกราฟ ส่วนโรงงานใหม่ที่ไม่รู้จักจะสุ่มสีจาก palette ให้อัตโนมัติ
+- เพิ่ม `await ensureElecFactoriesLoaded()` ที่จุดเริ่มของทุกฟังก์ชันที่ใช้รายชื่อโรงงาน: `loadElecData()`, `renderElecManageTable()`, `openElecMonthModal()`, `openElecBulkModal()` (เปลี่ยนเป็น async), `fetchExecReportData()`
+- แก้ query ยอดผลิตให้ปลอดภัยขึ้น: โรงงานที่ยังไม่มีตาราง production ผูกไว้ใน `ELEC_PROD_TABLES` จะข้าม query (ได้ผลลัพธ์ว่างแทน error) — บันทึก/แสดงค่าไฟฟ้า (บาท) ได้ปกติ แต่จะยังไม่มี "บาท/ตัน" จนกว่าจะเพิ่ม mapping ตารางผลิตของโรงงานนั้นเองใน `ELEC_KNOWN_META`
+- แก้ข้อความ hardcode "ค่าไฟฟ้า 4 โรงงาน" → "ค่าไฟฟ้ารายโรงงาน" และ "ค่าไฟฟ้ารวม 4 โรงงาน" (ใน Executive Summary) → "ค่าไฟฟ้ารวมทุกโรงงาน"
+
+**ขอบเขต:** แก้เฉพาะโมดูลค่าไฟฟ้าตามที่ผู้ใช้ยืนยัน — ระบบยอดผลิตหลัก (Dashboard/บันทึกยอดผลิตของแต่ละโรงงาน) ยังคงต้องสร้างตาราง `production_*` + หน้า manage-prod/dash ใหม่ต่อโรงงานเหมือนเดิม (สถาปัตยกรรมแยกตารางต่อโรงงาน ไม่ใช่ตารางเดียวแบบ factory_id) — ไม่ได้ทำ full auto-add เพราะมีความเสี่ยงสูงและอยู่นอกขอบเขตที่ผู้ใช้ต้องการรอบนี้
+
+**ไม่ต้องรัน SQL เพิ่ม** — ใช้ตาราง `factories`/`electricity_costs` เดิม
+
+### 2026-09-19 — เอาปุ่ม +/- ออกจากช่องกรอกตัวเลข + กันตัวเลขวิ่งตามลูกกลิ้งเมาส์
+
+**ที่มา:** ฟอร์ม "เพิ่มข้อมูลผลผลิต" (เช่น ชม.เครื่อง (หยุด), มิเตอร์หยุด) มีปุ่ม spinner (+/-) ของ browser และตัวเลขเปลี่ยนค่าไปเองเมื่อเลื่อนลูกกลิ้งเมาส์ผ่านช่องที่กำลังโฟกัสอยู่ เสี่ยงกรอกข้อมูลผิดโดยไม่ตั้งใจ
+
+**แก้ไข (มีผลกับ `input[type="number"]` ทุกช่องทั้งระบบ ไม่ใช่เฉพาะฟอร์มผลิต):**
+- CSS (บรรทัด ~90, ใน `<style>` หลัก): ซ่อนปุ่ม spin button ของ Chrome/Edge/Safari ด้วย `::-webkit-outer/inner-spin-button { -webkit-appearance: none; }` และปิดปุ่มของ Firefox ด้วย `-moz-appearance: textfield`
+- JS (ก่อน SECTION 19: APP BOOTSTRAP, บรรทัด ~10853): เพิ่ม global `document.addEventListener('wheel', ...)` — ถ้ากำลังโฟกัสอยู่ที่ `input[type=number]` ขณะเลื่อนลูกกลิ้ง จะเรียก `.blur()` ทันที ทำให้ค่าตัวเลขไม่เปลี่ยน (ใช้ event delegation ระดับ document จึงครอบคลุมฟอร์มที่สร้างขึ้นภายหลังด้วย ไม่ต้องแก้ทีละฟอร์ม)
+
+**ไม่ต้องรัน SQL เพิ่ม**
 
 ### 2026-09-15 — แก้นำเข้า Excel/CSV ยอดขายพังเมื่อไม่มีวันที่
 

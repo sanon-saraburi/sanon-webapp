@@ -404,7 +404,10 @@ async function restoreSession() {
         const rolePm = rp.extra_manage.filter(k => k.startsWith('pm-'));
         extraManage = [...new Set([...extraManage, ...rolePm])];
       }
-      currentUser = { ...u, _extraManage: extraManage };
+      // base session จาก gotoSystem() ไม่มี meeting_access — re-fetch เองเพื่อให้การ์ด จองห้อง ในสวิตช์เชอร์ ทำงานถูกต้อง
+      const { data: fullUser } = await db.from('app_users')
+        .select('meeting_access').eq('id', u.id).maybeSingle();
+      currentUser = { ...u, _extraManage: extraManage, meeting_access: fullUser?.meeting_access || false };
       try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(_) {}
       return true;
     } catch(_) {}
@@ -424,7 +427,9 @@ async function restoreSession() {
         const rolePm = rp.extra_manage.filter(k => k.startsWith('pm-'));
         extraManage = [...new Set([...extraManage, ...rolePm])];
       }
-      currentUser = { ...shared, _extraManage: extraManage };
+      const { data: fullUser } = await db.from('app_users')
+        .select('meeting_access').eq('id', shared.id).maybeSingle();
+      currentUser = { ...shared, _extraManage: extraManage, meeting_access: fullUser?.meeting_access || false };
       try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser)); } catch(_) {}
       return true;
     }
@@ -494,19 +499,19 @@ function renderShell() {
           <div class="text-slate-400 text-xs">Maintenance System</div>
         </div>
       </div>
-      <nav class="flex-1 px-3 py-3 space-y-0.5">${sideLinks}</nav>
+      <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">${sideLinks}</nav>
       <div class="p-3 border-t border-white/10">
         <!-- System Switcher -->
         <div class="text-amber-300/50 text-[10px] font-semibold uppercase tracking-widest px-0.5 mb-2">เปลี่ยนระบบ</div>
-        <div class="flex gap-1.5 mb-3">
-          <a href="#" onclick="gotoSystem('index.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+        <div class="grid grid-cols-3 gap-1.5 mb-3">
+          <a href="#" onclick="event.preventDefault();gotoSystem('index.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 2px 8px rgba(37,99,235,.4)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">ผลิต</span>
           </a>
-          <a href="#" onclick="gotoSystem('inventory.html')" class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+          <a href="#" onclick="event.preventDefault();gotoSystem('inventory.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
              style="background:linear-gradient(135deg,#0f766e,#0d9488);box-shadow:0 2px 8px rgba(13,148,136,.4)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="package" class="w-3.5 h-3.5 text-white"></i>
@@ -514,13 +519,35 @@ function renderShell() {
             <span class="text-[10px] font-bold text-white leading-tight">คลัง</span>
           </a>
           <!-- PM — active (ระบบปัจจุบัน) -->
-          <div class="flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
+          <div class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center cursor-default"
                style="background:linear-gradient(135deg,#b45309,#d97706);box-shadow:0 2px 8px rgba(180,83,9,.4)">
             <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
               <i data-lucide="wrench" class="w-3.5 h-3.5 text-white"></i>
             </div>
             <span class="text-[10px] font-bold text-white leading-tight">PM</span>
           </div>
+          <a href="#" onclick="event.preventDefault();gotoSystem('checkin.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#065f46,#059669);box-shadow:0 2px 8px rgba(5,150,105,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">HR</span>
+          </a>
+          ${(currentUser?.meeting_access || currentUser?.role === 'admin') ? `
+          <a href="#" onclick="event.preventDefault();gotoSystem('meeting.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#0e7490,#0284c7);box-shadow:0 2px 8px rgba(14,116,144,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">จองห้อง</span>
+          </a>` : ''}
+          <a href="#" onclick="event.preventDefault();gotoSystem('leave.html')" class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl text-center transition-all duration-150 hover:scale-105 cursor-pointer"
+             style="background:linear-gradient(135deg,#6d28d9,#7c3aed);box-shadow:0 2px 8px rgba(109,40,217,.4)">
+            <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,.2)">
+              <i data-lucide="clipboard-check" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="text-[10px] font-bold text-white leading-tight">ขอลา</span>
+          </a>
         </div>
         <!-- User + Logout -->
         <div class="flex items-center gap-2 px-1 py-1 text-xs text-slate-400 mb-1">

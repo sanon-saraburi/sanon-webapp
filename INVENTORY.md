@@ -5,7 +5,7 @@
 
 ## 1. ข้อมูลระบบ
 
-- **ไฟล์:** `inventory.html` (~4,695 บรรทัด)
+- **ไฟล์:** `inventory.html` (~4,739 บรรทัด)
 - **สถานะ:** ✅ ใช้งานจริง
 - **Supabase:** `https://pcmpwkcmvsxrvbximjgf.supabase.co` (project เดิม)
 - **Session key:** `_sn_inv_sess` (แยกจาก `_sn_sess` ของ System 1)
@@ -133,6 +133,25 @@ thead th      : position: sticky; top: 0; z-index: 20 (หัวตาราง�
 ---
 
 ## 9. Changelog
+
+### 2026-09-22 (รอบ 2) — System Switcher: เอาไอคอน Portal ออกตามคำสั่งคุณใหญ่
+- คุณใหญ่ให้เอาไอคอน "Portal" ออกจากสวิตช์เปลี่ยนระบบใน `inventory.html` (เพิ่งเพิ่มไปในรอบก่อนหน้าวันเดียวกัน) — ลบออกทั้ง Desktop Sidebar และ Mobile Sidebar (2 จุด) เหลือ 6 ไอคอน: ผลิต, คลัง(ตัวเอง), PM, HR, จองห้อง(มีเงื่อนไขสิทธิ์), ขอลา
+- ตรวจสอบแล้ว: `node --check` ผ่าน, sync root/GitHub ตรงกัน
+- **หมายเหตุ:** `portal.html` (Smart Launcher) ยังทำงานปกติ ไม่ได้ถูกแก้ไข — แค่เอาลิงก์ลัดออกจาก switcher ของ inventory.html เท่านั้น ผู้ใช้ที่ต้องการกลับ Portal ยังกดปุ่ม back ของ browser หรือเข้า URL portal.html ตรงได้ตามปกติ
+- Frontend ล้วน ไม่ต้องรัน SQL เพิ่ม
+
+### 2026-09-22 — System Switcher: เพิ่มลิงก์ให้ครบทุกระบบ (checkin/meeting/leave/portal)
+- **ที่มา:** คุณใหญ่ (แจ้งแบบ broadcast ให้ทุกระบบตรวจสอบ) — สวิตช์ "เปลี่ยนระบบ" ของแต่ละไฟล์แยกกันเอง ไม่ได้ใช้ร่วมกัน ให้แต่ละระบบเช็ค/เพิ่มลิงก์ให้ครบเอง
+- **ตรวจพบ:** สวิตช์ "เปลี่ยนระบบ" ใน `inventory.html` (ทั้ง Desktop Sidebar footer + Mobile Sidebar footer) เดิมมีแค่ **ผลิต** (`index.html`) และ **PM** (`pm.html`) เท่านั้น — ขาด **HR** (`checkin.html`), **จองห้อง** (`meeting.html`), **ขอลา** (`leave.html`), และ **Portal** (`portal.html`) ครบทั้ง 4 ระบบ
+- **แก้ไข:** เพิ่มลิงก์ที่ขาดทั้ง 4 ระบบ ในทั้ง 2 จุด (desktop + mobile) โดยใช้ `onclick="gotoSystem('xxx.html')"` ตาม pattern เดิม (เขียน SSO session ทุก key ก่อนเปลี่ยนหน้า) — ไม่ใช้ `<a href="xxx.html">` เฉยๆ
+  - HR → `checkin.html` (สีเขียว emerald, icon `clock`)
+  - จองห้อง → `meeting.html` (สีฟ้า cyan, icon `calendar-check`) — **มีเงื่อนไขสิทธิ์**: แสดงเฉพาะ `currentUser.meeting_access === true` หรือ `role === 'admin'` (pattern เดียวกับที่ `index.html` ใช้)
+  - ขอลา → `leave.html` (สีม่วง violet, icon `clipboard-check`)
+  - Portal → `portal.html` (สีเทาเข้ม slate, icon `layout-grid`)
+- เปลี่ยน container จาก `flex gap-1.5` → `grid grid-cols-3 gap-1.5` (เพื่อรองรับ 7 ไอคอนแบบ 3 คอลัมน์ 3 แถว ไม่ล้นแถวเดียว) — สไตล์เดียวกับที่ `index.html` ใช้อยู่แล้ว
+- **ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่าน, sync root/GitHub inventory.html ตรงกันแล้ว (diff = IDENTICAL)
+- **ยังไม่ได้ upload ขึ้น GitHub Pages** — รอคุณใหญ่ upload โฟลเดอร์ `GitHub/` ตามขั้นตอนปกติ แล้ว hard-refresh ทดสอบว่ากดสลับระบบได้ครบทุกปุ่ม + SSO ยังทำงาน (ไม่ต้อง login ซ้ำ)
+- Frontend ล้วน ไม่ต้องรัน SQL เพิ่ม
 
 ### 2026-09-16 (รอบ 2) — เพิ่มรูปภาพวัสดุ (Item Photo)
 - **เป้าหมาย:** ให้เห็นรูปวัสดุตอนเบิก/รับของ และในรายการวัสดุคงเหลือ ตามที่คุณใหญ่ขอ

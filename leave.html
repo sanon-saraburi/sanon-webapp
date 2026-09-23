@@ -40,6 +40,11 @@ input,select,textarea{font-size:16px!important;}
 .sb-link:hover{background:rgba(255,255,255,.08);color:#fff;}
 .sb-link.active{background:linear-gradient(90deg,#3b82f6,#2563eb);color:#fff;font-weight:600;}
 .sb-link svg,.sb-link .ic{width:18px;height:18px;flex-shrink:0;}
+.sys-switch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px 12px 6px;}
+.sys-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:14px;cursor:pointer;transition:transform .15s;box-shadow:0 2px 8px rgba(0,0,0,.20);}
+.sys-card:hover{transform:scale(1.05);}
+.sys-card-icon{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:14px;}
+.sys-card-label{font-size:10px;font-weight:700;color:#fff;line-height:1.2;text-align:center;}
 .sb-footer{margin-top:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);}
 .sb-user{display:flex;align-items:center;gap:10px;}
 .sb-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;}
@@ -435,6 +440,32 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
         </div>
       </div>
 
+      <div class="sb-section" id="sb-sec-switch" style="display:none;">
+        <div class="sb-label">เปลี่ยนระบบ</div>
+        <div class="sys-switch-grid">
+          <div class="sys-card" onclick="gotoSystem('index.html')" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);">
+            <div class="sys-card-icon">📊</div>
+            <div class="sys-card-label">ผลิต</div>
+          </div>
+          <div class="sys-card" onclick="gotoSystem('inventory.html')" style="background:linear-gradient(135deg,#0f766e,#0d9488);">
+            <div class="sys-card-icon">📦</div>
+            <div class="sys-card-label">คลัง</div>
+          </div>
+          <div class="sys-card" onclick="gotoSystem('pm.html')" style="background:linear-gradient(135deg,#b45309,#d97706);">
+            <div class="sys-card-icon">🔧</div>
+            <div class="sys-card-label">PM</div>
+          </div>
+          <div class="sys-card" onclick="gotoSystem('checkin.html')" style="background:linear-gradient(135deg,#065f46,#059669);">
+            <div class="sys-card-icon">🕐</div>
+            <div class="sys-card-label">HR</div>
+          </div>
+          <div class="sys-card" id="sb-switch-meeting" onclick="gotoSystem('meeting.html')" style="display:none;background:linear-gradient(135deg,#0e7490,#0284c7);">
+            <div class="sys-card-icon">📅</div>
+            <div class="sys-card-label">จองห้อง</div>
+          </div>
+        </div>
+      </div>
+
       <div class="sb-footer">
         <div class="sb-user">
           <div class="sb-avatar" id="sb-avatar">?</div>
@@ -588,7 +619,8 @@ async function doLogin() {
   }
 
   currentUser = { id: data.id, username: data.username, full_name: data.full_name||data.username,
-    role: data.role||'viewer', department: data.department||'' };
+    role: data.role||'viewer', department: data.department||'',
+    factory: data.factory||'', meeting_access: data.meeting_access||false, _extraManage: data._extraManage||[] };
   currentMode = 'supervisor';
 
   saveRecentLvUser(username);   // จำ username ไว้สำหรับ autocomplete ครั้งต่อไป
@@ -1096,6 +1128,25 @@ function toggleSupPassFallback() {
   if (fb.style.display!=='none') setTimeout(()=>document.getElementById('lg-user')?.focus(), 100);
 }
 
+// SSO: เขียน session ทุก key ก่อนเปลี่ยนระบบ (แพทเทิร์นเดียวกับ index.html/pm.html/inventory.html)
+// เขียนเฉพาะกรณี login ด้วยบัญชี app_users จริง (currentMode==='supervisor' และไม่ใช่ login ด้วย PIN จาก checkin_employees)
+// เพราะ login ด้วย PIN (_proceedSupLogin) ไม่มีบัญชีใน app_users จึงไม่มี session ที่ถูกต้องจะส่งข้ามระบบได้ — จะแค่เปลี่ยนหน้าเฉยๆ
+function gotoSystem(url) {
+  if (currentUser && currentMode === 'supervisor' && !currentEmp) {
+    const base = {
+      id: currentUser.id, username: currentUser.username,
+      display_name: currentUser.full_name, full_name: currentUser.full_name,
+      role: currentUser.role, status: 'active',
+      factory: currentUser.factory || '', department: currentUser.department || '',
+      _extraManage: currentUser._extraManage || [],
+    };
+    try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_pm_sess',  JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  }
+  window.location.href = url;
+}
+
 function doLogout() {
   _stopNotifRealtime();
   _stopApproverRealtime();
@@ -1204,7 +1255,10 @@ function statusBadge(status) {
     pending:'<span class="badge badge-pending">⏳ รออนุมัติ</span>',
     approved:'<span class="badge badge-approved">✅ อนุมัติ</span>',
     rejected:'<span class="badge badge-rejected">❌ ปฏิเสธ</span>',
-    cancelled:'<span class="badge badge-cancelled">🚫 ยกเลิก</span>'
+    cancelled:'<span class="badge badge-cancelled">🚫 ยกเลิก</span>',
+    // สถานะเฉพาะของ pass_requests (ออกนอกบริษัท)
+    out:'<span class="badge" style="background:#3b82f622;color:#3b82f6;">🚪 กำลังออก</span>',
+    returned:'<span class="badge" style="background:#6d28d922;color:#6d28d9;">🏭 กลับแล้ว</span>'
   };
   return map[status]||`<span class="badge">${status}</span>`;
 }
@@ -1324,8 +1378,17 @@ async function renderDashboard() {
     if (empData?.photo_url && currentEmp) currentEmp.photo_url = empData.photo_url;
   }
 
+  // ช่วงเวลาสำหรับสรุปออกนอกบริษัท/โอที รายครึ่งเดือน (งวดของเดือนปัจจุบัน)
+  const _now = new Date();
+  const _curY = _now.getFullYear(), _curM = _now.getMonth(); // 0-indexed
+  const _mm = String(_curM+1).padStart(2,'0');
+  const monthStartStr = `${_curY}-${_mm}-01`;
+  const lastDayNum = new Date(_curY, _curM+1, 0).getDate();
+  const monthEndStr = `${_curY}-${_mm}-${String(lastDayNum).padStart(2,'0')}`;
+  const monthLabel = _now.toLocaleDateString('th-TH',{month:'short',year:'numeric'});
+
   // Parallel fetch
-  const [typesRes, myReqRes, pendingRes, balRes] = await Promise.all([
+  const [typesRes, myReqRes, pendingRes, balRes, passReqRes, otReqRes] = await Promise.all([
     sb.from('leave_types').select('*').eq('is_active',true).order('sort_order'),
     sb.from('leave_requests').select('*').eq('employee_id', empId)
       .order('created_at',{ascending:false}).limit(5),
@@ -1334,13 +1397,20 @@ async function renderDashboard() {
       if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
       return q;
     })() : Promise.resolve({data:[]}),
-    sb.from('leave_balances').select('*').eq('employee_id', empId).eq('year', year)
+    sb.from('leave_balances').select('*').eq('employee_id', empId).eq('year', year),
+    // สรุปออกนอกบริษัท/โอที รายครึ่งเดือน — ดึงทั้งเดือนปัจจุบัน (ไม่รวมกับตารางลา แยกการ์ดกันคนละหัวข้อ)
+    sb.from('pass_requests').select('*').eq('employee_id', empId)
+      .gte('request_date', monthStartStr).lte('request_date', monthEndStr),
+    sb.from('ot_requests').select('*').eq('employee_id', empId)
+      .gte('ot_date', monthStartStr).lte('ot_date', monthEndStr)
   ]);
 
-  const types   = typesRes.data||[];
-  const myReqs  = myReqRes.data||[];
-  const pending = pendingRes.data||[];
-  const bals    = balRes.data||[];
+  const types    = typesRes.data||[];
+  const myReqs   = myReqRes.data||[];
+  const pending  = pendingRes.data||[];
+  const bals     = balRes.data||[];
+  const passReqs = passReqRes.data||[];
+  const otReqs   = otReqRes.data||[];
 
   // Update approve badge
   const pc = pending.length;
@@ -1373,7 +1443,7 @@ async function renderDashboard() {
     </div>`;
   }).join('');
 
-  // Recent requests table
+  // Recent requests table — เฉพาะ "การลา" เท่านั้น (แยกจากออกนอกบริษัท/โอที ซึ่งใช้การ์ดสรุปรายครึ่งเดือนของตัวเองด้านล่าง)
   const recentRows = myReqs.length ? myReqs.map(r => `
     <tr>
       <td><span style="font-size:16px;">${_typeIcon(r.type_code)}</span> ${esc(r.type_name||'—')}</td>
@@ -1382,6 +1452,69 @@ async function renderDashboard() {
       <td>${statusBadge(r.status)}</td>
     </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">ยังไม่มีประวัติการลา</td></tr>';
+
+  // ── สรุปออกนอกบริษัท + โอที รายครึ่งเดือน (งวด 1: วันที่ 1-15, งวด 2: วันที่ 16-สิ้นเดือน) ──
+  // นับเฉพาะรายการที่ "อนุมัติแล้ว" เป็นยอดรวม ส่วนที่ยัง "รออนุมัติ" แสดงเป็นจำนวนรายการกำกับไว้ต่างหาก
+  const _dayOfMonth = d => d ? new Date(d).getDate() : 0;
+  const _splitPeriods = (rows, dateField) => [
+    rows.filter(r => _dayOfMonth(r[dateField]) <= 15),
+    rows.filter(r => _dayOfMonth(r[dateField]) >= 16)
+  ];
+  const [passP1, passP2] = _splitPeriods(passReqs, 'request_date');
+  const [otP1,   otP2]   = _splitPeriods(otReqs,   'ot_date');
+
+  const _passPeriodSummary = rows => {
+    const approved = rows.filter(r => r.status==='approved');
+    return {
+      count: approved.length,
+      hours: approved.reduce((s,r)=>s+_passMinutesBetween(r.out_time,r.expected_return),0) / 60,
+      pending: rows.filter(r => r.status==='pending').length
+    };
+  };
+  const _otPeriodSummary = rows => {
+    const approved = rows.filter(r => r.status==='approved');
+    return {
+      count: approved.length,
+      hours: approved.reduce((s,r)=>s+Number(r.actual_hours ?? r.estimated_hours ?? 0),0),
+      pending: rows.filter(r => r.status==='pending').length
+    };
+  };
+
+  const _periodRow = (label, summary, accentColor) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:${accentColor}10;border-radius:10px;border-left:3px solid ${accentColor};">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b;">${label}</div>
+        ${summary.pending>0 ? `<div style="font-size:11px;color:#f59e0b;">⏳ รออนุมัติ ${summary.pending} รายการ</div>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:16px;font-weight:700;color:${accentColor};">${summary.hours.toFixed(1)} ชม.</div>
+        <div style="font-size:11px;color:#94a3b8;">${summary.count} ครั้ง (อนุมัติแล้ว)</div>
+      </div>
+    </div>`;
+
+  const passSummaryCard = `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">🚪 สรุปออกนอกบริษัท (รายครึ่งเดือน)</div>
+      <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-pass-hist')">ดูทั้งหมด</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${_periodRow(`1–15 ${monthLabel}`, _passPeriodSummary(passP1), '#ea9d0a')}
+      ${_periodRow(`16–${lastDayNum} ${monthLabel}`, _passPeriodSummary(passP2), '#ea9d0a')}
+    </div>
+  </div>`;
+
+  const otSummaryCard = `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">⏱️ สรุปโอที (รายครึ่งเดือน)</div>
+      <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-ot-hist')">ดูทั้งหมด</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${_periodRow(`1–15 ${monthLabel}`, _otPeriodSummary(otP1), '#0f766e')}
+      ${_periodRow(`16–${lastDayNum} ${monthLabel}`, _otPeriodSummary(otP2), '#0f766e')}
+    </div>
+  </div>`;
 
   // Pending approval section (supervisor only) — แสดง list จริงในหน้า dashboard
   const pendingSection = can('approve') ? (() => {
@@ -1447,10 +1580,10 @@ async function renderDashboard() {
 
     ${pendingSection}
 
-    <!-- ประวัติล่าสุด -->
+    <!-- ประวัติการลาล่าสุด -->
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">📄 คำขอล่าสุด</div>
+        <div class="card-title">📄 คำขอลาล่าสุด</div>
         <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-my-hist')">ดูทั้งหมด</button>
       </div>
       <div class="tbl-wrap">
@@ -1458,6 +1591,10 @@ async function renderDashboard() {
         <tbody>${recentRows}</tbody></table>
       </div>
     </div>
+
+    ${passSummaryCard}
+
+    ${otSummaryCard}
   </div>`;
 }
 
@@ -4326,6 +4463,8 @@ async function _bootApp() {
   // Reset role-gated sections ก่อนเสมอ (ป้องกัน sidebar ค้างจาก session ก่อนหน้า)
   document.getElementById('sb-sec-approve').style.display    = 'none';
   document.getElementById('sb-sec-admin').style.display      = 'none';
+  document.getElementById('sb-sec-switch').style.display     = 'none';
+  document.getElementById('sb-switch-meeting').style.display = 'none';
   document.getElementById('sb-lv-pass-approve').style.display= 'none';
   document.getElementById('sb-lv-ot-approve').style.display  = 'none';
   const bnApv = document.getElementById('bn-lv-approvals');
@@ -4343,6 +4482,14 @@ async function _bootApp() {
   }
   if(can('admin')) {
     document.getElementById('sb-sec-admin').style.display='';
+  }
+  // สวิตช์ "เปลี่ยนระบบ" — แสดงเฉพาะบัญชี app_users จริง (currentMode==='supervisor' และไม่ใช่ login ด้วย PIN จาก checkin_employees)
+  // เพราะ login ด้วย PIN (_proceedSupLogin) ไม่มีบัญชีใน app_users จึงส่ง SSO ข้ามระบบไม่ได้
+  if(currentMode === 'supervisor' && !currentEmp) {
+    document.getElementById('sb-sec-switch').style.display='';
+    if(currentUser?.meeting_access || currentUser?.role === 'admin') {
+      document.getElementById('sb-switch-meeting').style.display='';
+    }
   }
 
   // Mobile: show menu button

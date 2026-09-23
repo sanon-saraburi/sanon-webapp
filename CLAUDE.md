@@ -14,7 +14,7 @@
 | Portal — Smart Launcher | `portal.html` | ✅ ใช้งานจริง | Login → แสดงเฉพาะระบบที่มีสิทธิ์, SSO, PWA shortcut เดียวสำหรับทุก User, **System 5 (จองห้องประชุม) ตรวจสิทธิ์ผ่าน meeting_access**, **System 6 (ขอลา) openAll=true ทุกคนมีสิทธิ์** | ต้องรัน SQL patch `meeting_access` ก่อน deploy |
 | System 1 — Production | `index.html` | ✅ ใช้งานจริง | Dashboard ทุกเมนู, Executive Dashboard, ค่าไฟฟ้า, PDF Report, SSO, **Mobile/Desktop System Switcher 6 ระบบ**, LINE แจ้งเตือนจาก JS, **Export CSV ทุกโรงงาน**, **Mobile Plant — Dashboard + ยอดผลิต + Approval ครบ**, **เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน**, **รายงานรายปี (dash-annual) — Dashboard + PDF + PPTX Export ทุกโรงงาน**, **System Switcher: ชื่อ "เช็คอิน" → "HR", การ์ดจองห้องซ่อนตาม meeting_access**, **วิเคราะห์รายวัน — กราฟ/ตาราง/Breakdown ครบทุกโรงงาน**, **รายวัน auto-detect วันล่าสุดที่มีข้อมูล**, **material_types: is_feed_material + is_product**, **groundwater_usage: ผู้บันทึก**, **drone factory sort: CDE→Propel→Sanon1→Sanon2→Mobile Plant** | ต้องรัน SQL patches สำหรับ Mobile Plant (ดู Section 7) |
 | System 2 — Inventory  | `inventory.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ + Changelog ทั้งหมดย้ายไปที่ **`INVENTORY.md`** แล้ว (ตามนโยบาย 2026-09-15) | ดู `INVENTORY.md` |
-| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`PM.md`** | ไม่มี Loading Screen (ถูก revert) — รายละเอียดเพิ่มเติมดู `PM.md` |
+| System 3 — PM         | `pm.html` | ✅ ใช้งานจริง | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`PM.md`** | ⏳ **ต้องรัน SQL `pm_sync_v2_patch.sql`** ก่อนใช้ sync มิเตอร์ Mobile Plant — รายละเอียดเพิ่มเติมดู `PM.md` |
 | System 4 — Checkin/HR | `checkin.html` | 🚧 ใช้งานได้บางส่วน | เช็คอิน/ออก, บุคคลภายนอก, Dashboard, รายงาน 2 แท็บ, Permission Matrix, QR+Barcode+สแกนกล้อง, สมัครสมาชิก, **บัตรตอก (OCR + OT calc + half_am/half_pm)**, **ชื่อ Sidebar → "สานนท์ — HR"**, **Refresh ค้างหน้าเดิม (sessionStorage._sn_ck_lastpage)**, **พิมพ์ตามตัวกรองแผนก**, **Guard Realtime Popup เมื่อ Pass approved (Supabase Broadcast)**, **ข้อมูลการลา: สรุปประจำเดือน + ประวัติทั้งหมด (ดึงจาก leave_requests + pass_requests)** | ยังไม่มี Export Excel — ยังไม่มี LINE แจ้งเตือน — ต้องรัน SQL: `ALTER TABLE checkin_users ADD COLUMN IF NOT EXISTS permissions text[];` |
 | System 5 — Meeting    | `meeting.html` | 🚧 พร้อม deploy (รอ SQL) | **No-login public booking** — เปิดปฏิทินตรง ไม่ต้อง login, Admin login มุมขวาบน, จองได้ทันที (auto confirmed), Conflict check, FullCalendar, QR Share, Print, Soft-delete+Restore, Admin section ใน sidebar (rooms/users/settings) — เฉพาะ Admin login เท่านั้น | ต้องรัน SQL: `ALTER TABLE app_users ADD COLUMN IF NOT EXISTS meeting_access boolean DEFAULT false;` |
 | System 6 — Leave      | `leave.html` | 🚧 พร้อม deploy (รอ SQL) | รายละเอียดฟีเจอร์ทั้งหมด → ดู **`LEAVE.md`** | ต้องรัน SQL 6 ชุด + Deploy Edge Function + Upload GitHub Pages + เปิด Realtime — รายละเอียดดู `LEAVE.md` |
@@ -121,14 +121,14 @@
 | `leave_schema.sql` | System 6 | 2026-08-15 (leave_types, leave_requests, leave_balances, leave_dept_supervisors, leave_settings + RLS) |
 | `leave_schema_v2_patch.sql` | System 6 | 2026-08-15 (leave_holidays + วันหยุดไทย 2025–2026) |
 | `inventory.html` | System 2 | 2026-08-05 (Dashboard redesign + LINE วันที่เบิก + แก้ราคาสารตกตะกอน) |
-| `pm.html` | System 3 | 2026-08-05 (dropdown PM เรียงตามสถานะ + คอลัมน์วันที่ PM ล่าสุด) |
+| `pm.html` | System 3 | 2026-09-22 (เพิ่มลิงก์ครบ 6 ระบบใน System Switcher รวม Portal + แก้ meeting_access ใน SSO fallback — ⏳ ต้องรัน `pm_sync_v2_patch.sql` ก่อนใช้ sync Mobile Plant — ดู `PM.md`) |
 | `checkin.html` | System 4 | 2026-09-15 (เพิ่ม "สรุปโอที" เชื่อมข้อมูลจาก ot_requests ของ System 6 + เปลี่ยนชื่อหมวด "ข้อมูลการลา-โอที") |
 | `line-notify_index.txt` | Edge Function | 2026-08-22 (URI button footer แทน postback, cornerRadius fix, AbortController timeout 10s, postback token fix) |
 | `CLAUDE.md` | ทุกระบบ | 2026-08-22 |
 | `TECHSTACK.md` | ทุกระบบ | 2026-08-02 (Tech Stack ครบทุก Library/DB/กฎ — อ่านก่อนเปิดแชตใหม่) |
 | `PRODUCTION.md` | System 1 | 2026-07-31 |
 | `INVENTORY.md` | System 2 | 2026-07-21 |
-| `PM.md` | System 3 | 2026-09-15 (ย้าย Changelog 2026-08-05 + สถานะฟีเจอร์เข้ามารวมที่นี่ ตามนโยบายแยกไฟล์) |
+| `PM.md` | System 3 | 2026-09-22 (เพิ่มเอกสาร System Switcher + Changelog เพิ่มลิงก์ 7 ระบบ) |
 | `sw.js` | PWA | 2026-08-01 (v3 — เพิ่ม portal.html + manifest-portal.json) |
 | `manifest-production.json` | PWA | 2026-07-31 (icon-192/512.png) |
 | `manifest-inventory.json` | PWA | 2026-07-31 (icon-192/512.png) |
@@ -358,6 +358,49 @@ sessionWarnShown, approvalCountInterval
 ## 7. ประวัติการแก้ไข (Changelog)
 
 > **📌 System 6 — Leave:** Changelog/รายละเอียดฟีเจอร์ย้ายไป **`LEAVE.md`** แล้ว (2026-09-15) — Section นี้เหลือเฉพาะเรื่องที่กระทบหลายระบบพร้อมกัน
+
+### 2026-09-22 (รอบ 7) — เปลี่ยนสวิตช์ "เปลี่ยนระบบ" เป็นการ์ดสีสัน (เหมือน index.html) + ตัด Portal ออก
+
+**คำขอ:** คุณใหญ่ส่งภาพสวิตช์ "เปลี่ยนระบบ" แบบการ์ดสีสัน 6 ใบของ index.html ถามว่าที่ทำไว้ (รอบ 6 — แบบลิสต์รายการธรรมดา) หน้าตาเหมือนภาพนี้ไหม → ตอบว่าไม่เหมือน → คุณใหญ่ขอให้ทำให้เหมือนภาพ → ระหว่างทำ คุณใหญ่แจ้งเพิ่มว่า "เอา portal ออก"
+
+**การแก้ไข:**
+- แทนที่ HTML ของกลุ่ม `sb-g5` จาก `.sb-item` (ลิสต์รายการ) เป็น grid การ์ด 3 คอลัมน์ (`.sys-switch-grid`/`.sys-card`) สีไล่เฉด (gradient) ต่อระบบ ตรงกับโทนสีที่ index.html ใช้ทุกจุด: ผลิต (น้ำเงิน), คลัง (เขียวมิ้นท์), PM (ส้ม), จองห้อง (ฟ้า), ขอลา (ม่วง #6d28d9→#7c3aed)
+- **ตัด Portal ออกจากสวิตช์** ตามที่คุณใหญ่แจ้งเพิ่มเติม (รอบ 6 เคยใส่ไว้) — เหลือ 4 การ์ด: ผลิต, คลัง, PM, ขอลา บวกจองห้องประชุม (แสดงเฉพาะ admin) = สูงสุด 5 การ์ด (ไม่รวมตัวเอง "HR")
+- เพิ่ม CSS ใหม่ (`.sys-switch-grid`, `.sys-card`, `.sys-card-icon`, `.sys-card-label`) เป็น plain CSS grid ธรรมดา (checkin.html ไม่มี Tailwind อยู่แล้ว จึงไม่ต้องเพิ่ม)
+- ตรรกะการแสดง/ซ่อนลิงก์จองห้องประชุม (admin เท่านั้น ผ่าน `applyPermissions()`) **ไม่เปลี่ยนแปลง** จากรอบ 6 — แก้เฉพาะรูปลักษณ์การแสดงผล
+
+**ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่านทั้งไฟล์ต้นทางและไฟล์บนเครื่องหลัง commit, เทียบขนาดไฟล์ + `diff` ระหว่าง `checkin.html` กับ `GitHub/checkin.html` ตรงกันทุกไบต์ (320,691 ไบต์), grep ยืนยันไม่มี `gotoSystem('portal.html')` เหลืออยู่แล้ว
+
+**ไฟล์ที่แก้ไข:** `checkin.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `checkin.html` ✅
+
+---
+
+
+
+### 2026-09-22 (รอบ 6) — เพิ่มสวิตช์ "เปลี่ยนระบบ" เชื่อมไปทุกระบบ (checkin.html เดิมไม่มีสวิตช์นี้เลย)
+
+**คำขอ:** ให้ตรวจสอบ/เพิ่มลิงก์ในสวิตช์ "เปลี่ยนระบบ" ให้ครบทุกระบบ (7 ไฟล์) ใช้ pattern `gotoSystem(url)` เดียวกับ index.html เพื่อให้ SSO session ทำงานข้ามระบบ ไม่ใช้ `<a href>` เฉยๆ
+
+**ตรวจสอบก่อนแก้ไข:** `checkin.html` ไม่มีสวิตช์ "เปลี่ยนระบบ" อยู่เลย (ไม่มีฟังก์ชัน `gotoSystem`)
+
+**พบประเด็นสำคัญ — checkin.html ใช้บัญชีคนละระบบกับที่อื่นทั้งหมด:** ระบบนี้ login ผ่านตาราง **`checkin_users`** (ดูคอมเมนต์ในสคีมาเอง: "ตาราง Users เฉพาะระบบนี้ (แยกจาก app_users)") ซึ่ง `id` เป็น `SERIAL` (เลขรันของตัวเอง เช่น 1,2,3…) คนละชุดกับ `app_users.id` ที่ระบบอื่น (index/inventory/pm/portal และ leave.html โหมด supervisor) ใช้ร่วมกันโดยสิ้นเชิง — **จึงไม่มี session ของ checkin.html ที่ถูกต้องจะส่งต่อแบบ SSO ไปให้ระบบอื่นได้เลย** หากเขียน session ปลอมลงไปตามแพทเทิร์นปกติ (เช่นใช้ `currentUser.id` ของ checkin_users ไปเขียนลง `_sn_sess`) จะเป็นการยัด id/username ที่ไม่มีอยู่จริงใน app_users เข้าไปในระบบปลายทาง เสี่ยงเกิด bug (เช่น permission fetch ว่างเปล่า หรือแย่กว่านั้นคือชนกับ id จริงที่ไม่เกี่ยวข้องกันโดยบังเอิญ)
+
+**การแก้ไข:**
+- เพิ่ม sidebar group ใหม่ `sb-g5` "เปลี่ยนระบบ" (สีเทา ต่อจากกลุ่ม "จัดการระบบ") มีลิงก์ไป: Portal, ระบบผลิต (index.html), ระบบคลัง (inventory.html), ระบบ PM (pm.html), จองห้องประชุม (meeting.html — ซ่อนไว้ก่อน), ขอลา (leave.html)
+- เพิ่มฟังก์ชัน `gotoSystem(url)` — **เป็นแค่ `window.location.href = url` เฉยๆ ไม่เขียน session ใดๆ** (คงชื่อฟังก์ชันไว้ให้ตรง pattern เรียกใช้เดียวกับระบบอื่น แต่ตัวฟังก์ชันไม่มี SSO จริง เพราะไม่มี session ที่ถูกต้องจะส่งได้) — ผู้ใช้ต้อง login ใหม่ในระบบปลายทางตามปกติ ซึ่งเป็นพฤติกรรมที่ถูกต้องแล้ว ไม่ใช่บั๊ก
+- ลิงก์ "จองห้องประชุม" แสดงเฉพาะ role admin เท่านั้น (`checkin_users` ไม่มีคอลัมน์ `meeting_access` เหมือน `app_users` จึงใช้ role admin แทนเงื่อนไข `meeting_access||role==='admin'` ของระบบอื่น) — gate ผ่านฟังก์ชัน `applyPermissions()` เดิมที่มีอยู่แล้ว
+
+**หมายเหตุ:** ไม่ได้เพิ่มลิงก์กลับ `checkin.html` เอง (ไม่นับตัวเองตามที่ขอ) — Portal ที่มักตกหล่นได้ใส่ลิงก์ไว้ครบแล้ว
+
+**ตรวจสอบแล้ว:** extract inline `<script>` แล้วรัน `node --check` ผ่านทั้งไฟล์ต้นทางและไฟล์บนเครื่องหลัง commit, เทียบขนาดไฟล์ + `diff` ระหว่าง `checkin.html` กับ `GitHub/checkin.html` ตรงกันทุกไบต์ (319,421 ไบต์)
+
+**ไฟล์ที่แก้ไข:** `checkin.html`, `CLAUDE.md`
+**Copy ไป GitHub/:** `checkin.html` ✅
+
+---
+
+
 
 ### 2026-09-20 (รอบ 5) — checkin.html (System 4): ขยายไฮไลต์สีแดง "วันหยุด" ไปทุกปุ่ม Export ในระบบ (ทั้งแถว)
 

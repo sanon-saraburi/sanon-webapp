@@ -89,6 +89,18 @@
   .modal-backdrop { background: rgba(15,23,42,0.55); }
   input:focus, select:focus, textarea:focus, button:focus { outline:none; }
 
+  /* ========== ซ่อนปุ่ม +/- (spinner) ของช่องกรอกตัวเลขทั้งระบบ ========== */
+  /* ป้องกันการกดปุ่มเพิ่ม/ลดค่าโดยไม่ตั้งใจ และป้องกันตัวเลขวิ่งตามลูกกลิ้งเมาส์ */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   /* ========== Mobile Form Optimization ========== */
   @media (max-width: 640px) {
     /* ป้องกัน iOS zoom เมื่อ focus input (ต้องการ font-size >= 16px) */
@@ -142,6 +154,25 @@
     background: linear-gradient(90deg,#112240 25%,#1d3a5f 37%,#112240 63%);
     background-size: 400% 100%;
     animation: skeleton-loading 1.4s ease infinite;
+  }
+
+  /* ===== Dashboard (พื้นหลังเข้ม) — ปรับขนาดให้เหมาะกับจอมือถือ ===== */
+  /* เดิมการ์ด/ตัวเลข/กราฟ ใช้ขนาดเดียวกับจอ Desktop ทำให้บนมือถือดูเหมือน "ซูมเข้ามาเยอะ" */
+  @media (max-width: 640px) {
+    .dash-dark-bg .dash-dark-card { padding: 14px !important; }
+    .dash-dark-bg h2.text-lg { font-size: 16px !important; }
+    .dash-dark-bg .text-2xl { font-size: 19px !important; }
+    .dash-dark-bg .text-xl  { font-size: 16px !important; }
+    /* ระยะห่างระหว่างการ์ดในกริด (stat cards, OEE/KPI, กราฟ ฯลฯ) */
+    .dash-dark-bg .gap-4 { gap: 10px !important; }
+    .dash-dark-bg .gap-5 { gap: 10px !important; }
+    .dash-dark-bg .gap-6 { gap: 12px !important; }
+    /* ลดความสูงพื้นที่กราฟให้พอดีจอมือถือ ไม่ต้องเลื่อนเยอะ */
+    .dash-dark-bg .relative.h-72 { height: 210px !important; }
+    .dash-dark-bg .relative.h-64 { height: 200px !important; }
+    .dash-dark-bg .relative.h-56 { height: 190px !important; }
+    .dash-dark-bg [style*="height:320px"] { height: 220px !important; }
+    .dash-dark-bg [style*="height:270px"] { height: 200px !important; }
   }
 </style>
 </head>
@@ -10255,13 +10286,62 @@ function exportReportExcel() {
 // =====================================================================
 // SECTION 18B: DASHBOARD ค่าไฟฟ้า
 // =====================================================================
-const ELEC_FACTORIES = [
-  { key: 'CDE',    label: 'CDE',    color: '#3b82f6' },
-  { key: 'Propel', label: 'Propel', color: '#8b5cf6' },
-  { key: 'Sanon1', label: 'Sanon 1',color: '#f59e0b' },
-  { key: 'Sanon2', label: 'Sanon 2',color: '#10b981' },
-];
-const ELEC_PROD_TABLES = { CDE:'production_cde', Propel:'production_propel', Sanon1:'production_sanon1', Sanon2:'production_sanon2' };
+// ตั้งแต่ 2026-09-20: ELEC_FACTORIES ไม่ hardcode รายชื่อโรงงานอีกต่อไป —
+// โหลดมาจากตาราง `factories` (เฉพาะที่ status = active) อัตโนมัติ
+// เพิ่ม/ลบโรงงานที่เมนู "จัดการ → โรงงาน" แล้วหน้าค่าไฟฟ้าจะอัปเดตตามโดยไม่ต้องแก้โค้ด
+// ส่วนคำนวณ "บาท/ตัน" ยังต้องอาศัยตาราง production เฉพาะของแต่ละโรงงาน (ดู ELEC_KNOWN_META)
+// — โรงงานที่ยังไม่มีตาราง production ผูกไว้ จะบันทึก/แสดงค่าไฟฟ้า (บาท) ได้ปกติ
+// แต่จะไม่มีค่า บาท/ตัน จนกว่าจะเพิ่ม mapping ในนี้เอง
+const ELEC_KNOWN_META = {
+  'CDE':         { color: '#3b82f6', prodTable: 'production_cde' },
+  'Propel':      { color: '#8b5cf6', prodTable: 'production_propel' },
+  'Sanon1':      { color: '#f59e0b', prodTable: 'production_sanon1' },
+  'Sanon2':      { color: '#10b981', prodTable: 'production_sanon2' },
+  'MobilePlant': { color: '#f97316', prodTable: 'production_mobile' },
+  'Mobile':      { color: '#f97316', prodTable: 'production_mobile' },
+};
+const ELEC_COLOR_PALETTE = ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#f97316','#ec4899','#06b6d4','#84cc16','#6366f1','#ef4444'];
+let ELEC_FACTORIES = [];
+let ELEC_PROD_TABLES = {};
+let _elecFactoriesLoadedAt = 0;
+
+function elecFactoryKey(name) {
+  return String(name || '').trim().replace(/\s+/g, '');
+}
+
+// โหลด/รีเฟรชรายชื่อโรงงานสำหรับโมดูลค่าไฟฟ้า — cache 60 วิ กันยิง query ถี่เกินไป
+async function ensureElecFactoriesLoaded(force) {
+  if (!force && ELEC_FACTORIES.length && (Date.now() - _elecFactoriesLoadedAt) < 60000) return;
+  try {
+    const { data, error } = await db.from('factories').select('name,status').eq('status','active').order('created_at', { ascending: true });
+    if (error) throw error;
+    const list = data || [];
+    ELEC_FACTORIES = list.map((f, i) => {
+      const key = elecFactoryKey(f.name);
+      const known = ELEC_KNOWN_META[key];
+      return { key, label: f.name, color: known ? known.color : ELEC_COLOR_PALETTE[i % ELEC_COLOR_PALETTE.length] };
+    });
+    ELEC_PROD_TABLES = {};
+    ELEC_FACTORIES.forEach(f => {
+      const known = ELEC_KNOWN_META[f.key];
+      if (known) ELEC_PROD_TABLES[f.key] = known.prodTable;
+    });
+    _elecFactoriesLoadedAt = Date.now();
+  } catch (err) {
+    console.error('โหลดรายชื่อโรงงาน (ค่าไฟฟ้า) ไม่สำเร็จ', err);
+    if (!ELEC_FACTORIES.length) {
+      // fallback กันระบบพังถ้าโหลดตาราง factories ไม่ได้เลยตั้งแต่แรก
+      ELEC_FACTORIES = [
+        { key:'CDE',    label:'CDE',     color:'#3b82f6' },
+        { key:'Propel', label:'Propel',  color:'#8b5cf6' },
+        { key:'Sanon1', label:'Sanon 1', color:'#f59e0b' },
+        { key:'Sanon2', label:'Sanon 2', color:'#10b981' },
+      ];
+      ELEC_PROD_TABLES = { CDE:'production_cde', Propel:'production_propel', Sanon1:'production_sanon1', Sanon2:'production_sanon2' };
+    }
+  }
+}
+
 const _elecRangeState = defaultRangeState();
 
 function renderDashboardElectricity(container) {
@@ -10273,7 +10353,7 @@ function renderDashboardElectricity(container) {
       <!-- Header -->
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-lg font-semibold dash-dark-text flex items-center gap-2">
-          <i data-lucide="zap" class="w-5 h-5 text-yellow-400"></i>ค่าไฟฟ้า 4 โรงงาน
+          <i data-lucide="zap" class="w-5 h-5 text-yellow-400"></i>ค่าไฟฟ้ารายโรงงาน
         </h2>
         <div class="flex flex-wrap items-center gap-2">
           <select id="elec-year" onchange="loadElecData()" class="dash-dark-input rounded-xl px-3 py-1.5 text-xs">${yearOpts}</select>
@@ -10301,6 +10381,7 @@ async function loadElecData() {
   const rankEl  = document.getElementById('elec-rank-block');
   const tableEl = document.getElementById('elec-table-block');
   if (!kpiEl) return;
+  await ensureElecFactoriesLoaded();
 
   try {
     // ดึงค่าไฟทั้งปี
@@ -10308,17 +10389,20 @@ async function loadElecData() {
       .select('factory,month,baht,kwh').eq('year', year).order('month');
     if (elecErr) throw elecErr;
 
-    // ดึงยอดผลิตทั้ง 4 โรงงาน ทั้งปี
+    // ดึงยอดผลิตทุกโรงงานที่มีตาราง production ผูกไว้ (ดู ELEC_PROD_TABLES) ทั้งปี
+    // โรงงานที่ยังไม่มีตาราง production mapping จะได้ [] แทน (ไม่คำนวณ บาท/ตัน แต่ไม่ทำให้ query อื่นพัง)
     const thYear = year; // พ.ศ. stored as AD in DB
     const dateFrom = `${year}-01-01`;
     const dateTo   = `${year}-12-31`;
     const prodResults = await Promise.all(
       ELEC_FACTORIES.map(f =>
-        db.from(ELEC_PROD_TABLES[f.key])
-          .select('production_date,feed_ton')
-          .eq('status','approved')
-          .gte('production_date', dateFrom)
-          .lte('production_date', dateTo)
+        ELEC_PROD_TABLES[f.key]
+          ? db.from(ELEC_PROD_TABLES[f.key])
+              .select('production_date,feed_ton')
+              .eq('status','approved')
+              .gte('production_date', dateFrom)
+              .lte('production_date', dateTo)
+          : Promise.resolve({ data: [] })
       )
     );
 
@@ -10579,6 +10663,7 @@ async function renderElecManageTable() {
   const el = document.getElementById('elec-m-table-block');
   if (!el) return;
   el.innerHTML = `<div class="text-center py-8 text-secondary-400 text-sm">กำลังโหลด...</div>`;
+  await ensureElecFactoriesLoaded();
   const year = _elecManageFilter.year;
   try {
     const dateFrom = `${year}-01-01`;
@@ -10586,8 +10671,10 @@ async function renderElecManageTable() {
     const [{ data: elecData }, ...prodResults] = await Promise.all([
       db.from('electricity_costs').select('factory,month,baht,kwh').eq('year',year).order('month'),
       ...ELEC_FACTORIES.map(f =>
-        db.from(ELEC_PROD_TABLES[f.key]).select('production_date,feed_ton').eq('status','approved')
-          .gte('production_date',dateFrom).lte('production_date',dateTo)
+        ELEC_PROD_TABLES[f.key]
+          ? db.from(ELEC_PROD_TABLES[f.key]).select('production_date,feed_ton').eq('status','approved')
+              .gte('production_date',dateFrom).lte('production_date',dateTo)
+          : Promise.resolve({ data: [] })
       ),
     ]);
     const elecMap = {};
@@ -10643,6 +10730,7 @@ async function renderElecManageTable() {
 }
 
 async function openElecMonthModal(month, year) {
+  await ensureElecFactoriesLoaded();
   const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const yearNow = new Date().getFullYear();
   const monthOpts = MN.map((n,i) => `<option value="${i+1}" ${i+1===month?'selected':''}>${n}</option>`).join('');
@@ -10788,7 +10876,8 @@ async function deleteElecFactory(factoryKey) {
 }
 
 // Bulk modal: เลือกเดือนแล้วกรอก
-function openElecBulkModal() {
+async function openElecBulkModal() {
+  await ensureElecFactoriesLoaded();
   const year = _elecManageFilter.year;
   const MN = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const curMonth = new Date().getMonth() + 1;
@@ -10837,6 +10926,19 @@ async function saveElecBulk(year) {
     showToast('บันทึกไม่สำเร็จ: ' + err.message, 'error');
   }
 }
+
+// =====================================================================
+// GLOBAL FIX: ป้องกันช่องกรอกตัวเลขเปลี่ยนค่าตามการเลื่อนลูกกลิ้งเมาส์
+// =====================================================================
+// เมื่อเลื่อนลูกกลิ้งเมาส์ขณะโฟกัสอยู่ที่ input[type=number] ให้เอาโฟกัสออก
+// ก่อน เพื่อไม่ให้ค่าตัวเลขเปลี่ยนโดยไม่ตั้งใจ (ใช้ event delegation ทั้งหน้า
+// จึงครอบคลุมทุกฟอร์มที่สร้างขึ้นภายหลัง เช่น modal บันทึกยอดผลิต)
+document.addEventListener('wheel', (e) => {
+  const el = document.activeElement;
+  if (el && el.tagName === 'INPUT' && el.type === 'number') {
+    el.blur();
+  }
+}, { passive: true });
 
 // =====================================================================
 // SECTION 19: APP BOOTSTRAP
@@ -11687,6 +11789,7 @@ function openExecutiveReportDialog() {
 async function loadPptxGenJS() { /* deprecated */ }
 
 async function fetchExecReportData(fromDate, toDate) {
+  await ensureElecFactoriesLoaded();
   const plants = Object.keys(PRODUCTION_PLANT_CONFIG);
   const results = {};
   const [fy, fm] = fromDate.split('-').map(Number);
@@ -11893,7 +11996,7 @@ async function generateExecutiveReport(fromDate, toDate, company) {
   if (failPlants.length)  summaryLines.push(`🔴 ต่ำกว่าเป้า: ${failPlants.join(', ')} — ต้องติดตาม`);
   if (totalBd > 0) summaryLines.push(`⚠️ พบ Breakdown รวม ${totalBd} วัน ใน ${plants.filter(pk=>data[pk].breakdownCount>0).map(pk=>EXEC_REPORT_LABELS[pk]).join(', ')}`);
   summaryLines.push(`💰 ยอดขาย ${fmtExN(data._sales.totalValue,0)} บาท (${fmtExN(data._sales.totalTon,1)} ตัน)`);
-  if (data._electricity?.total > 0) summaryLines.push(`⚡ ค่าไฟฟ้ารวม 4 โรงงาน ${fmtExN(data._electricity.total,0)} บาท`);
+  if (data._electricity?.total > 0) summaryLines.push(`⚡ ค่าไฟฟ้ารวมทุกโรงงาน ${fmtExN(data._electricity.total,0)} บาท`);
 
   // ── ตาราง Overview (พร้อม Traffic Light + Trend) ──
   const overviewRows = plants.map(pk => {
