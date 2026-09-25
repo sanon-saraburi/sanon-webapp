@@ -3331,20 +3331,27 @@ async function renderReport() {
     byDeptLeave[d][r.employee_name].total += Number(r.days);
   });
   const leaveSections = Object.entries(byDeptLeave).map(([dept,emps])=>{
-    const rows = Object.entries(emps).map(([name,days])=>`
+    const rows = Object.entries(emps).map(([name,days])=>{
+      // "อื่นๆ" = รวมประเภทลาที่ไม่มีคอลัมน์ของตัวเอง (ลาสมรส/ลาคลอดบุตร/ลาอุปสมบท/ลาฌาปนกิจ/ลาฝึกอบรม ฯลฯ)
+      // คำนวณจาก total - 4 ประเภทหลัก เพื่อให้ผลรวมของคอลัมน์ที่เห็นตรงกับ "รวม (วัน)" เสมอ ไม่ต้องแก้ตอนสะสมข้อมูล
+      const other = days.total - (days.sick||0) - (days.personal||0) - (days.annual||0) - (days.out||0);
+      return `
       <tr>
         <td>${esc(name)}</td>
         <td style="color:#ef4444;font-weight:600;">${days.sick||0}</td>
         <td style="color:#f59e0b;font-weight:600;">${days.personal||0}</td>
         <td style="color:#22c55e;font-weight:600;">${days.annual||0}</td>
         <td style="color:#3b82f6;font-weight:600;">${days.out||0}</td>
+        <td style="color:#8b5cf6;font-weight:600;">${other>0?other:0}</td>
         <td style="font-weight:700;">${days.total}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
+      <div class="card-title" style="margin-bottom:4px;">🏭 ${esc(dept)}</div>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">"อื่นๆ" = ลาสมรส / ลาคลอดบุตร / ลาอุปสมบท / ลาฌาปนกิจ / ลาฝึกอบรม ฯลฯ — ดูรายละเอียดรายบุคคลได้ใน Export Excel</p>
       <div class="tbl-wrap">
-        <table><thead><tr><th>ชื่อ</th><th>🤒 ป่วย</th><th>📌 กิจ</th><th>🏖️ พักร้อน</th><th>🚗 ออกนอก</th><th>รวม (วัน)</th></tr></thead>
+        <table><thead><tr><th>ชื่อ</th><th>🤒 ป่วย</th><th>📌 กิจ</th><th>🏖️ พักร้อน</th><th>🚗 ออกนอก</th><th>📋 อื่นๆ</th><th>รวม (วัน)</th></tr></thead>
         <tbody>${rows}</tbody></table>
       </div>
     </div>`;

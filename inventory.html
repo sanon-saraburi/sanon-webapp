@@ -1179,6 +1179,7 @@ function renderNoAccess() {
 // =====================================================================
 // SECTION 12: inv-dashboard
 // =====================================================================
+let _dashTxns=[];let _dashLow=[];let _dashOut=[];let _dashPeriodLabel='';
 PAGE_RENDERERS['inv-dashboard'] = async function(el) {
   const now=new Date();
   const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -1286,6 +1287,124 @@ PAGE_RENDERERS['inv-dashboard'] = async function(el) {
   await loadDashboard();
 };
 
+function showDashMovementDetail(id){
+  const t=_dashTxns.find(x=>String(x.id)===String(id));
+  if(!t){showToast('ไม่พบข้อมูลรายการนี้','error');return;}
+  const it=t.inventory_items||_invItems.find(x=>x.id===t.item_id)||{};
+  const isRcv=t.transaction_type==='receive';
+  const statusMap={pending:'⏳ รออนุมัติ',approved:'✅ อนุมัติแล้ว',rejected:'❌ ไม่อนุมัติ'};
+  const statusColor={pending:'text-amber-600 bg-amber-50',approved:'text-green-600 bg-green-50',rejected:'text-red-600 bg-red-50'};
+  const price=t.unit_price||t.unit_cost||0;
+  const row=(label,val)=>val?`<div><div class="text-xs text-gray-400 mb-0.5">${label}</div><div class="text-sm font-medium text-gray-800">${val}</div></div>`:'';
+  const personRow=isRcv
+    ?row('ผู้บันทึกรับเข้า',escapeHtml(t.creator?.full_name||t.creator?.username||'-'))
+    :row('ผู้ขอเบิก',escapeHtml(t.requested_by||'-'));
+  const supplierRow=isRcv?row('ผู้จำหน่าย',escapeHtml(t.inv_suppliers?.name||'')):'';
+  const body=`
+  <div class="space-y-4">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${isRcv?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}">${isRcv?'⬇ รับเข้า':'⬆ เบิก'}</span>
+      ${t.status?`<span class="px-2.5 py-1 rounded-full text-xs font-semibold ${statusColor[t.status]||'text-gray-600 bg-gray-50'}">${statusMap[t.status]||escapeHtml(t.status)}</span>`:''}
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      ${row('เลขที่เอกสาร',escapeHtml(t.doc_no||'-'))}
+      ${row('วันที่ทำรายการ',fmtDateTime(t.created_at))}
+      ${row('วัสดุ',escapeHtml((it.code?it.code+' — ':'')+(it.name||'-')))}
+      ${row('จำนวน',fmtNum(t.quantity)+' '+escapeHtml(it.unit||''))}
+      ${row('ราคา/หน่วย',price?fmtMoney(price)+' บาท':'')}
+      ${row('มูลค่ารวม',t.total_amount?fmtMoney(t.total_amount)+' บาท':'')}
+      ${row('โรงงาน/ฝ่าย',escapeHtml([t.factory,t.department].filter(Boolean).join(' / ')||'-'))}
+      ${row('Lot No.',t.lot_no?`<span class="font-mono">${escapeHtml(t.lot_no)}</span>`:'')}
+      ${supplierRow}
+      ${personRow}
+      ${row('ผู้อนุมัติ',t.approver?escapeHtml(t.approver?.full_name||t.approver?.username||''):'')}
+      ${row('วันที่อนุมัติ',t.approved_at?fmtDateTime(t.approved_at):'')}
+      ${row('วัตถุประสงค์',escapeHtml(t.purpose||''))}
+    </div>
+    ${t.status==='rejected'&&t.rejected_reason?`<div><div class="text-xs text-gray-400 mb-0.5">เหตุผลไม่อนุมัติ</div><div class="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">${escapeHtml(t.rejected_reason)}</div></div>`:''}
+    ${t.note?`<div><div class="text-xs text-gray-400 mb-0.5">หมายเหตุ</div><div class="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">${escapeHtml(t.note)}</div></div>`:''}
+  </div>`;
+  showModal({title:`รายละเอียดรายการ — ${escapeHtml(t.doc_no||'')}`,body,footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">ปิด</button>`});
+}
+function dashKpiClick(kind){
+  if(kind==='items') return showDashItemsPopup();
+  if(kind==='low') return showDashStockPopup('low');
+  if(kind==='out') return showDashStockPopup('out');
+  return showDashTxnListPopup(kind); // 'receive' | 'withdraw'
+}
+
+function showDashTxnListPopup(type){
+  const rows=_dashTxns.filter(t=>t.transaction_type===type).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  const isRcv=type==='receive';
+  const title=`${isRcv?'รายการรับเข้า':'รายการเบิก'} — ${_dashPeriodLabel} (${rows.length} รายการ)`;
+  const body=rows.length?`
+  <div class="overflow-y-auto" style="max-height:60vh">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 text-gray-500 sticky top-0"><tr>
+        <th class="text-left px-3 py-2">วันที่</th><th class="text-left px-3 py-2">เลขที่</th>
+        <th class="text-left px-3 py-2">วัสดุ</th><th class="text-right px-3 py-2">จำนวน</th>
+        <th class="text-right px-3 py-2">มูลค่า</th><th class="text-left px-3 py-2">โรงงาน</th>
+      </tr></thead>
+      <tbody>${rows.map(t=>{
+        const it=t.inventory_items||_invItems.find(x=>x.id===t.item_id)||{};
+        return `<tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="showDashMovementDetail('${t.id}')" title="คลิกดูรายละเอียด">
+          <td class="px-3 py-2 text-gray-500 whitespace-nowrap">${fmtDate(t.created_at)}</td>
+          <td class="px-3 py-2 font-mono text-xs ${isRcv?'text-blue-600':'text-orange-600'}">${escapeHtml(t.doc_no||'-')}</td>
+          <td class="px-3 py-2 max-w-[160px] truncate">${escapeHtml(it.name||'-')}</td>
+          <td class="px-3 py-2 text-right font-medium">${fmtNum(t.quantity)} ${escapeHtml(it.unit||'')}</td>
+          <td class="px-3 py-2 text-right text-gray-600">${t.total_amount?fmtMoney(t.total_amount):'-'}</td>
+          <td class="px-3 py-2 text-gray-400">${escapeHtml(t.factory||'-')}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`:'<div class="py-8 text-center text-gray-400 text-sm">ไม่มีรายการในเดือนนี้</div>';
+  showModal({title,wide:true,body,footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">ปิด</button>`});
+}
+
+function showDashStockPopup(kind){
+  const rows=kind==='low'?_dashLow:_dashOut;
+  const title=`${kind==='low'?'วัสดุใกล้หมด':'วัสดุหมด'} (${rows.length} รายการ)`;
+  const body=rows.length?`
+  <div class="overflow-y-auto" style="max-height:60vh">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 text-gray-500 sticky top-0"><tr>
+        <th class="text-left px-3 py-2">รหัส</th><th class="text-left px-3 py-2">ชื่อวัสดุ</th>
+        <th class="text-right px-3 py-2">คงเหลือ</th><th class="text-right px-3 py-2">ขั้นต่ำ</th>
+        <th class="text-left px-3 py-2">ที่เก็บ</th>
+      </tr></thead>
+      <tbody>${rows.map(i=>`<tr class="border-t hover:bg-gray-50">
+        <td class="px-3 py-2 font-mono text-xs">${escapeHtml(i.code||'')}</td>
+        <td class="px-3 py-2">${escapeHtml(i.name||'')}</td>
+        <td class="px-3 py-2 text-right font-medium ${kind==='out'?'text-red-500':'text-amber-500'}">${fmtNum(_stockMap[i.id]||0)} ${escapeHtml(i.unit||'')}</td>
+        <td class="px-3 py-2 text-right text-gray-400">${fmtNum(i.min_stock||0)}</td>
+        <td class="px-3 py-2 text-xs text-gray-500">${escapeHtml(i.location||'-')}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`:'<div class="py-8 text-center text-gray-400 text-sm">ไม่มีรายการ</div>';
+  showModal({title,wide:true,body,footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">ปิด</button>`});
+}
+
+function showDashItemsPopup(){
+  const rows=[..._invItems].sort((a,b)=>(a.code||'').localeCompare(b.code||''));
+  const title=`รายการวัสดุทั้งหมด (${rows.length} รายการ)`;
+  const body=rows.length?`
+  <div class="overflow-y-auto" style="max-height:60vh">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 text-gray-500 sticky top-0"><tr>
+        <th class="text-left px-3 py-2">รหัส</th><th class="text-left px-3 py-2">ชื่อวัสดุ</th>
+        <th class="text-left px-3 py-2">ประเภท</th><th class="text-right px-3 py-2">คงเหลือ</th>
+      </tr></thead>
+      <tbody>${rows.map(i=>`<tr class="border-t hover:bg-gray-50">
+        <td class="px-3 py-2 font-mono text-xs">${escapeHtml(i.code||'')}</td>
+        <td class="px-3 py-2">${escapeHtml(i.name||'')}</td>
+        <td class="px-3 py-2 text-xs text-gray-500">${escapeHtml(i.category||'-')}</td>
+        <td class="px-3 py-2 text-right font-medium">${fmtNum(_stockMap[i.id]||0)} ${escapeHtml(i.unit||'')}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`:'<div class="py-8 text-center text-gray-400 text-sm">ไม่มีรายการ</div>';
+  showModal({title,wide:true,body,footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">ปิด</button>`});
+}
+
 function dashRangeChange() { loadDashboard(); }
 function dashSetFac(val){
   qs('#dash-factory').value=val;
@@ -1307,11 +1426,14 @@ async function loadDashboard() {
   const de=`${selY}-${String(selM+1).padStart(2,'0')}-${String(lastD).padStart(2,'0')}`;
   const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const lbl=qs('#dash-period-label');
-  if(lbl)lbl.textContent=`${MN[selM]} ${selY+543} (${ds} — ${de})`;
+  _dashPeriodLabel=`${MN[selM]} ${selY+543}`;
+  if(lbl)lbl.textContent=`${_dashPeriodLabel} (${ds} — ${de})`;
 
-  let q=db.from('inventory_transactions').select('id,transaction_type,quantity,unit_price,unit_cost,total_amount,factory,item_id,created_at').gte('created_at',ds).lte('created_at',de+'T23:59:59').eq('status','approved');
+  let q=db.from('inventory_transactions').select('id,transaction_type,quantity,unit_price,unit_cost,total_amount,factory,department,item_id,created_at,doc_no,note,requested_by,status,approved_at,rejected_reason,purpose,supplier_id,lot_no,inventory_items(name,unit,code),creator:app_users!created_by(full_name,username),approver:app_users!approved_by(full_name,username)').gte('created_at',ds).lte('created_at',de+'T23:59:59').eq('status','approved');
   if (factory) q=q.eq('factory',factory);
-  const {data:txns}=await q;
+  const {data:txns,error:txnErr}=await q;
+  if(txnErr){showToast('โหลดข้อมูล Dashboard ผิดพลาด: '+txnErr.message,'error');console.error('loadDashboard query error:',txnErr);}
+  _dashTxns=txns||[];
   const rcv=(txns||[]).filter(t=>t.transaction_type==='receive');
   const wdw=(txns||[]).filter(t=>t.transaction_type==='withdraw');
   const tRcv=rcv.reduce((s,t)=>s+Number(t.quantity||0),0);
@@ -1320,16 +1442,17 @@ async function loadDashboard() {
   const tAmt=wdw.reduce((s,t)=>s+_priceFallback(t),0);
   const low=_invItems.filter(i=>{const q=_stockMap[i.id]||0;return q>0&&q<=(i.min_stock||0);});
   const out=_invItems.filter(i=>(_stockMap[i.id]||0)<=0);
+  _dashLow=low;_dashOut=out;
 
   const kEl=qs('#dash-kpi');
   if(kEl) kEl.innerHTML=[
-    {l:'รายการวัสดุ',v:fmtNum(_invItems.length),c:'text-blue-700',bg:'bg-blue-50',border:'border-blue-400',icon:'package'},
-    {l:'รับเข้า',v:fmtNum(tRcv),c:'text-green-700',bg:'bg-green-50',border:'border-green-400',icon:'arrow-down-to-line'},
-    {l:'เบิกออก',v:fmtNum(tWdw),c:'text-orange-600',bg:'bg-orange-50',border:'border-orange-400',icon:'arrow-up-from-line'},
-    {l:'มูลค่าเบิก (บาท)',v:fmtMoney(tAmt),c:'text-purple-700',bg:'bg-purple-50',border:'border-purple-400',icon:'banknote'},
-    {l:'ใกล้หมด',v:fmtNum(low.length),c:'text-amber-600',bg:'bg-amber-50',border:'border-amber-400',icon:'alert-triangle'},
-    {l:'วัสดุหมด',v:fmtNum(out.length),c:'text-red-600',bg:'bg-red-50',border:'border-red-400',icon:'package-x'},
-  ].map(k=>`<div class="${k.bg} rounded-2xl p-4 border-l-4 ${k.border} shadow-sm">
+    {l:'รายการวัสดุ',v:fmtNum(_invItems.length),c:'text-blue-700',bg:'bg-blue-50',border:'border-blue-400',icon:'package',k:'items'},
+    {l:'รับเข้า',v:fmtNum(tRcv),c:'text-green-700',bg:'bg-green-50',border:'border-green-400',icon:'arrow-down-to-line',k:'receive'},
+    {l:'เบิกออก',v:fmtNum(tWdw),c:'text-orange-600',bg:'bg-orange-50',border:'border-orange-400',icon:'arrow-up-from-line',k:'withdraw'},
+    {l:'มูลค่าเบิก (บาท)',v:fmtMoney(tAmt),c:'text-purple-700',bg:'bg-purple-50',border:'border-purple-400',icon:'banknote',k:'withdraw'},
+    {l:'ใกล้หมด',v:fmtNum(low.length),c:'text-amber-600',bg:'bg-amber-50',border:'border-amber-400',icon:'alert-triangle',k:'low'},
+    {l:'วัสดุหมด',v:fmtNum(out.length),c:'text-red-600',bg:'bg-red-50',border:'border-red-400',icon:'package-x',k:'out'},
+  ].map(k=>`<div onclick="dashKpiClick('${k.k}')" class="${k.bg} rounded-2xl p-4 border-l-4 ${k.border} shadow-sm cursor-pointer hover:shadow-md transition-shadow" title="คลิกดูรายละเอียด">
     <div class="flex items-center justify-between mb-2">
       <span class="text-xs font-medium text-gray-500">${k.l}</span>
       <i data-lucide="${k.icon}" class="w-4 h-4 ${k.c} opacity-50"></i>
@@ -1373,9 +1496,9 @@ async function loadDashboard() {
   if(mvEl){
     const mvRows=[...(txns||[])].sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||'')).slice(0,25);
     mvEl.innerHTML=mvRows.length?mvRows.map(t=>{
-      const it=_invItems.find(x=>x.id===t.item_id);
+      const it=t.inventory_items||_invItems.find(x=>x.id===t.item_id);
       const isRcv=t.transaction_type==='receive';
-      return `<tr class="border-t hover:bg-gray-50">
+      return `<tr class="border-t hover:bg-gray-50 cursor-pointer" onclick="showDashMovementDetail('${t.id}')" title="คลิกดูรายละเอียด">
         <td class="px-3 py-2.5 text-gray-500 whitespace-nowrap">${fmtDate(t.created_at)}</td>
         <td class="px-3 py-2.5"><span class="px-1.5 py-0.5 rounded-full text-xs font-medium ${isRcv?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}">${isRcv?'รับเข้า':'เบิก'}</span></td>
         <td class="px-3 py-2.5 max-w-[160px] truncate text-gray-700">${escapeHtml(it?.name||'-')}</td>
@@ -1421,9 +1544,15 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
       </div>
     </div>
     <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-      <div class="px-5 py-3 border-b flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-gray-600">ประวัติการรับเข้า</h3>
-        <input placeholder="ค้นหา..." oninput="filterTbl(this,'si-body')" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-44"/>
+      <div class="px-5 py-3 border-b flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold text-gray-600 mr-2 flex-1">ประวัติการรับเข้า</h3>
+        <select onchange="siFilterMonth(this.value)" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+          <option value="">ทุกเดือน</option>
+          ${(()=>{const MN=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+          return [...new Set((hist||[]).map(r=>(r.created_at||'').slice(0,7)).filter(Boolean))].sort().reverse()
+            .map(m=>{const[y,mo]=m.split('-');return `<option value="${m}">${MN[parseInt(mo)-1]} ${parseInt(y)+543}</option>`;}).join('');})()}
+        </select>
+        <input placeholder="ค้นหา..." oninput="siFilterSearch(this.value)" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-44"/>
       </div>
       <div class="overflow-x-auto tbl-wrap"><table class="w-full text-sm ${canEdit?'table-sticky-last':''}">
         <thead class="bg-gray-50 text-gray-500 text-xs"><tr>
@@ -1432,7 +1561,7 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
           <th class="text-left px-4 py-2">ผู้จำหน่าย</th><th class="text-right px-4 py-2">รวมเงิน</th>
           ${canEdit?'<th class="px-4 py-2">จัดการ</th>':''}
         </tr></thead>
-        <tbody id="si-body">${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50">
+        <tbody id="si-body">${(hist||[]).map(r=>`<tr class="border-t hover:bg-gray-50" data-month="${(r.created_at||'').slice(0,7)}">
           <td class="px-4 py-2 font-mono text-xs text-blue-600">${escapeHtml(r.doc_no||'-')}</td>
           <td class="px-4 py-2 text-gray-500">${fmtDate(r.created_at)}</td>
           <td class="px-4 py-2">${escapeHtml(r.inventory_items?.name||'-')}</td>
@@ -1494,6 +1623,17 @@ function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#
 function siGenLot(){const d=qs('#si-date')?.value||todayISO();const el=qs('#si-lot');if(el)el.value=genLotNo(d);}
 function siCalc(){const q=parseFloat(qs('#si-qty')?.value||0),p=parseFloat(qs('#si-price')?.value||0);if(qs('#si-total'))qs('#si-total').value=fmtMoney(q*p);}
 function filterTbl(inp,bodyId){const q=(inp.value||'').toLowerCase();qsa('#'+bodyId+' tr').forEach(tr=>{tr.style.display=!q||tr.textContent.toLowerCase().includes(q)?'':'none';});}
+let _siMonthFilter='';let _siSearchFilter='';
+function siFilterSearch(val){_siSearchFilter=(val||'').toLowerCase();_siApplyFilters();}
+function siFilterMonth(val){_siMonthFilter=val||'';_siApplyFilters();}
+function _siApplyFilters(){
+  qsa('#si-body tr').forEach(tr=>{
+    const month=(tr.dataset.month||'');
+    const monthOk=!_siMonthFilter||month===_siMonthFilter;
+    const searchOk=!_siSearchFilter||tr.textContent.toLowerCase().includes(_siSearchFilter);
+    tr.style.display=(monthOk&&searchOk)?'':'none';
+  });
+}
 let _woFacFilter='';let _woSearchFilter='';let _woMonthFilter='';
 function woFilterFac(fac){
   _woFacFilter=fac==='ทั้งหมด'?'':fac;
@@ -2431,15 +2571,15 @@ async function loadChemDash(){
         <div class="flex justify-between text-xs text-gray-400 mb-1"><span>ขั้นต่ำ ${ci.min_stock} ${ci.unit||'ถุง'}</span><span>${pct}%</span></div>
         <div class="h-2.5 bg-gray-200 rounded-full overflow-hidden"><div class="${barColor} h-2.5 rounded-full transition-all" style="width:${pct}%"></div></div>
       </div>`:'<div class="mb-3"></div>'}
-      <div class="flex gap-3 pt-3 border-t border-gray-200">
+      <div class="flex gap-3 pt-4 mt-1 border-t-2 border-gray-200">
         <div class="flex-1 text-center">
-          <div class="text-sm font-bold ${(curWd[ci.id]?.qty||0)>0?'text-orange-600':'text-gray-400'}">${fmtNum(curWd[ci.id]?.qty||0,1)}</div>
-          <div class="text-xs text-gray-500">เบิกเดือนนี้ (${MN[month]})</div>
+          <div class="text-2xl font-extrabold ${(curWd[ci.id]?.qty||0)>0?'text-orange-600':'text-gray-400'}">${fmtNum(curWd[ci.id]?.qty||0,1)} <span class="text-sm font-semibold">${ci.unit||'ถุง'}</span></div>
+          <div class="text-xs font-medium text-gray-600 mt-0.5">เบิกเดือนนี้ (${MN[month]})</div>
         </div>
         <div class="w-px bg-gray-200"></div>
         <div class="flex-1 text-center">
-          <div class="text-sm font-bold ${(curRcv[ci.id]?.qty||0)>0?'text-blue-600':'text-gray-400'}">${fmtNum(curRcv[ci.id]?.qty||0,1)}</div>
-          <div class="text-xs text-gray-500">รับเข้าเดือนนี้</div>
+          <div class="text-2xl font-extrabold ${(curRcv[ci.id]?.qty||0)>0?'text-blue-600':'text-gray-400'}">${fmtNum(curRcv[ci.id]?.qty||0,1)} <span class="text-sm font-semibold">${ci.unit||'ถุง'}</span></div>
+          <div class="text-xs font-medium text-gray-600 mt-0.5">รับเข้าเดือนนี้</div>
         </div>
       </div>
     </div>`;
@@ -2448,7 +2588,12 @@ async function loadChemDash(){
   // ── Stock ณ สิ้นเดือน ──
   const eomWrap=qs('#ch-eom-wrap');
   if(eomWrap){
-    if(chemIds.length){
+    const _nowD=new Date();
+    const _isCurMonth=(year===_nowD.getFullYear()&&month===_nowD.getMonth());
+    if(_isCurMonth){
+      // เดือนปัจจุบันยังไม่สิ้นสุด ยอดสิ้นเดือนจะเท่ากับยอดปัจจุบันเสมอ (ข้อมูลซ้ำ) — ไม่แสดงการ์ดนี้
+      eomWrap.innerHTML='';
+    } else if(chemIds.length){
       // สร้าง date string ตรงๆ ป้องกัน UTC offset ทำให้วันคลาดเคลื่อน
       const _nm=month+1,_ny=_nm>11?year+1:year,_nm2=_nm>11?0:_nm;
       const afterStart=_ny+'-'+String(_nm2+1).padStart(2,'0')+'-01';
@@ -2526,52 +2671,78 @@ async function loadChemDash(){
     }
   }
 
-  // ── Comparison table ──
+  // ── Comparison table (12 เดือนล่าสุด) ──
   const compareWrap=qs('#ch-compare-wrap');
   if(compareWrap){
-    const prevLabel=`${MN[pM]} ${pY+543}`,curLabel=`${MN[month]} ${year+543}`;
-    const rows=displayItems.map(ci=>{
-      const cQ=curWd[ci.id]?.qty||0,pQ=prevWd[ci.id]?.qty||0;
-      const cC=curWd[ci.id]?.cost||0,pC=prevWd[ci.id]?.cost||0;
-      const dQ=cQ-pQ,dC=cC-pC;
-      const pctQ=pQ>0?((dQ/pQ)*100):null;
-      const qUp=dQ>0;const cUp=dC>0;
+    const months12=[];
+    for(let m=0;m<12;m++){
+      months12.push({y:year,m:m});
+    }
+    const trendLabels=months12.map(mm=>`${MN[mm.m]} ${String(mm.y+543).slice(-2)}`);
+    const trendFrom=`${year}-01-01`;
+    const trendYearEnd=`${year}-12-31`;
+    const trendRes=await db.from('inventory_transactions').select('created_at,item_id,quantity,unit_cost,unit_price').in('item_id',chemIds).eq('transaction_type','withdraw').eq('status','approved').gte('created_at',trendFrom+'T00:00:00').lte('created_at',trendYearEnd+'T23:59:59');
+    const trendAgg={};
+    (trendRes.data||[]).forEach(r=>{
+      const d=new Date(r.created_at);
+      const key=`${d.getFullYear()}-${d.getMonth()}`;
+      if(!trendAgg[r.item_id])trendAgg[r.item_id]={};
+      if(!trendAgg[r.item_id][key])trendAgg[r.item_id][key]={qty:0,cost:0};
+      const qty=Number(r.quantity)||0;
+      const itemPrice=Number(_invItems.find(i=>i.id===r.item_id)?.unit_price)||0;
+      const pricePerBag=Number(r.unit_cost)||Number(r.unit_price)||itemPrice;
+      trendAgg[r.item_id][key].qty+=qty;
+      trendAgg[r.item_id][key].cost+=qty*pricePerBag;
+    });
+    const totalRow=`<tr class="border-t bg-gray-50 text-xs font-semibold">
+        <td class="px-4 py-3 text-gray-800">รวมทั้งหมด</td>
+        ${months12.map(mm=>{
+          const key=`${mm.y}-${mm.m}`;
+          let tq=0,tc=0;
+          displayItems.forEach(ci=>{const v=trendAgg[ci.id]?.[key];tq+=v?.qty||0;tc+=v?.cost||0;});
+          return `<td class="px-3 py-3 text-center text-gray-800">${fmtNum(tq,1)}<div class="text-gray-500 font-normal">฿${fmtNum(tc,0)}</div></td>`;
+        }).join('')}
+      </tr>`;
+    const itemRows=displayItems.map(ci=>{
+      const cells=months12.map(mm=>{
+        const key=`${mm.y}-${mm.m}`;
+        const v=trendAgg[ci.id]?.[key];
+        return `<td class="px-3 py-3 text-center text-gray-700">${fmtNum(v?.qty||0,1)}<div class="text-gray-400">฿${fmtNum(v?.cost||0,0)}</div></td>`;
+      }).join('');
       return `<tr class="border-t hover:bg-gray-50 text-xs">
         <td class="px-4 py-3 font-semibold text-gray-800">${escapeHtml(ci.name)}<div class="text-gray-500 font-normal text-xs">${escapeHtml(itemLookup[ci.id].fac)}</div></td>
-        <td class="px-4 py-3 text-center text-gray-600">${fmtNum(pQ,1)} ถุง<div class="text-gray-500">฿${fmtNum(pC,0)}</div></td>
-        <td class="px-4 py-3 text-center font-bold text-gray-800">${fmtNum(cQ,1)} ถุง<div class="text-gray-600 font-normal">฿${fmtNum(cC,0)}</div></td>
-        <td class="px-4 py-3 text-center">
-          <span class="inline-flex items-center gap-1 font-medium ${qUp?'text-red-500':'text-green-600'}">
-            <i data-lucide="${qUp?'arrow-up':'arrow-down'}" class="w-3.5 h-3.5"></i>
-            ${dQ>=0?'+':''}${fmtNum(dQ,1)} ถุง
-          </span>
-          ${pctQ!==null?`<div class="text-gray-400 mt-0.5">${pctQ>=0?'+':''}${pctQ.toFixed(1)}%</div>`:''}
-        </td>
-        <td class="px-4 py-3 text-center">
-          <span class="${cUp?'text-red-500':'text-green-600'}">${dC>=0?'+':''}฿${fmtNum(dC,0)}</span>
-        </td>
+        ${cells}
       </tr>`;
     }).join('');
     compareWrap.innerHTML=`<div class="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div class="px-5 py-3 border-b flex items-center gap-2">
-        <i data-lucide="bar-chart-2" class="w-4 h-4 text-teal-700"></i>
-        <h3 class="text-sm font-bold text-gray-800">เปรียบเทียบการเบิก — ${prevLabel} vs ${curLabel}</h3>
+        <i data-lucide="trending-up" class="w-4 h-4 text-teal-700"></i>
+        <h3 class="text-sm font-bold text-gray-800">เปรียบเทียบการเบิกรายเดือน — ปี ${year+543}</h3>
       </div>
-      <div class="overflow-auto">
+      <div class="p-4" style="position:relative;height:300px;width:100%"><canvas id="chem-trend-chart"></canvas></div>
+      <div class="overflow-x-auto border-t">
         <table class="w-full">
           <thead class="bg-gray-100 text-xs text-gray-700 font-semibold">
             <tr>
-              <th class="px-4 py-2.5 text-left">สาร / โรงงาน</th>
-              <th class="px-4 py-2.5 text-center">${prevLabel}</th>
-              <th class="px-4 py-2.5 text-center">${curLabel}</th>
-              <th class="px-4 py-2.5 text-center">เปลี่ยนแปลง (ถุง)</th>
-              <th class="px-4 py-2.5 text-center">เปลี่ยนแปลง (฿)</th>
+              <th class="px-4 py-2.5 text-left whitespace-nowrap">สาร / โรงงาน</th>
+              ${months12.map(mm=>`<th class="px-3 py-2.5 text-center whitespace-nowrap">${MN[mm.m]} ${String(mm.y+543).slice(-2)}</th>`).join('')}
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${itemRows}${totalRow}</tbody>
         </table>
       </div>
     </div>`;
+    destroyChart('chemTrend');
+    const trendCtx=qs('#chem-trend-chart');
+    if(trendCtx){
+      const trendColors=['#0d9488','#f59e0b','#3b82f6','#ef4444'];
+      const trendDatasets=displayItems.map((ci,idx)=>({
+        label:ci.name,
+        data:months12.map(mm=>trendAgg[ci.id]?.[`${mm.y}-${mm.m}`]?.qty||0),
+        backgroundColor:trendColors[idx%trendColors.length]
+      }));
+      chartRegistry['chemTrend']=new Chart(trendCtx,{type:'bar',data:{labels:trendLabels,datasets:trendDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'ถุง'}}}}});
+    }
   }
 
   // ── Daily records ──
