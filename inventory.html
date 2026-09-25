@@ -3085,7 +3085,50 @@ async function loadReport(){
 
 function exportReport(){
   if(!_rptData.length){showToast('ไม่มีข้อมูลให้ Export','warn');return;}
-  const ws=XLSX.utils.json_to_sheet(_rptData);
+  const type=qs('#rpt-type')?.value||'balance';
+  let rows=[];
+  if(type==='balance'){
+    rows=_rptData.map(r=>({
+      'รหัส':r.code,'ชื่อวัสดุ':r.name,'ประเภท':r.category||'',
+      'คงเหลือ':r.current_qty,'หน่วย':r.unit||'','ขั้นต่ำ':r.min_stock||0,
+      'สถานะ':r.current_qty<=0?'หมด':r.current_qty<=r.min_stock?'ใกล้หมด':'ปกติ',
+      'ที่เก็บ':r.location||''
+    }));
+  } else if(type==='movement'||type==='stock-in'||type==='stock-out'||type==='cost'){
+    rows=_rptData.map(r=>({
+      'เลขที่':r.doc_no||'','วันที่':fmtDate(r.created_at),
+      'ประเภท':r.transaction_type==='receive'?'รับเข้า':'เบิก',
+      'วัสดุ':r.inventory_items?.name||'','หน่วย':r.inventory_items?.unit||'',
+      'จำนวน':r.quantity, 'มูลค่า':r.total_amount||0,
+      'โรง/ฝ่าย':[r.factory,r.department].filter(Boolean).join('/')||'',
+      'ผู้ทำรายการ':r.requested_by||r.created_by||'',
+      'สถานะ':r.status||'', 'หมายเหตุ':r.note||''
+    }));
+  } else if(type==='low-stock'){
+    rows=_rptData.map(i=>({
+      'รหัส':i.code,'ชื่อวัสดุ':i.name,
+      'คงเหลือ':_stockMap[i.id]||0,'ขั้นต่ำ':i.min_stock||0,
+      'ที่เก็บ':i.location||'',
+      'สถานะ':(_stockMap[i.id]||0)<=0?'หมด':'ใกล้หมด'
+    }));
+  } else if(type==='chem'){
+    const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    rows=_rptData.map(r=>{const d=new Date(r.month_date);return {
+      'เดือน':`${months[d.getMonth()]} ${d.getFullYear()+543}`,
+      'โรง':r.factory,'สาร':r.item_name,
+      'ใช้ (ถุง)':r.total_qty_used,'ใช้ (กก.)':r.total_kg_used||0,
+      'ผลิต (ตัน)':r.production_ton||0,'กก./ตัน':r.rate_kg_per_ton||0,
+      'บาท/ตัน':r.rate_thb_per_ton||0
+    };});
+  } else if(type==='po'){
+    rows=_rptData.map(r=>({
+      'เลขที่ PO':r.po_no,'วันที่':fmtDate(r.po_date),
+      'ผู้จำหน่าย':r.inv_suppliers?.name||'','โรง':r.factory||'','สถานะ':r.status
+    }));
+  } else {
+    rows=_rptData;
+  }
+  const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'รายงาน');
   XLSX.writeFile(wb,'inventory_report_'+todayISO()+'.xlsx');
 }
