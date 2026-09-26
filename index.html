@@ -42,6 +42,14 @@
   * { font-family: 'Kanit', sans-serif; }
   body { background:#f8fafc; }
   body { max-width:100%; overflow-x:hidden; }
+  /* ===== Root cause จริงของปัญหาจอมือถือล้น (ทุกหน้า ไม่ใช่แค่ Dashboard) =====
+     โครงสร้างหลักของแอป: <div class="min-h-screen flex bg-secondary-50"> ครอบ sidebar (fixed, ไม่กินพื้นที่ flex)
+     กับ <div id="app-shell-main" class="flex-1 ..."> ซึ่งเป็น flex item — flex item มีค่า default
+     min-width:auto (ยึดตามเนื้อหาข้างในที่กว้างที่สุดที่ไม่ยอมหด เช่น การ์ด/กราฟ/ตัวเลขลึกๆ ข้างใน)
+     ทำให้ #app-shell-main (และ #page-content ข้างใน) ปฏิเสธที่จะหดให้แคบกว่าความกว้างจอมือถือจริง
+     body { overflow-x:hidden } ด้านบนแค่ "ซ่อน" ส่วนที่ล้น ไม่ได้แก้ที่ต้นตอ เนื้อหาฝั่งขวาเลยถูกตัดขาดไปเลย
+     (เห็นได้จริงบนมือถือจริง ไม่ใช่แค่ DevTools) แก้ด้วย min-width:0 ที่ต้นทาง ให้ทั้งหน้าหดตามจอได้จริง */
+  #app-shell-main, #page-content { min-width: 0; }
   /* ป้องกัน iOS auto-zoom บน input/select (ต้อง font-size >= 16px) */
   @media (max-width:640px) {
     input, select, textarea { font-size:16px !important; }
@@ -1803,7 +1811,7 @@ function renderAppShell() {
     </aside>
 
     <!-- MAIN COLUMN -->
-    <div class="flex-1 flex flex-col lg:ml-64 min-h-screen">
+    <div id="app-shell-main" class="flex-1 flex flex-col lg:ml-64 min-h-screen">
       <!-- HEADER -->
       <header class="no-print h-16 bg-white border-b border-secondary-100 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20">
         <div class="flex items-center gap-2 lg:hidden">

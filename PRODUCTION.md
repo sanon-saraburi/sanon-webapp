@@ -174,9 +174,48 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 - `escapeHtml()` ทุกครั้งที่ render ข้อมูลจาก DB ลง HTML
 - `destroyChart(id)` ก่อน create chart ใหม่เสมอ
 
+### 10.1 ถ้าเจอปัญหา "การ์ด/กราฟล้นจอมือถือ" อีก — เช็คตามลำดับนี้ (อย่าไล่แก้จากจุดที่เห็นอาการอย่างเดียว)
+
+ปัญหานี้เคยใช้เวลาแก้หลายรอบ (ดู Changelog 2026-09-26 รอบ 1-5) เพราะไล่แก้จากจุดที่เห็นอาการ (เช่น Dashboard) ไปทีละจุด โดยไม่ตรวจ container ทุกชั้นตั้งแต่ root ครั้งหน้าให้เช็คตามลำดับนี้แทน:
+
+1. **เช็ค root cause ระดับโครงสร้างแอปก่อนเป็นอันดับแรก** — `#app-shell-main` และ `#page-content` (ใน `renderAppShell()`) ต้องมี `min-width: 0` เสมอ (มีอยู่แล้วที่ CSS บรรทัด ~50 นอก media query) เพราะเป็น flex item ของ layout หลักทั้งแอป ถ้าเผลอลบ/ย้าย CSS นี้ออกไป ปัญหาล้นจอจะกลับมาทันทีทุกหน้า ไม่ใช่แค่ Dashboard
+2. **grid/flex item ทุกตัวที่ใช้ `grid-cols-*` หรือ `flex` แล้วมีเนื้อหาข้างในกว้าง (ตัวเลข, กราฟ, การ์ด)** ต้องมี `min-width: 0` กำกับลูกด้วยเสมอ (browser default คือ `min-width: auto` ซึ่งยึดตามเนื้อหาไม่ยอมหด) — ดูตัวอย่างที่ `.dash-dark-bg .grid > *` และ `.dash-dark-bg .flex > *` (บรรทัด ~53-60)
+3. **SVG/canvas ที่กำหนด `width`/`height` เป็น attribute ตรงๆ** (ไม่ใช่ CSS class) ต้องมี `max-width:100% !important; height:auto !important;` กำกับเสมอ เพราะ attribute พวกนี้ไม่หดตาม container เอง
+4. **จุดที่สำคัญ/ซับซ้อนและพังบ่อย** (เช่น OEE Gauge) ให้เขียน CSS `display:grid`/`display:flex` เป็น class ของตัวเอง **ไม่พึ่ง Tailwind utility class ล้วนๆ** เพราะ Tailwind CDN (`cdn.tailwindcss.com`) เป็น JIT scan on-the-fly มีโอกาสไม่ generate CSS ให้ครบในไฟล์ขนาดใหญ่ (ดูตัวอย่าง `.oee-gauge-grid`)
+5. **ทดสอบบนมือถือจริงเสมอ อย่าเชื่อ Chrome DevTools Responsive mode 100%** — เคยเจอกรณี DevTools แสดงตัวเลข/ภาพคลาดเคลื่อนจากขนาดจอที่ตั้งไว้จริง (ดู Changelog รอบ 4-5) ทำให้เข้าใจผิดว่าแก้ไม่หายทั้งที่ CSS ถูกต้องแล้ว หรือกลับกัน คือ DevTools ดูเหมือนไม่ล้นแต่มือถือจริงล้น
+
 ---
 
 ## 11. Changelog
+
+### 2026-09-26 รอบ 5 — แก้ root cause จริงระดับโครงสร้างแอป: #app-shell-main ไม่มี min-width:0 (ทุกหน้า ไม่ใช่แค่ Dashboard)
+
+**ที่มา:** หลังแก้รอบ 4 ผู้ใช้ตรวจสอบด้วย DevTools พบตัวเลขที่ดูเหมือนไม่ล้น (`innerWidth` 574px, เนื้อหาพอดี) แต่ภาพหน้าจอยังเห็นเหมือนล้นอยู่ — เมื่อขอให้ทดสอบบน**มือถือจริง** (ไม่ผ่าน DevTools) ผลออกมาว่า **ล้นจอจริง** ทั้ง OEE Gauge (กราฟ Performance ถูกตัดขอบ) และการ์ดสถิติ (หินป้อนรวม, Throughput ถูกตัดตัวเลขฝั่งขวา) — สรุปว่า DevTools ก่อนหน้านี้รายงานค่าคลาดเคลื่อน (อาจเป็นปัญหาของ DevTools เอง) แต่ปัญหาจริงบนมือถือยังคงอยู่
+
+**Root cause ตัวจริง (อยู่ลึกกว่าที่คิดไว้ทุกรอบก่อนหน้า):** โครงสร้างหลักของทั้งแอป (Section 11: APP SHELL) คือ
+```html
+<div class="min-h-screen flex bg-secondary-50">   <!-- flex container ระดับบนสุด -->
+  <aside class="... fixed ...">...</aside>          <!-- sidebar: fixed position ไม่กินพื้นที่ flex -->
+  <div class="flex-1 flex flex-col lg:ml-64 min-h-screen">  <!-- flex item เดียวที่เหลือ -->
+    <header>...</header>
+    <main id="page-content" class="flex-1 ...">...</main>   <!-- เนื้อหาทุกหน้ารวมถึง Dashboard -->
+  </div>
+</div>
+```
+`<div class="flex-1 ...">` เป็น **flex item ของ flex container ระดับบนสุดของทั้งแอป** และเหมือนปัญหาที่เจอซ้ำๆ ในทุกรอบก่อนหน้า (grid item / flex item มี `min-width:auto` เป็นค่า default) — จุดนี้ไม่เคยถูกแก้เลยเพราะการแก้ทุกรอบก่อนหน้าใส่ CSS ไว้แค่ **ภายใน** `.dash-dark-bg` เท่านั้น (เช่น `.dash-dark-bg .grid > *`, `.dash-dark-bg .flex > *`) แต่จุดนี้เป็น **บรรพบุรุษ (ancestor) ของ `.dash-dark-bg`** อยู่คนละชั้น การแก้ข้างในไม่มีทางไปถึงจุดนี้ได้เลย
+
+ผลคือ: ถ้าเนื้อหาลึกๆ ข้างในหน้าใดก็ตาม (การ์ด, กราฟ, ตัวเลข) มีความกว้างขั้นต่ำที่ไม่ยอมหด (min-content) กว้างกว่าจอมือถือ ทั้ง `#app-shell-main` และ `#page-content` จะปฏิเสธไม่ยอมหดตามจอ — `body { overflow-x:hidden }` ที่มีอยู่เดิมแค่ "ซ่อน" ส่วนเกินไม่ให้เกิด scrollbar แนวนอน แต่ไม่ได้แก้ให้เนื้อหาหดจริง เนื้อหาฝั่งขวาที่เกินจอเลยถูกตัดขาดหายไปเลย (ไม่ใช่แค่ Dashboard — เป็นปัญหาระดับโครงสร้างที่กระทบทุกเมนู เพียงแต่ Dashboard เห็นชัดที่สุดเพราะมีกราฟ/การ์ดกว้างๆ)
+
+**แก้ไข:**
+1. ใส่ `id="app-shell-main"` ให้ div หลักใน `renderAppShell()` (บรรทัด ~1814)
+2. เพิ่ม CSS (บรรทัด ~44 นอก media query — มีผลทุกหน้า ทุกขนาดจอ):
+```css
+#app-shell-main, #page-content { min-width: 0; }
+```
+
+**บทเรียนสำคัญ:** ปัญหา "min-width:auto บน flex/grid item" ที่ไล่แก้มา 4 รอบ (stat cards → OEE gauge SVG → แถบช่วงเวลา) ล้วนเป็นอาการย่อยของปัญหาเดียวกันที่ **รากลึกที่สุดคือโครงสร้าง app shell เอง** — การไล่แก้จากจุดที่เห็นอาการ (Dashboard) โดยไม่ตรวจสอบ DOM ทั้งสายจนถึง `<body>` ทำให้แก้ไม่ครบ ครั้งต่อไปถ้าเจอปัญหาการ์ด/กราฟล้นจอในลักษณะนี้อีก ให้ตรวจ container ทุกชั้นตั้งแต่ root ไม่ใช่แค่จุดที่เห็นปัญหา
+
+**ไม่ต้องรัน SQL เพิ่ม**
 
 ### 2026-09-26 รอบ 4 — แก้ OEE Gauge แบบเขียน CSS grid เอง ไม่พึ่ง Tailwind class
 

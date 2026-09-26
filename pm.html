@@ -2655,6 +2655,7 @@ async function renderMachinesPage() {
                 <div class="text-xs text-gray-400">${items.length} รายการ PM</div>
               </div>
               <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                ${(m.sync_source && m.sync_source!=='manual' && isManager())?`<button onclick="forceSyncMachine('${m.id}')" class="p-1.5 hover:bg-green-50 rounded text-green-600" title="บังคับซิงก์ใหม่ (ใช้เมื่อแก้ไขข้อมูลต้นทางผิดพลาดแล้ว)"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>`:''}
                 <button onclick="openEditMachineModal('${m.id}')" class="p-1.5 hover:bg-amber-50 rounded text-amber-600" title="แก้ไขเครื่อง"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button>
                 ${isAdmin()?`<button onclick="deleteMachine('${m.id}')" class="p-1.5 hover:bg-red-50 rounded text-red-400" title="ลบเครื่อง"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>`:''}
               </div>
@@ -4090,6 +4091,79 @@ async function syncCurrentMeters() {
 async function syncAndRefreshMachines() {
   showToast('กำลังซิงค์ชั่วโมงจากระบบ 1…','info');
   await syncCurrentMeters();
+  renderMachinesPage();
+}
+
+// บังคับซิงก์ใหม่ต่อเครื่อง — ต่างจาก syncCurrentMeters() ตรงที่ "อัปเดตเสมอ"
+// ไม่สนว่าค่าใหม่จะมากกว่าหรือน้อยกว่าค่าปัจจุบัน (ปกติ sync อัตโนมัติจะขึ้นได้ทางเดียว
+// ลงไม่ได้ กันมิเตอร์รีเซ็ตทับ) — ใช้กรณีข้อมูลต้นทางเคยกรอกผิดพลาด ทำให้ current_meter
+// ค้างอยู่ผิดๆ แล้วแก้ไขข้อมูลต้นทางถูกต้องแล้ว ต้องการดึงค่าที่ถูกต้อง (ซึ่งอาจต่ำกว่าเดิม) กลับมา
+async function forceSyncMachine(machineId) {
+  const machine = _pmMachines.find(m => m.id === machineId);
+  if (!machine) return;
+  if (!machine.sync_source || machine.sync_source === 'manual') {
+    alert('เครื่องนี้ตั้งค่าเป็น "กรอกเอง" ไม่มีต้นทางให้บังคับซิงก์');
+    return;
+  }
+
+  const PROD_TABLES = ['production_cde','production_propel','production_sanon1','production_sanon2','production_mobile'];
+  let newMeter = null;
+
+  try {
+    if (PROD_TABLES.includes(machine.sync_source)) {
+      const { data, error } = await db.from(machine.sync_source)
+        .select('stop_hour, production_date')
+        .not('stop_hour', 'is', null)
+        .order('production_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.stop_hour != null) newMeter = Number(data.stop_hour);
+    } else if (machine.sync_source === 'electric_loader') {
+      let q = db.from('electric_loader')
+        .select('machine_hour_stop, work_date')
+        .not('machine_hour_stop', 'is', null)
+        .order('work_date', { ascending: false })
+        .limit(1);
+      if (machine.sync_loader_name) q = q.eq('loader_name', machine.sync_loader_name);
+      const { data, error } = await q.maybeSingle();
+      if (error) throw error;
+      if (data?.machine_hour_stop != null) newMeter = Number(data.machine_hour_stop);
+    }
+  } catch(e) {
+    alert('ดึงข้อมูลจากต้นทางไม่สำเร็จ: ' + (e?.message || e));
+    return;
+  }
+
+  if (newMeter == null) {
+    alert('ไม่พบข้อมูลมิเตอร์ล่าสุดจากต้นทาง (' + machine.sync_source + ')');
+    return;
+  }
+
+  const unit = machine.meter_type === 'km' ? 'กม.' : 'ชม.';
+  const oldVal = fmtNum(machine.current_meter);
+  const newVal = fmtNum(newMeter);
+
+  if (newMeter === machine.current_meter) {
+    alert(`ค่าปัจจุบันของ "${machine.name}" (${oldVal} ${unit}) ตรงกับต้นทางอยู่แล้ว ไม่ต้องบังคับซิงก์`);
+    return;
+  }
+
+  const dir = newMeter > machine.current_meter ? 'เพิ่มขึ้น ↑' : 'ลดลง ↓';
+  const ok = confirm(
+    `บังคับซิงก์ใหม่ — "${machine.name}"\n\n` +
+    `ค่าปัจจุบันในระบบ: ${oldVal} ${unit}\n` +
+    `ค่าล่าสุดจากต้นทาง: ${newVal} ${unit} (${dir})\n\n` +
+    `การบังคับซิงก์จะเขียนทับค่าปัจจุบันทันที ไม่ว่าค่าใหม่จะมากหรือน้อยกว่าเดิม\n` +
+    `ใช้เฉพาะกรณีตรวจสอบแล้วว่าข้อมูลต้นทางถูกต้อง — ยืนยันดำเนินการ?`
+  );
+  if (!ok) return;
+
+  const { error } = await db.from('pm_machines').update({ current_meter: newMeter }).eq('id', machine.id);
+  if (error) { alert('บันทึกไม่สำเร็จ: ' + error.message); return; }
+
+  machine.current_meter = newMeter;
+  showToast(`บังคับซิงก์ "${machine.name}" สำเร็จ: ${oldVal} → ${newVal} ${unit}`, 'success');
   renderMachinesPage();
 }
 
