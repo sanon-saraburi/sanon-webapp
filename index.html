@@ -156,6 +156,25 @@
     animation: skeleton-loading 1.4s ease infinite;
   }
 
+  /* ===== Dashboard (พื้นหลังเข้ม) — แก้ root cause: การ์ดใน grid ดันความกว้างล้นจอ ===== */
+  /* ค่า default ของ browser คือ grid item มี min-width:auto (ยึดตามความกว้างเนื้อหาข้างใน เช่น
+     ไอคอน+ป้ายชื่อในแถวเดียวกันแบบ flex ไม่ยอมหด) ทำให้คอลัมน์ที่ 2 ของ grid-cols-2 ถูกดันกว้างเกิน
+     ขอบจอมือถือ มองไม่เห็นการ์ดที่เหลือ (ต้องเลื่อนขวา) และการ์ดที่เห็นก็ขยายเต็มจอจนดูเหมือน "ซูมเข้ามาเยอะ"
+     แก้ด้วยการบังคับ min-width:0 ให้การ์ดหดตามคอลัมน์จริงแทน — เป็นค่าที่ถูกต้องทุกขนาดจอ ไม่ใช่แค่มือถือ */
+  .dash-dark-bg .grid > * { min-width: 0; }
+  /* จุดที่ยังล้นจอ (OEE Gauge / แถบเลือกช่วงเวลา) ไม่ใช่ grid แต่เป็น flex (flex-col items-center,
+     flex-wrap ฯลฯ) — flex item ก็มี min-width:auto เป็นค่า default เหมือนกัน (ยึดตามขนาดเนื้อหา/SVG
+     ข้างในไม่ยอมหด) กฎด้านบนที่แก้ไว้ครอบคลุมแค่ลูกของ .grid เท่านั้น เลยยังไม่ครอบคลุมจุดนี้ */
+  .dash-dark-bg .flex > * { min-width: 0; }
+  .dash-dark-bg .dash-dark-card { overflow-wrap: break-word; }
+  .dash-dark-bg { overflow-x: hidden !important; }
+
+  /* OEE Gauge — เขียน CSS grid 2 คอลัมน์เองตรงๆ (ไม่พึ่ง Tailwind class "grid grid-cols-2" ที่ต้องรอ
+     Tailwind CDN สแกนแล้วสร้างให้) กันปัญหากรณี Tailwind ไม่ generate CSS ให้จุดนี้ทันเวลา/ครบถ้วน
+     รับประกันว่าจะเป็น 2 คอลัมน์แน่นอนทุกครั้ง ไม่ต้องพึ่งเงื่อนไขอื่น */
+  .dash-dark-bg .oee-gauge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .dash-dark-bg .oee-gauge-grid > * { min-width: 0; }
+
   /* ===== Dashboard (พื้นหลังเข้ม) — ปรับขนาดให้เหมาะกับจอมือถือ ===== */
   /* เดิมการ์ด/ตัวเลข/กราฟ ใช้ขนาดเดียวกับจอ Desktop ทำให้บนมือถือดูเหมือน "ซูมเข้ามาเยอะ" */
   @media (max-width: 640px) {
@@ -173,6 +192,17 @@
     .dash-dark-bg .relative.h-56 { height: 190px !important; }
     .dash-dark-bg [style*="height:320px"] { height: 220px !important; }
     .dash-dark-bg [style*="height:270px"] { height: 200px !important; }
+    /* OEE Gauge เป็น SVG ขนาดคงที่ (width/height attribute) ไม่หดตาม container เอง
+       ต้องบังคับผ่าน CSS ให้หดตามพื้นที่จริง (height:auto รักษาสัดส่วนไม่ให้เบี้ยว) */
+    .dash-dark-bg svg { max-width: 100% !important; height: auto !important; }
+    /* กราฟ Chart.js (canvas) กันเผื่อไว้อีกชั้น ไม่ให้ล้นกรอบถ้า container คำนวณขนาดผิดจังหวะ */
+    .dash-dark-bg canvas { max-width: 100% !important; }
+    /* แถบเลือกช่วงเวลา (รายวัน/รายเดือน/รายปี + dropdown เดือน/ปี) ลด padding/font ให้พอดีจอแคบ
+       กันไม่ให้ผลรวมความกว้างของปุ่ม+dropdown ล้นขอบจอ */
+    .dash-dark-bg [id$="-range-controls"] { width: 100%; }
+    .dash-dark-bg [id$="-range-controls"] .range-mode-btn { padding: 4px 7px !important; font-size: 10.5px !important; }
+    .dash-dark-bg [id$="-range-controls"] select,
+    .dash-dark-bg [id$="-range-controls"] input[type="date"] { padding: 4px 6px !important; font-size: 10.5px !important; }
   }
 </style>
 </head>
@@ -2291,7 +2321,7 @@ function renderOeeGaugeBlock(type, rows, targetThroughput) {
   el.innerHTML = `
     <div class="dash-dark-card rounded-2xl p-5">
       <h3 class="text-sm font-medium dash-dark-text-muted mb-3 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-cyan-400"></i>OEE Gauge (Availability / Performance)</h3>
-      <div class="grid grid-cols-2 gap-2">
+      <div class="oee-gauge-grid">
         ${gaugeSvg(oee.availabilityPct, 'Availability', `${type}-avail`)}
         ${gaugeSvg(oee.performancePct, 'Performance', `${type}-perf`)}
       </div>

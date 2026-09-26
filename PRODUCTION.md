@@ -4,7 +4,7 @@
 
 ---
 
-## 0. สถานะล่าสุด (อัปเดต 2026-09-22)
+## 0. สถานะล่าสุด (อัปเดต 2026-09-26)
 
 ✅ ใช้งานจริง — Dashboard ทุกเมนู (CDE/Propel/Sanon1/Sanon2/Mobile Plant), Executive Dashboard, รายงานรายปี (dash-annual: Dashboard + PDF + PPTX Export ทุกโรงงาน), ค่าไฟฟ้า, PDF Report, SSO, Mobile/Desktop System Switcher 6 ระบบ, LINE แจ้งเตือนจาก JS, Export CSV ทุกโรงงาน, Mobile Plant (โรงงานที่ 5 — Dashboard + ยอดผลิต + Approval ครบ), เพิ่มโรงงาน: กำหนดเป้าตัน/เดือน + ตัน/ชม. จาก UI ได้ทุกโรงงาน, วิเคราะห์รายวัน (กราฟ/ตาราง/Breakdown ครบทุกโรงงาน + auto-detect วันล่าสุดที่มีข้อมูล), material_types (is_feed_material + is_product), groundwater_usage (ผู้บันทึก), drone factory sort ตามลำดับ CDE→Propel→Sanon1→Sanon2→Mobile Plant
 
@@ -177,6 +177,92 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 ---
 
 ## 11. Changelog
+
+### 2026-09-26 รอบ 4 — แก้ OEE Gauge แบบเขียน CSS grid เอง ไม่พึ่ง Tailwind class
+
+**ที่มา:** หลังแก้รอบ 3 (เพิ่ม `.flex > * { min-width:0 }`) ผู้ใช้ทดสอบซ้ำอีกครั้ง OEE Gauge (Performance) ยังถูกตัดขอบเหมือนเดิมทุกประการ ไม่มีอะไรเปลี่ยน ผู้ใช้ขอให้ตรวจสอบว่าการแก้ไขที่ผ่านมาจุดไหนที่ทำให้เกิดปัญหานี้
+
+**การตรวจสอบ:** จำลองโครงสร้าง HTML/CSS ของ OEE Gauge แยกต่างหาก (นอกระบบจริง) แล้วทดสอบด้วย headless browser ที่ viewport 400px — พบว่า **ตรรกะ CSS ที่เขียนไว้ (min-width:0 + max-width:100%) ถูกต้องแล้ว 100%** เมื่อ class `grid grid-cols-2` ของ Tailwind ถูกแปลงเป็น `display:grid` จริง (คอลัมน์แบ่ง 181px/181px พอดี SVG 128px ไม่ล้นแน่นอน) — แปลว่าปัญหาที่ผู้ใช้เจอไม่ได้อยู่ที่สูตร CSS ที่เขียนผิด แต่น่าจะอยู่ที่ **Tailwind CDN (โหลดจาก `cdn.tailwindcss.com`) ไม่ได้ generate CSS ให้ class `grid grid-cols-2` ของจุดนี้ทันเวลา/ครบถ้วน** (ไฟล์มีขนาดใหญ่มาก ~12,000+ บรรทัด และ Tailwind ต้องสแกนข้อความทั้งหน้าเพื่อสร้าง utility CSS แบบ on-the-fly ซึ่งมีโอกาสพลาดจุดที่อยู่ลึกในไฟล์ได้)
+
+**แก้ไข:** เลิกพึ่งพา Tailwind class `grid grid-cols-2` สำหรับจุดนี้ เขียน CSS class ของตัวเองตรงๆ แทน (ไม่ต้องรอ Tailwind สแกน รับประกันว่าเป็น 2 คอลัมน์แน่นอน 100%)
+
+โครงสร้าง (`renderOeeGaugeBlock`, บรรทัด ~2324):
+```html
+<div class="oee-gauge-grid">
+  ...gaugeSvg() x2...
+</div>
+```
+
+CSS (บรรทัด ~175):
+```css
+.dash-dark-bg .oee-gauge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.dash-dark-bg .oee-gauge-grid > * { min-width: 0; }
+```
+
+**บทเรียน:** เมื่อเจอ layout ที่ CSS ดูถูกต้องแล้วแต่ยังไม่เปลี่ยนพฤติกรรมจริงในเบราว์เซอร์ ให้สงสัย Tailwind CDN (JIT scan แบบ on-the-fly) ว่าอาจไม่ generate utility class ให้ครบ โดยเฉพาะจุดที่อยู่ลึกในไฟล์ขนาดใหญ่ — วิธีแก้ที่นิ่งที่สุดคือเขียน CSS ของจุดสำคัญๆ (เช่น layout ที่พังแล้วซ่อมยาก) เป็น custom class ของตัวเองแทนการพึ่ง Tailwind utility ล้วนๆ
+
+**ผลการยืนยัน (หลังแก้):** ตรวจสอบด้วย Console โดยตรง (`getBoundingClientRect()` ของ grid/SVG + `document.body.scrollWidth` เทียบ `window.innerWidth`) พบว่าเนื้อหาพอดีกับความกว้างจอจริง ไม่มีส่วนล้น — ที่เห็น "ตัดขอบ" ในภาพ DevTools Responsive mode ก่อนหน้านี้ เกิดจากช่อง Dimensions ที่ตั้งไว้ (400px) ยังไม่ถูกใช้งานจริง (ค่าจริงตอนวัดคือ 574px) ไม่ใช่ปัญหาโค้ด — ผู้ใช้ทดสอบซ้ำบนมือถือจริงแล้วยืนยันว่าใช้งานได้ปกติ ✅ ปิดปัญหานี้
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-26 รอบ 3 — แก้ root cause จริง: flex item ก็มี min-width:auto เหมือน grid item
+
+**ที่มา:** หลังแก้รอบ 2 (SVG max-width:100% + ลด padding แถบช่วงเวลา) ผู้ใช้ทดสอบด้วย Chrome DevTools 400px ซ้ำหลายรอบ ยังเห็น OEE Gauge (กราฟ Performance) ถูกตัดขอบเหมือนเดิมทุกประการ ไม่มีอะไรเปลี่ยนเลย — ตรวจสอบผ่าน View Page Source (Ctrl+U) ยืนยันแล้วว่า browser โหลด CSS ที่แก้ล่าสุดถูกต้อง ไม่ใช่ปัญหา cache
+
+**Root cause ตัวจริง:** ตัว SVG ของ OEE Gauge อยู่ใน `<div class="flex flex-col items-center">` (ไม่ใช่ grid) — และ **flex item ก็มีค่า default `min-width: auto` เหมือน grid item ทุกประการ** (ยึดตามขนาดเนื้อหา/ความกว้าง attribute ของ SVG เอง ไม่ยอมหด) กฎ `.dash-dark-bg .grid > *` ที่แก้ไว้ตั้งแต่รอบแรกครอบคลุมเฉพาะลูกของ `.grid` เท่านั้น **ไม่ครอบคลุมลูกของ `.flex`** จึงเป็นเหตุผลที่ `max-width:100%` บน SVG (รอบ 2) ไม่มีผลจริง — เพราะ `min-width:auto` (ค่า default ที่ไม่เคยถูกลบ) ชนะ `max-width` เสมอเมื่อขัดแย้งกัน (กฎ CSS: min-width สูงกว่า max-width) แถบเลือกช่วงเวลาก็อยู่ใน `flex flex-wrap` เช่นกัน จึงเป็นสาเหตุเดียวกัน
+
+**แก้ไข (CSS บรรทัด ~164 และ ~187):**
+```css
+/* เพิ่มคู่กับกฎ .grid > * เดิม — ใช้ตรรกะเดียวกัน มีผลทุกขนาดจอ */
+.dash-dark-bg .flex > * { min-width: 0; }
+
+/* กันเผื่อ Chart.js canvas อีกชั้น (เฉพาะจอ ≤640px) */
+.dash-dark-bg canvas { max-width: 100% !important; }
+```
+
+**หมายเหตุ:** นี่คือ root cause ตัวจริงที่อธิบายได้ครบทุกจุดที่ยังล้นจอ (OEE Gauge SVG + แถบเลือกช่วงเวลา) เพราะทั้งสองจุดอยู่ใน flex container ไม่ใช่ grid — บทเรียน: เวลาเจอ container ที่ไม่ยอมหดตามพื้นที่จริง ต้องเช็คทั้ง `.grid > *` และ `.flex > *` คู่กันเสมอ (browser default `min-width:auto` มีผลกับทั้งสองแบบเหมือนกัน)
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-26 รอบ 2 — แก้ overflow ที่เหลือ: OEE Gauge (SVG) + แถบเลือกช่วงเวลา
+
+**ที่มา:** หลังแก้ `min-width:0` รอบแรก การ์ดสถิติ (stat cards) เรียง 2 คอลัมน์ถูกต้องแล้ว แต่ทดสอบด้วย Chrome DevTools 400px อีกครั้งพบว่ายังล้นจอ 2 จุด: (1) กราฟ OEE Gauge (Availability/Performance) กราฟที่ 2 ถูกตัดขอบขวา (2) แถบเลือกช่วงเวลา "รายวัน/รายเดือน/รายปี" + dropdown เดือน/ปี ล้นขอบขวาเล็กน้อย
+
+**Root cause เพิ่มเติม:**
+- OEE Gauge เป็น SVG ที่กำหนด `width="128" height="74"` เป็น **attribute ตรงๆ** (ไม่ใช่ CSS class) ค่า `min-width:0` ที่แก้ไปรอบแรกใช้ไม่ได้กับ SVG attribute แบบนี้ — SVG จึงคงความกว้าง 128px แน่นอนไม่ยอมหด แม้ parent จะแคบกว่า
+- แถบเลือกช่วงเวลา: ปุ่ม "รายวัน/รายเดือน/รายปี" (3 ปุ่ม) + dropdown เดือน + dropdown ปี รวมความกว้างที่ padding/font ขนาด Desktop เดิม ยาวเกินพื้นที่ที่เหลือบนจอ 400px เล็กน้อย
+
+**แก้ไข (CSS บรรทัด ~170, เฉพาะจอ ≤640px):**
+```css
+.dash-dark-bg svg { max-width: 100% !important; height: auto !important; }
+.dash-dark-bg [id$="-range-controls"] { width: 100%; }
+.dash-dark-bg [id$="-range-controls"] .range-mode-btn { padding: 4px 7px !important; font-size: 10.5px !important; }
+.dash-dark-bg [id$="-range-controls"] select,
+.dash-dark-bg [id$="-range-controls"] input[type="date"] { padding: 4px 6px !important; font-size: 10.5px !important; }
+```
+- บังคับ SVG หดตามพื้นที่จริงด้วย `max-width:100%` (ใช้ `height:auto` คู่กันเพื่อรักษาสัดส่วนไม่ให้ภาพเบี้ยว)
+- ลด padding/font ของปุ่ม+dropdown ในแถบเลือกช่วงเวลาให้กระชับพอดีจอแคบ
+- เพิ่ม `.dash-dark-bg { overflow-x: hidden !important; }` (ใส่ !important เพิ่มจากรอบแรก) เป็นตาข่ายนิรภัยชั้นสุดท้ายกันล้นจอในจุดที่ยังไม่เจอ
+
+**หมายเหตุ:** ใช้ attribute selector `[id$="-range-controls"]` (ลงท้ายด้วยคำนี้) ครอบคลุมทุกโรงงานในคำเรียกเดียว (`cde-range-controls`, `propel-range-controls`, `sanon1-range-controls` ฯลฯ) ไม่ต้องเขียนแยกทีละโรงงาน
+
+**ไม่ต้องรัน SQL เพิ่ม**
+
+### 2026-09-26 — แก้ root cause: การ์ด Dashboard ล้นจอมือถือ (min-width:0)
+
+**ที่มา:** ปรับ CSS มือถือของ Dashboard เมื่อ 2026-09-22 (ลด font-size/padding) แล้วผู้ใช้ยังเห็นว่าจอมือถือ "ซูมเต็มหน้าจอ" อยู่ — ทดสอบด้วย Chrome DevTools ที่ 400px พบว่าการ์ดสถิติ (เช่น "วันทำงาน", "Runtime รวม") แสดงทีละใบเต็มความกว้างจอ แทนที่จะเป็น 2 คอลัมน์ตามที่ตั้งใจ (`grid-cols-2`)
+
+**Root cause:** grid item ของ browser มีค่า default `min-width: auto` (ยึดตามความกว้างเนื้อหาข้างในที่ไม่ยอมหด เช่น ไอคอน+ป้ายชื่อในแถว flex เดียวกัน) ทำให้คอลัมน์ที่ 2 ของ `grid-cols-2` ถูกดันกว้างเกินขอบจอมือถือ — มองไม่เห็นการ์ดที่เหลือ (ต้องเลื่อนขวาถึงจะเห็น) และการ์ดที่เห็นก็ขยายเต็มจอจนดูเหมือน "ซูมเข้ามาเยอะ"
+
+**แก้ไข (CSS บรรทัด ~159, มีผลทุกขนาดจอ ไม่จำกัดเฉพาะมือถือ เพราะเป็นค่าที่ถูกต้องเสมอ):**
+```css
+.dash-dark-bg .grid > * { min-width: 0; }
+.dash-dark-bg .dash-dark-card { overflow-wrap: break-word; }
+.dash-dark-bg { overflow-x: hidden; }
+```
+บังคับให้การ์ดหดตามความกว้างคอลัมน์จริงแทนการดันล้น + กันข้อความยาวดันกว้างซ้ำ + กัน scroll แนวนอนเป็นตาข่ายนิรภัยชั้นสุดท้าย
+
+**ไม่ต้องรัน SQL เพิ่ม**
 
 ### 2026-09-22 — ปรับขนาดหน้า Dashboard (พื้นหลังเข้ม) ให้เหมาะกับจอมือถือ
 
