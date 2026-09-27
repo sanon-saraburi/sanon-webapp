@@ -2117,6 +2117,8 @@ async function renderApprovals() {
           <button class="btn btn-success btn-sm" style="flex:1;" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
           <button class="btn btn-danger btn-sm" style="flex:1;" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
           <button class="btn btn-outline btn-sm" onclick="printLeaveForm(${r.request_id})" title="พิมพ์">🖨️</button>
+          ${can('admin') ? `<button class="btn btn-outline btn-sm" onclick="_editLeaveRecord(${r.request_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
+          <button class="btn btn-outline btn-sm" onclick="_deleteLeaveRecord(${r.request_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : ''}
         </div>
       </div>`;
     }
@@ -2131,6 +2133,8 @@ async function renderApprovals() {
         <button class="btn btn-success btn-xs" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
         <button class="btn btn-danger btn-xs" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
         <button class="btn btn-xs btn-outline" onclick="printLeaveForm(${r.request_id})" title="พิมพ์ใบลา">🖨️</button>
+        ${can('admin') ? `<button class="btn btn-xs btn-outline" onclick="_editLeaveRecord(${r.request_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
+        <button class="btn btn-xs btn-outline" onclick="_deleteLeaveRecord(${r.request_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : ''}
       </div></td>
     </tr>`;
   }).join('') : '';
@@ -2219,6 +2223,70 @@ async function rejectRequest(id) {
   _sendBroadcastNotif(data.employee_id, { icon:'📋', label:data.type_name||'คำขอลา', detail:`${data.start_date||''} · ${data.days||0} วัน`, status:'rejected', note:data.reject_note||'' });
   showToast('ปฏิเสธคำขอเรียบร้อย','info');
   currentPage === 'lv-dashboard' ? renderDashboard() : renderApprovals();
+}
+
+// ── แก้ไข / ลบ คำขอลา (Admin เท่านั้น) — เพิ่มปุ่มในคอลัมน์ "จัดการ" หน้าอนุมัติคำขอลา ──
+async function _editLeaveRecord(id) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขได้'); return; }
+  const { data: r, error } = await sb.from('leave_requests').select('*').eq('request_id', id).single();
+  if (error || !r) { alert('ไม่พบข้อมูล: ' + (error?.message||'')); return; }
+
+  if (!_leaveTypes.length) {
+    const { data } = await sb.from('leave_types').select('*').eq('is_active',true).order('sort_order');
+    _leaveTypes = data||[];
+  }
+  const typeOpts = _leaveTypes.map(t=>`<option value="${t.code}" data-name="${esc(t.name)}" ${r.type_code===t.code?'selected':''}>${esc(t.name)}</option>`).join('');
+  const STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ', rejected:'ปฏิเสธ' };
+  const statusOpts = Object.keys(STATUS_TH).map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${STATUS_TH[s]}</option>`).join('');
+
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">✏️ แก้ไขคำขอลา</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div style="font-size:12px;color:#64748b;margin:-4px 0 12px;">${esc(r.employee_name)} · ${esc(r.department||'')}</div>
+    <div class="form-group"><label class="form-label">ประเภทลา</label><select id="le-type" class="form-control">${typeOpts}</select></div>
+    <div class="form-group"><label class="form-label">วันเริ่ม</label><input type="date" id="le-start" class="form-control" value="${r.start_date}"></div>
+    <div class="form-group"><label class="form-label">วันสิ้นสุด</label><input type="date" id="le-end" class="form-control" value="${r.end_date}"></div>
+    <div class="form-group"><label class="form-label">จำนวนวัน</label><input type="number" step="0.5" id="le-days" class="form-control" value="${r.days}"></div>
+    <div class="form-group"><label class="form-label">เหตุผล</label><textarea id="le-reason" class="form-control" rows="2">${esc(r.reason||'')}</textarea></div>
+    <div class="form-group"><label class="form-label">สถานะ</label><select id="le-status" class="form-control">${statusOpts}</select></div>
+    <div id="le-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="_saveLeaveEdit(${id})">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function _saveLeaveEdit(id) {
+  const typeSel    = document.getElementById('le-type');
+  const type_code  = typeSel.value;
+  const type_name  = typeSel.selectedOptions[0]?.dataset.name || type_code;
+  const start_date = document.getElementById('le-start').value;
+  const end_date   = document.getElementById('le-end').value;
+  const days       = parseFloat(document.getElementById('le-days').value);
+  const reason     = document.getElementById('le-reason').value.trim();
+  const status     = document.getElementById('le-status').value;
+  const err        = document.getElementById('le-err');
+  if (!start_date || !end_date || !days) { err.textContent = 'กรุณาระบุวันที่และจำนวนวันให้ครบ'; return; }
+
+  const payload = { type_code, type_name, start_date, end_date, days, reason: reason||null, status };
+  if (status === 'approved') {
+    payload.approver_id   = currentUser?.id||'';
+    payload.approver_name = currentUser?.full_name||'';
+    payload.approved_at   = new Date().toISOString();
+  }
+  const { error } = await sb.from('leave_requests').update(payload).eq('request_id', id);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+  closeModal();
+  showToast('แก้ไขเรียบร้อย ✅','success');
+  renderApprovals();
+}
+
+async function _deleteLeaveRecord(id) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบได้'); return; }
+  if (!confirm('ลบคำขอลานี้ถาวร?\nไม่สามารถกู้คืนได้')) return;
+  const { error } = await sb.from('leave_requests').delete().eq('request_id', id);
+  if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+  showToast('ลบรายการเรียบร้อย','info');
+  renderApprovals();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2646,6 +2714,10 @@ async function renderPassApprovals() {
     const actionBtns = r.status==='pending' ? `
       <button class="btn btn-success btn-xs" onclick="approvePass(${r.pass_id})" style="flex:1;">✅ อนุมัติ</button>
       <button class="btn btn-danger btn-xs"  onclick="rejectPass(${r.pass_id})" style="flex:1;">❌ ปฏิเสธ</button>` : '';
+    // แก้ไข/ลบ — Admin เท่านั้น มองเห็นได้ทุกสถานะ (ไม่ใช่เฉพาะ pending เหมือนปุ่มอนุมัติ/ปฏิเสธ)
+    const adminBtns = can('admin') ? `
+      <button class="btn btn-xs btn-outline" onclick="_editPassRecord(${r.pass_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
+      <button class="btn btn-xs btn-outline" onclick="_deletePassRecord(${r.pass_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : '';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
@@ -2659,7 +2731,7 @@ async function renderPassApprovals() {
         <div style="font-size:13px;color:#475569;margin-bottom:3px;">📋 ${esc(r.reason_name)}</div>
         <div style="font-size:12px;color:#475569;margin-bottom:3px;">🕐 ออก ${r.request_date} ${r.out_time?.slice(0,5)} · กลับ ~${r.expected_return?.slice(0,5)}</div>
         ${r.note?`<div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">📝 ${esc(r.note)}</div>`:''}
-        ${r.status==='pending'?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}</div>`:''}
+        ${(actionBtns||adminBtns)?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}${adminBtns}</div>`:''}
       </div>`;
     }
     return `<tr>
@@ -2669,7 +2741,7 @@ async function renderPassApprovals() {
       <td style="font-size:12px;">~${r.expected_return?.slice(0,5)}</td>
       <td style="font-size:12px;color:#64748b;">${r.note?esc(r.note).slice(0,30):'—'}</td>
       <td><span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${PASS_LABEL[r.status]||r.status}</span></td>
-      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}</div></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}${adminBtns}</div></td>
     </tr>`;}).join('')
     : (isMobile
         ? '<div style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</div>'
@@ -2732,6 +2804,61 @@ async function rejectPass(passId) {
   if(error){ showToast('ปฏิเสธไม่สำเร็จ','error'); return; }
   if(data) _sendBroadcastNotif(data.employee_id, { icon:'🚪', label:data.reason_name||'ขอออกนอกบริเวณ', detail:`${data.request_date||''} · ${data.out_time||''} → ${data.expected_return||''}`, status:'rejected', note:note||'' });
   showToast('❌ ปฏิเสธคำขอแล้ว','info');
+  renderPassApprovals();
+}
+
+// ── แก้ไข / ลบ คำขอออกนอกบริษัท (Admin เท่านั้น) — เพิ่มปุ่มในคอลัมน์ "จัดการ" หน้าอนุมัติออกนอกบริษัท ──
+async function _editPassRecord(passId) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขได้'); return; }
+  const { data: r, error } = await sb.from('pass_requests').select('*').eq('pass_id', passId).single();
+  if (error || !r) { alert('ไม่พบข้อมูล: ' + (error?.message||'')); return; }
+
+  const STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ (รอออก)', out:'กำลังออก', returned:'กลับแล้ว', rejected:'ปฏิเสธ' };
+  const statusOpts = Object.keys(STATUS_TH).map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${STATUS_TH[s]}</option>`).join('');
+
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">✏️ แก้ไขคำขอออกนอกบริษัท</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div style="font-size:12px;color:#64748b;margin:-4px 0 12px;">${esc(r.employee_name)} · ${esc(r.reason_name||'')}</div>
+    <div class="form-group"><label class="form-label">วันที่</label><input type="date" id="pe-date" class="form-control" value="${r.request_date}"></div>
+    <div class="form-group"><label class="form-label">เวลาออก</label><input type="time" id="pe-out" class="form-control" value="${(r.out_time||'').slice(0,5)}"></div>
+    <div class="form-group"><label class="form-label">เวลากลับ (คาด)</label><input type="time" id="pe-ret" class="form-control" value="${(r.expected_return||'').slice(0,5)}"></div>
+    <div class="form-group"><label class="form-label">สถานะ</label><select id="pe-status" class="form-control">${statusOpts}</select></div>
+    <div class="form-group"><label class="form-label">หมายเหตุ</label><input type="text" id="pe-note" class="form-control" value="${esc(r.note||'')}"></div>
+    <div id="pe-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="_savePassEdit(${passId})">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function _savePassEdit(passId) {
+  const date   = document.getElementById('pe-date').value;
+  const out    = document.getElementById('pe-out').value;
+  const ret    = document.getElementById('pe-ret').value;
+  const status = document.getElementById('pe-status').value;
+  const note   = document.getElementById('pe-note').value.trim();
+  const err    = document.getElementById('pe-err');
+  if (!date || !out || !ret) { err.textContent = 'กรุณาระบุวันที่และเวลาให้ครบ'; return; }
+
+  const payload = { request_date: date, out_time: out, expected_return: ret, status, note: note || null };
+  if (status === 'approved') {
+    payload.approver_id   = currentUser?.id||'';
+    payload.approver_name = currentUser?.full_name||'';
+    payload.approved_at   = new Date().toISOString();
+  }
+  const { error } = await sb.from('pass_requests').update(payload).eq('pass_id', passId);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+  closeModal();
+  showToast('แก้ไขเรียบร้อย ✅','success');
+  renderPassApprovals();
+}
+
+async function _deletePassRecord(passId) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบได้'); return; }
+  if (!confirm('ลบรายการออกนอกบริษัทนี้ถาวร?\nไม่สามารถกู้คืนได้')) return;
+  const { error } = await sb.from('pass_requests').delete().eq('pass_id', passId);
+  if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+  showToast('ลบรายการเรียบร้อย','info');
   renderPassApprovals();
 }
 
@@ -3182,6 +3309,10 @@ async function renderOtApprovals() {
     const actionBtns = r.status==='pending' ? `
       <button class="btn btn-success btn-xs" onclick="approveOt(${r.ot_id})" style="flex:1;">✅ อนุมัติ</button>
       <button class="btn btn-danger btn-xs"  onclick="rejectOt(${r.ot_id})" style="flex:1;">❌ ปฏิเสธ</button>` : '';
+    // แก้ไข/ลบ — Admin เท่านั้น มองเห็นได้ทุกสถานะ (ไม่ใช่เฉพาะ pending เหมือนปุ่มอนุมัติ/ปฏิเสธ)
+    const adminBtns = can('admin') ? `
+      <button class="btn btn-xs btn-outline" onclick="_editOtRecord(${r.ot_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
+      <button class="btn btn-xs btn-outline" onclick="_deleteOtRecord(${r.ot_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : '';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
@@ -3194,7 +3325,7 @@ async function renderOtApprovals() {
         </div>
         <div style="font-size:12px;color:#475569;margin-bottom:3px;">🕐 ${r.ot_date} ${r.start_time?.slice(0,5)} → ${r.end_time?.slice(0,5)} (${Number(r.estimated_hours||0).toFixed(1)} ชม.)</div>
         <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">📝 ${esc(r.reason)}</div>
-        ${r.status==='pending'?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}</div>`:''}
+        ${(actionBtns||adminBtns)?`<div style="display:flex;gap:8px;margin-top:8px;">${actionBtns}${adminBtns}</div>`:''}
       </div>`;
     }
     return `<tr>
@@ -3204,7 +3335,7 @@ async function renderOtApprovals() {
       <td style="font-size:12px;">${Number(r.estimated_hours||0).toFixed(1)} ชม.</td>
       <td style="font-size:12px;color:#64748b;">${esc(r.reason).slice(0,30)}</td>
       <td><span style="background:${OT_COLOR[r.status]||'#94a3b8'}22;color:${OT_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${OT_LABEL[r.status]||r.status}</span></td>
-      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}</div></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actionBtns}${adminBtns}</div></td>
     </tr>`;}).join('')
     : (isMobile
         ? '<div style="text-align:center;color:#22c55e;padding:24px;">✅ ไม่มีคำขอรออนุมัติ</div>'
@@ -3250,6 +3381,76 @@ async function rejectOt(otId) {
   if(error){ showToast('ปฏิเสธไม่สำเร็จ','error'); return; }
   if(data) _sendBroadcastNotif(data.employee_id, { icon:'⏱️', label:'คำขอโอที', detail:`${data.ot_date||''} · ${data.start_time||''} → ${data.end_time||''}`, status:'rejected', note:note||'' });
   showToast('❌ ปฏิเสธคำขอแล้ว','info');
+  renderOtApprovals();
+}
+
+// ── แก้ไข / ลบ คำขอโอที (Admin เท่านั้น) — เพิ่มปุ่มในคอลัมน์ "จัดการ" หน้าอนุมัติ OT ──
+async function _editOtRecord(otId) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่แก้ไขได้'); return; }
+  const { data: r, error } = await sb.from('ot_requests').select('*').eq('ot_id', otId).single();
+  if (error || !r) { alert('ไม่พบข้อมูล: ' + (error?.message||'')); return; }
+
+  const TYPE_TH = { advance:'ขอล่วงหน้า', actual:'ย้อนหลัง' };
+  const typeOpts = Object.keys(TYPE_TH).map(t=>`<option value="${t}" ${r.request_type===t?'selected':''}>${TYPE_TH[t]}</option>`).join('');
+  const STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ', rejected:'ปฏิเสธ' };
+  const statusOpts = Object.keys(STATUS_TH).map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${STATUS_TH[s]}</option>`).join('');
+
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">✏️ แก้ไขคำขอโอที</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div style="font-size:12px;color:#64748b;margin:-4px 0 12px;">${esc(r.employee_name)} · ${esc(r.department||'')}</div>
+    <div class="form-group"><label class="form-label">ประเภท</label><select id="oe-type" class="form-control">${typeOpts}</select></div>
+    <div class="form-group"><label class="form-label">วันที่โอที</label><input type="date" id="oe-date" class="form-control" value="${r.ot_date}"></div>
+    <div class="form-group"><label class="form-label">เวลาเริ่ม</label><input type="time" id="oe-start" class="form-control" value="${(r.start_time||'').slice(0,5)}"></div>
+    <div class="form-group"><label class="form-label">เวลาสิ้นสุด</label><input type="time" id="oe-end" class="form-control" value="${(r.end_time||'').slice(0,5)}"></div>
+    <div class="form-group"><label class="form-label">ชั่วโมงประมาณการ</label><input type="number" step="0.5" id="oe-est" class="form-control" value="${r.estimated_hours ?? ''}"></div>
+    <div class="form-group"><label class="form-label">ชั่วโมงจริง</label><input type="number" step="0.5" id="oe-act" class="form-control" value="${r.actual_hours ?? ''}"></div>
+    <div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="oe-holiday" ${r.is_holiday?'checked':''} style="width:auto;"> เป็นการทำ OT ในวันหยุด</label></div>
+    <div class="form-group"><label class="form-label">เหตุผล</label><textarea id="oe-reason" class="form-control" rows="2">${esc(r.reason||'')}</textarea></div>
+    <div class="form-group"><label class="form-label">สถานะ</label><select id="oe-status" class="form-control">${statusOpts}</select></div>
+    <div id="oe-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="_saveOtEdit(${otId})">บันทึก</button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
+}
+
+async function _saveOtEdit(otId) {
+  const request_type = document.getElementById('oe-type').value;
+  const ot_date       = document.getElementById('oe-date').value;
+  const start_time    = document.getElementById('oe-start').value;
+  const end_time      = document.getElementById('oe-end').value;
+  const estVal        = document.getElementById('oe-est').value;
+  const actVal        = document.getElementById('oe-act').value;
+  const is_holiday    = document.getElementById('oe-holiday').checked;
+  const reason        = document.getElementById('oe-reason').value.trim();
+  const status        = document.getElementById('oe-status').value;
+  const err           = document.getElementById('oe-err');
+  if (!ot_date || !start_time || !end_time) { err.textContent = 'กรุณาระบุวันที่และเวลาให้ครบ'; return; }
+
+  const payload = {
+    request_type, ot_date, start_time, end_time,
+    estimated_hours: estVal!==''?parseFloat(estVal):null,
+    actual_hours: actVal!==''?parseFloat(actVal):null,
+    is_holiday, reason: reason||null, status
+  };
+  if (status === 'approved') {
+    payload.approver_id   = currentUser?.id||'';
+    payload.approver_name = currentUser?.full_name||'';
+    payload.approved_at   = new Date().toISOString();
+  }
+  const { error } = await sb.from('ot_requests').update(payload).eq('ot_id', otId);
+  if (error) { err.textContent = 'เกิดข้อผิดพลาด: ' + error.message; return; }
+  closeModal();
+  showToast('แก้ไขเรียบร้อย ✅','success');
+  renderOtApprovals();
+}
+
+async function _deleteOtRecord(otId) {
+  if (!can('admin')) { alert('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบได้'); return; }
+  if (!confirm('ลบคำขอโอทีนี้ถาวร?\nไม่สามารถกู้คืนได้')) return;
+  const { error } = await sb.from('ot_requests').delete().eq('ot_id', otId);
+  if (error) { alert('ลบไม่สำเร็จ: ' + error.message); return; }
+  showToast('ลบรายการเรียบร้อย','info');
   renderOtApprovals();
 }
 
@@ -3388,20 +3589,22 @@ async function renderReport() {
   _otReportData.forEach(r=>{
     const d=r.department||'ไม่ระบุแผนก';
     if(!byDeptOt[d]) byDeptOt[d]={};
-    if(!byDeptOt[d][r.employee_name]) byDeptOt[d][r.employee_name]={count:0,hours:0};
+    if(!byDeptOt[d][r.employee_name]) byDeptOt[d][r.employee_name]={eid:r.employee_id,count:0,hours:0};
     byDeptOt[d][r.employee_name].count += 1;
     byDeptOt[d][r.employee_name].hours += Number(r.actual_hours ?? r.estimated_hours ?? 0);
   });
+  // คลิกชื่อพนักงาน → ดูรายละเอียดโอทีรายวัน (เหมือน checkin.html) — ดึงจาก _otReportData ที่โหลดไว้แล้ว ไม่ต้อง query ใหม่
   const otSections = Object.entries(byDeptOt).map(([dept,emps])=>{
     const rows = Object.entries(emps).map(([name,v])=>`
       <tr>
-        <td>${esc(name)}</td>
+        <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_showOtReportDetail('${v.eid}','${name.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดโอทีรายวัน">${esc(name)}</td>
         <td style="font-weight:600;">${v.count} ครั้ง</td>
         <td style="font-weight:700;">${v.hours.toFixed(1)} ชม.</td>
       </tr>`).join('');
     return `
     <div class="card">
-      <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
+      <div class="card-title" style="margin-bottom:4px;">🏭 ${esc(dept)}</div>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">📌 คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดโอทีรายวันในปีนี้</p>
       <div class="tbl-wrap">
         <table><thead><tr><th>ชื่อ</th><th>จำนวนครั้ง</th><th>รวมชั่วโมงโอที</th></tr></thead>
         <tbody>${rows}</tbody></table>
@@ -3469,11 +3672,86 @@ function exportPassReportCSV() {
 
 function exportOtReportCSV() {
   if(!_otReportData.length) { showToast('ไม่มีข้อมูลโอที','info'); return; }
-  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','เหตุผล','สถานะ','ผู้อนุมัติ']];
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','วันหยุด/ปกติ','เหตุผล','สถานะ','ผู้อนุมัติ']];
   _otReportData.forEach(r=>{
-    rows.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.reason||'','อนุมัติ',r.approver_name||'']);
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.is_holiday?'วันหยุด':'วันทำงานปกติ',r.reason||'','อนุมัติ',r.approver_name||'']);
   });
   _downloadCSV(rows, `ot_report_${_reportYear}.csv`);
+}
+
+// ป็อบอัพรายละเอียดโอทีรายวันของพนักงาน — คลิกชื่อในตารางสรุปโอที (รายงานประจำปี)
+// ใช้แบบเดียวกับ _showOtEmployeeDetail ใน checkin.html แต่ไม่ query ใหม่ (ใช้ _otReportData ที่โหลดไว้ทั้งปีอยู่แล้ว เฉพาะที่อนุมัติแล้ว)
+// แถวที่เป็นโอทีวันหยุด (is_holiday) ไฮไลท์พื้นหลังสีแดงอ่อน ให้เห็นชัดเจน เหมือนกฎเดียวกับ Export Excel/checkin.html
+function _showOtReportDetail(eid, ename) {
+  const existing = document.getElementById('ot-report-detail-modal');
+  if (existing) existing.remove();
+
+  const rows = (_otReportData||[]).filter(r=>r.employee_id===eid).sort((a,b)=>(a.ot_date||'').localeCompare(b.ot_date||''));
+
+  const modal = document.createElement('div');
+  modal.id = 'ot-report-detail-modal';
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px;';
+
+  let totalHours = 0;
+  const trs = rows.map(r=>{
+    const hrs = Number(r.actual_hours ?? r.estimated_hours) || 0;
+    totalHours += hrs;
+    const rowBg = r.is_holiday ? ' style="background:#fff1f2;"' : '';
+    return `<tr${rowBg}>
+      <td style="font-size:12px;padding:6px 8px;">${r.ot_date}</td>
+      <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">${(r.start_time||'').slice(0,5)} → ${(r.end_time||'').slice(0,5)}${r.is_holiday?' <span style="font-size:10px;color:#7c3aed;">(วันหยุด)</span>':''}</td>
+      <td style="font-size:12px;padding:6px 8px;text-align:center;font-weight:700;color:#0f766e;">${hrs.toFixed(1)}</td>
+      <td style="font-size:12px;padding:6px 8px;">${esc(r.approver_name||'-')}</td>
+    </tr>
+    ${r.reason ? `<tr${rowBg}><td></td><td colspan="3" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📝 ${esc(r.reason)}</td></tr>` : ''}`;
+  }).join('');
+
+  modal.innerHTML = `<div class="modal-box" style="width:100%;max-width:640px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>⏱️ รายละเอียดโอที — ${esc(ename)}</span>
+      <button onclick="document.getElementById('ot-report-detail-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin:-8px 0 12px;">ปี ${_reportYear+543} (เฉพาะคำขอที่อนุมัติแล้ว)</div>
+    ${rows.length ? `
+    <div style="background:#f0fdfa;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#115e59;">
+      รวมชั่วโมงโอทีที่อนุมัติแล้วในปีนี้: <b>${totalHours.toFixed(1)} ชม.</b> (${rows.length} ครั้ง)
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#f8fafc;color:#64748b;font-size:11px;">
+          <th style="padding:6px 8px;text-align:left;">วันที่</th>
+          <th style="padding:6px 8px;text-align:left;">เวลา</th>
+          <th style="padding:6px 8px;text-align:center;">ชั่วโมง</th>
+          <th style="padding:6px 8px;text-align:left;">ผู้อนุมัติ</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>` : '<div style="text-align:center;padding:24px;color:#94a3b8;">ไม่มีข้อมูลโอทีของพนักงานคนนี้ในปีนี้</div>'}
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+// ทำพื้นหลังสีให้เซลล์ตามแถวที่ตรงเงื่อนไข — ย้ายมาจาก checkin.html (highlight โอทีวันหยุดใน Sheet Excel)
+// highlight = { rowFlags:[boolean ต่อแถวข้อมูล], cols:'all'|[ดัชนีคอลัมน์], rgb:'RRGGBB' }
+function _applyRowHighlight(ws, highlight) {
+  if (!highlight) return;
+  const { rowFlags, cols, rgb } = highlight;
+  let colIndices = cols;
+  if (cols === 'all') {
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    colIndices = [];
+    for (let c = range.s.c; c <= range.e.c; c++) colIndices.push(c);
+  }
+  rowFlags.forEach((flag, i) => {
+    if (!flag) return;
+    const r = i + 1; // +1 เพราะแถวที่ 0 ในชีตคือหัวตาราง (header)
+    colIndices.forEach(c => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) return;
+      ws[addr].s = Object.assign({}, ws[addr].s, { fill: { patternType:'solid', fgColor:{ rgb }, bgColor:{ rgb } } });
+    });
+  });
 }
 
 function _downloadCSV(rows, filename) {
@@ -3484,7 +3762,11 @@ function _downloadCSV(rows, filename) {
   a.download=filename; a.click();
 }
 
-function exportReportExcel() {
+// คำแปลไทยสำหรับ Sheet "โอที" ใน Export Excel — ให้ตรงกับ checkin.html ทุกตัวอักษร (OT_TYPE_TH / OT_STATUS_TH ใน checkin.html บรรทัด ~5198, ~5370)
+const OT_TYPE_TH = { advance:'ขอล่วงหน้า', actual:'ย้อนหลัง' };
+const OT_STATUS_TH = { approved:'อนุมัติ', pending:'รออนุมัติ', rejected:'ปฏิเสธ' };
+
+async function exportReportExcel() {
   if(!_reportData.length && !_passReportData.length && !_otReportData.length) { showToast('ไม่มีข้อมูล','info'); return; }
   const wb=XLSX.utils.book_new();
 
@@ -3507,12 +3789,34 @@ function exportReportExcel() {
   XLSX.utils.book_append_sheet(wb,wsPass,`ออกนอกบริษัท ${_reportYear+543}`);
 
   // Sheet 3 — โอที
-  const otData = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','เหตุผล','สถานะ','ผู้อนุมัติ']];
-  _otReportData.forEach(r=>{
-    otData.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.reason||'','อนุมัติ',r.approver_name||'']);
+  // ขยายให้ตรงกับ Export OT ของ checkin.html ทุกคอลัมน์ (2026-09-27 ตามคำขอ "ทำแบบนี้เหมือนระบบ HR"):
+  // ดึงข้อมูลใหม่แบบไม่กรองสถานะ (รวมรออนุมัติ/ปฏิเสธด้วย ต่างจาก _otReportData ที่ใช้แสดงสรุปบนจอซึ่งเป็นเฉพาะที่อนุมัติแล้วเท่านั้น)
+  // เพิ่มคอลัมน์ ประเภท / ชั่วโมงประมาณการ+ชั่วโมงจริงแยกกัน / วันหยุด-ปกติ / วันที่อนุมัติ / หมายเหตุปฏิเสธ
+  // และไฮไลท์พื้นหลังสีแดงอ่อนทั้งแถวสำหรับโอทีวันหยุด (is_holiday) — กฎเดียวกับ checkin.html
+  const otYStart = `${_reportYear}-01-01`, otYEnd = `${_reportYear}-12-31`;
+  const { data: otAllData } = await sb.from('ot_requests')
+    .select('employee_id,employee_name,department,ot_date,request_type,start_time,end_time,estimated_hours,actual_hours,is_holiday,reason,status,approver_name,approved_at,reject_note')
+    .gte('ot_date', otYStart).lte('ot_date', otYEnd)
+    .order('department').order('employee_name').order('ot_date');
+  const otRowsAll = otAllData || [];
+
+  const otHeader = ['รหัสพนักงาน','ชื่อ-นามสกุล','แผนก','วันที่โอที','ประเภท','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมงประมาณการ','ชั่วโมงจริง','วันหยุด/ปกติ','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ','หมายเหตุปฏิเสธ'];
+  const otData = [otHeader];
+  otRowsAll.forEach(r=>{
+    otData.push([
+      r.employee_id||'', r.employee_name||'', r.department||'', r.ot_date||'',
+      OT_TYPE_TH[r.request_type]||r.request_type||'',
+      r.start_time?r.start_time.slice(0,5):'', r.end_time?r.end_time.slice(0,5):'',
+      Number(r.estimated_hours)||0, r.actual_hours!=null?Number(r.actual_hours):'',
+      r.is_holiday?'วันหยุด':'วันทำงานปกติ', r.reason||'',
+      OT_STATUS_TH[r.status]||r.status||'', r.approver_name||'',
+      r.approved_at?r.approved_at.slice(0,10):'', r.reject_note||''
+    ]);
   });
   const wsOt=XLSX.utils.aoa_to_sheet(otData);
-  wsOt['!cols']=[{wch:12},{wch:20},{wch:16},{wch:12},{wch:10},{wch:10},{wch:8},{wch:30},{wch:10},{wch:16}];
+  wsOt['!cols']=[{wch:12},{wch:20},{wch:16},{wch:12},{wch:12},{wch:10},{wch:10},{wch:14},{wch:10},{wch:14},{wch:20},{wch:12},{wch:16},{wch:14},{wch:20}];
+  const otHolidayFlags = otRowsAll.map(r => !!r.is_holiday);
+  _applyRowHighlight(wsOt, { rowFlags: otHolidayFlags, cols: 'all', rgb: 'FFC7CE' });
   XLSX.utils.book_append_sheet(wb,wsOt,`โอที ${_reportYear+543}`);
 
   XLSX.writeFile(wb,`summary_report_${_reportYear}.xlsx`);

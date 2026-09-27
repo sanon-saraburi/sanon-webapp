@@ -5339,14 +5339,16 @@ async function _showOtEmployeeDetail(eid, ename) {
     const approverInfo = r.status === 'approved'
       ? `${escHtml(r.approver_name||'-')}${r.approved_at ? `<br><span style="font-size:10px;color:#94a3b8;">${r.approved_at.slice(0,10)}</span>` : ''}`
       : (r.status === 'rejected' ? `<span style="font-size:11px;color:#dc2626;">${escHtml(r.reject_note||'-')}</span>` : '<span style="color:#cbd5e1;">-</span>');
-    return `<tr>
+    // แถวโอทีวันหยุด (is_holiday) ไฮไลท์พื้นหลังสีแดงอ่อน ให้เห็นชัดเจนบนหน้าจอ เหมือนกฎเดียวกับที่ใช้ใน Export Excel
+    const rowBg = r.is_holiday ? ' style="background:#fff1f2;"' : '';
+    return `<tr${rowBg}>
       <td style="font-size:12px;padding:6px 8px;">${r.ot_date}</td>
       <td style="font-size:12px;padding:6px 8px;white-space:nowrap;">${(r.start_time||'').slice(0,5)} → ${(r.end_time||'').slice(0,5)}${r.is_holiday?' <span style="font-size:10px;color:#7c3aed;">(วันหยุด)</span>':''}</td>
       <td style="font-size:12px;padding:6px 8px;text-align:center;font-weight:700;color:#0f766e;">${hrs.toFixed(1)}</td>
       <td style="font-size:12px;padding:6px 8px;">${STATUS_BADGE[r.status]||r.status}</td>
       <td style="font-size:12px;padding:6px 8px;">${approverInfo}</td>
     </tr>
-    ${r.reason ? `<tr><td></td><td colspan="4" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📝 ${escHtml(r.reason)}</td></tr>` : ''}`;
+    ${r.reason ? `<tr${rowBg}><td></td><td colspan="4" style="font-size:11px;color:#64748b;padding:0 8px 6px;">📝 ${escHtml(r.reason)}</td></tr>` : ''}`;
   }).join('');
 
   body.innerHTML = `
