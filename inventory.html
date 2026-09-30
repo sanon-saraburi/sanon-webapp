@@ -4463,6 +4463,29 @@ function woFilterItems(){
   if(qs('#wo-bal'))qs('#wo-bal').value='';
   if(qs('#wo-fifo'))qs('#wo-fifo').innerHTML='';
   if(qs('#wo-total'))qs('#wo-total').value='';
+
+  // แสดงรายการแนะนำ (autocomplete) ใต้ช่องค้นหา ทันทีที่พิมพ์รหัส/ชื่อ
+  const sug=qs('#wo-suggest');
+  if(sug){
+    if(search){
+      const top=filtered.slice(0,30);
+      sug.innerHTML=top.length?top.map(i=>`
+        <div onmousedown="woPickItem('${i.id}')" class="px-3 py-2 text-sm hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-0">
+          <span class="font-mono text-gray-500">${escapeHtml(i.code)}</span> — ${escapeHtml(i.name)}
+          <span class="text-xs text-gray-400">(คงเหลือ ${fmtNum(_stockMap[i.id]||0)} ${escapeHtml(i.unit||'')})</span>
+        </div>`).join(''):`<div class="px-3 py-2 text-sm text-gray-400">ไม่พบวัสดุที่ตรงกับ "${escapeHtml(search)}"</div>`;
+      sug.classList.remove('hidden');
+    }else{
+      sug.classList.add('hidden');sug.innerHTML='';
+    }
+  }
+}
+function woPickItem(id){
+  const sel=qs('#wo-item');
+  if(sel){sel.value=id;woItemChange();}
+  const sug=qs('#wo-suggest');if(sug){sug.classList.add('hidden');sug.innerHTML='';}
+  const inp=qs('#wo-search-filter');
+  if(inp){const opt=sel?.selectedOptions[0];inp.value=opt&&opt.value?opt.textContent:'';}
 }
 
 function openWithdrawModal(preItem=null) {
@@ -4501,8 +4524,11 @@ function openWithdrawModal(preItem=null) {
             <select id="wo-cat-filter" onchange="woFilterItems()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
               <option value="">-- ทุกประเภท --</option>${catFilterOpts}
             </select>
-            <input id="wo-search-filter" type="text" placeholder="ค้นหารหัส / ชื่อ..." oninput="woFilterItems()"
-              class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-w-0"/>
+            <div class="relative min-w-0">
+              <input id="wo-search-filter" type="text" autocomplete="off" placeholder="ค้นหารหัส / ชื่อ..." oninput="woFilterItems()" onfocus="woFilterItems()" onblur="setTimeout(()=>{const s=qs('#wo-suggest');if(s)s.classList.add('hidden');},150)"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-w-0"/>
+              <div id="wo-suggest" class="hidden absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto"></div>
+            </div>
             <button type="button" onclick="openScanner(item=>{const cf=qs('#wo-cat-filter'),sf=qs('#wo-search-filter');if(cf)cf.value='';if(sf)sf.value='';woFilterItems();const s=qs('#wo-item');if(s){s.value=item.id;woItemChange();}showToast('พบ: '+item.name,'success');})"
               class="flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-700" title="สแกน QR/Barcode">
               <i data-lucide="scan-line" class="w-5 h-5"></i>
