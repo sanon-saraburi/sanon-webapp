@@ -1366,6 +1366,63 @@ function closeMobileMenu() {
 // ─────────────────────────────────────────────────────────────
 // SECTION 7 — Dashboard
 // ─────────────────────────────────────────────────────────────
+// สร้างการ์ด "📋 สรุปรายละเอียดการลา" (หัวหน้างาน/Admin) — ใช้ร่วมกันทั้งหน้า Dashboard และหน้า "อนุมัติคำขอลา"
+async function _buildTeamLeaveOverviewCard() {
+  if (!can('approve')) return '';
+  const todayStr = todayISO();
+  const next7Str = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+
+  const [teamLeaveTodayRes, teamLeaveUpcomingRes] = await Promise.all([
+    (()=>{
+      let q = sb.from('leave_requests').select('*').eq('status','approved')
+        .lte('start_date', todayStr).gte('end_date', todayStr)
+        .order('department').order('employee_name');
+      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      return q;
+    })(),
+    (()=>{
+      let q = sb.from('leave_requests').select('*').eq('status','approved')
+        .gt('start_date', todayStr).lte('start_date', next7Str)
+        .order('start_date');
+      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      return q;
+    })()
+  ]);
+
+  const teamLeaveToday    = teamLeaveTodayRes.data||[];
+  const teamLeaveUpcoming = teamLeaveUpcomingRes.data||[];
+  // จำนวนวันนับจากวันนี้ถึงวันเริ่มลา (สำหรับแสดง "อีก N วัน" ในรายการที่กำลังจะถึงคิว)
+  const _daysUntil = dateStr => Math.round((new Date(dateStr) - new Date(todayStr)) / 86400000);
+
+  // แถวสไตล์เดียวกับป็อบอัพแจ้งเตือน (การ์ดรายชื่อ ไม่ใช่ตาราง) — วันนี้: ไม่โชว์วันที่ (คือวันนี้อยู่แล้ว), เร็วๆ นี้: โชว์ "อีก N วัน" + วันที่
+  const _rowHtml = (r, showCountdown) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #f1f5f9;">
+      <div style="min-width:0;">
+        <span style="font-weight:600;font-size:13px;color:#0f172a;">${esc(r.employee_name)}</span>
+        <span style="font-size:11px;color:#94a3b8;margin-left:6px;">${esc(r.department||'—')}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <span style="color:${typeColor(r.type_code)};font-size:12px;font-weight:600;white-space:nowrap;">${_typeIcon(r.type_code)} ${esc(r.type_name)}</span>
+        <div style="font-size:11px;color:#94a3b8;">
+          ${showCountdown ? `<span style="color:#ea9d0a;font-weight:700;">อีก ${_daysUntil(r.start_date)} วัน</span> · ` : ''}${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}
+        </div>
+      </div>
+    </div>`;
+  const todayHtml    = teamLeaveToday.map(r=>_rowHtml(r,false)).join('');
+  const upcomingHtml = teamLeaveUpcoming.map(r=>_rowHtml(r,true)).join('');
+
+  return `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">📋 สรุปรายละเอียดการลา</div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">📅 วันนี้ลา (${teamLeaveToday.length} คน)</div>
+    ${teamLeaveToday.length ? todayHtml : `<div style="text-align:center;color:#22c55e;padding:10px;font-size:13px;">✅ วันนี้ไม่มีใครลา</div>`}
+    <div style="font-size:12px;font-weight:700;color:#334155;margin:14px 0 6px;">🔜 อีกกี่วันจะถึงคิวลา (ภายใน 7 วันข้างหน้า)</div>
+    ${teamLeaveUpcoming.length ? upcomingHtml : `<div style="text-align:center;color:#94a3b8;padding:10px;font-size:13px;">ไม่มีคำขอลาที่จะถึง</div>`}
+  </div>`;
+}
+
 async function renderDashboard() {
   const empId = currentUser?.id || currentEmp?.employee_id;
   const empName = currentUser?.full_name || currentEmp?.name || '';
@@ -1386,6 +1443,9 @@ async function renderDashboard() {
   const lastDayNum = new Date(_curY, _curM+1, 0).getDate();
   const monthEndStr = `${_curY}-${_mm}-${String(lastDayNum).padStart(2,'0')}`;
   const monthLabel = _now.toLocaleDateString('th-TH',{month:'short',year:'numeric'});
+
+  // การ์ด "สรุปรายละเอียดการลา" (หัวหน้างาน/Admin) — ยิงคู่ขนานไปพร้อมชุด fetch หลัก (ใช้ฟังก์ชันร่วมกับหน้า "อนุมัติคำขอลา")
+  const teamOverviewPromise = _buildTeamLeaveOverviewCard();
 
   // Parallel fetch
   const [typesRes, myReqRes, pendingRes, balRes, passReqRes, otReqRes] = await Promise.all([
@@ -1411,6 +1471,7 @@ async function renderDashboard() {
   const bals     = balRes.data||[];
   const passReqs = passReqRes.data||[];
   const otReqs   = otReqRes.data||[];
+  const teamOverviewSection = await teamOverviewPromise;
 
   // Update approve badge
   const pc = pending.length;
@@ -1580,6 +1641,8 @@ async function renderDashboard() {
 
     ${pendingSection}
 
+    ${teamOverviewSection}
+
     <!-- ประวัติการลาล่าสุด -->
     <div class="card">
       <div class="card-hd">
@@ -1659,6 +1722,16 @@ async function renderNewRequest() {
         </div>
       </div>
 
+      <!-- ใบรับรองแพทย์ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01: ไม่เก็บไฟล์จริง เก็บแค่สถานะ พนักงานนำใบจริงมาส่งแยกต่างหาก -->
+      <div class="form-group" id="cert-status-grp" style="display:none;">
+        <label class="form-label">ใบรับรองแพทย์ <span style="color:#ef4444;">*</span></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" id="cs-have"  onclick="setCertStatus('มีใบ')">มีใบ</button>
+          <button type="button" class="btn btn-outline btn-sm" id="cs-none"  onclick="setCertStatus('ไม่มี')">ไม่มี</button>
+          <button type="button" class="btn btn-outline btn-sm" id="cs-later" onclick="setCertStatus('จะนำมาส่งภายหลัง')">จะนำมาส่งภายหลัง</button>
+        </div>
+      </div>
+
       <!-- วันที่ -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
@@ -1696,9 +1769,11 @@ async function renderNewRequest() {
 
   _reqTypeId=null; _reqTypeCode=''; _reqTypeName='';
   _halfDay = '';
+  _certStatus = '';
 }
 
 let _halfDay = '';
+let _certStatus = ''; // สถานะใบรับรองแพทย์ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01
 function selectLeaveType(id, code, name, color) {
   _reqTypeId=id; _reqTypeCode=code; _reqTypeName=name;
   // Reset all cards
@@ -1716,6 +1791,12 @@ function selectLeaveType(id, code, name, color) {
   }
   document.getElementById('req-type-id').value=id;
   document.getElementById('half-day-grp').style.display='';
+
+  // แสดงช่องสถานะใบรับรองแพทย์เฉพาะเมื่อเลือก "ลาป่วย" (type_code === 'sick')
+  const certGrp = document.getElementById('cert-status-grp');
+  if (certGrp) certGrp.style.display = (code === 'sick') ? '' : 'none';
+  if (code !== 'sick') { _certStatus = ''; setCertStatus(''); } // รีเซ็ตปุ่มถ้าสลับออกจากลาป่วย
+
   _calcDays();
 }
 
@@ -1729,6 +1810,21 @@ function setHalfDay(v) {
     btn.style.color      = (v===''&&k==='full'||v===k) ? '#2563eb' : '';
   });
   _calcDays();
+}
+
+// ตั้งสถานะใบรับรองแพทย์ตอนยื่นคำขอ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01
+function setCertStatus(v) {
+  _certStatus = v;
+  const err = document.getElementById('req-err');
+  if (err) err.textContent = '';
+  ['have','none','later'].forEach(k=>{
+    const btn = document.getElementById('cs-'+k);
+    if (!btn) return;
+    const match = (k==='have'&&v==='มีใบ') || (k==='none'&&v==='ไม่มี') || (k==='later'&&v==='จะนำมาส่งภายหลัง');
+    btn.style.background  = match ? '#eff6ff' : '';
+    btn.style.borderColor = match ? '#3b82f6' : '';
+    btn.style.color       = match ? '#2563eb' : '';
+  });
 }
 
 function _calcDays() {
@@ -1754,6 +1850,8 @@ async function submitRequest() {
   const end   = document.getElementById('req-end').value;
   if(!start||!end) { err.textContent='กรุณาระบุวันที่'; return; }
   if(end<start)    { err.textContent='วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น'; return; }
+  // ลาป่วยต้องเลือกสถานะใบรับรองแพทย์ก่อนยื่น (ไม่เก็บไฟล์จริง เก็บแค่สถานะ) — เพิ่ม 2026-10-01
+  if(_reqTypeCode === 'sick' && !_certStatus) { err.textContent='กรุณาเลือกสถานะใบรับรองแพทย์'; return; }
 
   const days   = _halfDay ? 0.5 : calcWorkingDays(start,end);
   const reason = document.getElementById('req-reason').value.trim();
@@ -1788,7 +1886,8 @@ async function submitRequest() {
     type_id: _reqTypeId, type_name: _reqTypeName, type_code: _reqTypeCode,
     start_date: start, end_date: end, days, half_day: _halfDay||null,
     reason: overQuotaNote ? `${overQuotaNote}${reason?` ${reason}`:''}` : (reason||null),
-    status:'pending'
+    status:'pending',
+    cert_status: _reqTypeCode === 'sick' ? _certStatus : null // สถานะใบรับรองแพทย์ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01
   };
 
   const { data, error } = await sb.from('leave_requests').insert([payload]).select().single();
@@ -2080,7 +2179,10 @@ async function renderApprovals() {
   // Admin sees all pending; supervisor sees their department
   let q = sb.from('leave_requests').select('*').eq('status','pending').order('created_at');
   if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
-  const { data } = await q.limit(100);
+  const [{ data }, teamOverviewSection] = await Promise.all([
+    q.limit(100),
+    _buildTeamLeaveOverviewCard()
+  ]);
   const reqs = data||[];
 
   // Update badge
@@ -2100,6 +2202,9 @@ async function renderApprovals() {
     const dateRange = fmtDate(r.start_date)+(r.start_date!==r.end_date?' – '+fmtDate(r.end_date):'');
     const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;">🔄 บัตรตอก</span>` : '';
     const reasonText = isAuto ? '🔄 สร้างจากบัตรตอกอัตโนมัติ' : qb.reason.slice(0,60)||'—';
+    // แจ้งเตือนกรณีลาป่วยที่ยัง "จะนำมาส่งภายหลัง" — ใบรับรองแพทย์ยังไม่ได้รับ — เพิ่ม 2026-10-01
+    const certBadge = (r.type_code==='sick' && r.cert_status==='จะนำมาส่งภายหลัง')
+      ? `<span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;">⏳ รอใบรับรองแพทย์</span>` : '';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:10px;">
@@ -2112,7 +2217,7 @@ async function renderApprovals() {
         </div>
         <div style="font-size:13px;color:#475569;margin-bottom:4px;">📅 ${dateRange} &nbsp;·&nbsp; <b>${r.days} วัน</b></div>
         ${(qb.reason||isAuto) ? `<div style="font-size:12px;color:#64748b;margin-bottom:6px;">📝 ${esc(reasonText)}</div>` : ''}
-        ${qb.badge || autoBadge ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${autoBadge}${qb.badge}</div>` : ''}
+        ${qb.badge || autoBadge || certBadge ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${autoBadge}${certBadge}${qb.badge}</div>` : ''}
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="btn btn-success btn-sm" style="flex:1;" onclick="approveRequest(${r.request_id})">✅ อนุมัติ</button>
           <button class="btn btn-danger btn-sm" style="flex:1;" onclick="openRejectModal(${r.request_id})">❌ ปฏิเสธ</button>
@@ -2125,7 +2230,7 @@ async function renderApprovals() {
     // Desktop: table row
     return `<tr>
       <td><div style="font-weight:600;color:#0f172a;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
-      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}</td>
+      <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}${certBadge ? ' '+certBadge : ''}</td>
       <td>${dateRange}</td>
       <td style="font-weight:700;">${r.days} วัน</td>
       <td><span style="font-size:12px;color:#64748b;">${esc(reasonText)}</span>${qb.badge ? '<br>'+qb.badge : ''}</td>
@@ -2158,6 +2263,8 @@ async function renderApprovals() {
            </table></div>`
       }
     </div>
+
+    ${teamOverviewSection}
   </div>`;
 }
 
@@ -2238,15 +2345,21 @@ async function _editLeaveRecord(id) {
   const typeOpts = _leaveTypes.map(t=>`<option value="${t.code}" data-name="${esc(t.name)}" ${r.type_code===t.code?'selected':''}>${esc(t.name)}</option>`).join('');
   const STATUS_TH = { pending:'รออนุมัติ', approved:'อนุมัติ', rejected:'ปฏิเสธ' };
   const statusOpts = Object.keys(STATUS_TH).map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${STATUS_TH[s]}</option>`).join('');
+  const CERT_OPTS = ['', 'มีใบ', 'ไม่มี', 'จะนำมาส่งภายหลัง'];
+  const certOpts = CERT_OPTS.map(c=>`<option value="${c}" ${ (r.cert_status||'')===c ? 'selected':'' }>${c||'— ไม่ระบุ —'}</option>`).join('');
 
   openModal(`
     <div class="modal-hd"><span class="modal-title">✏️ แก้ไขคำขอลา</span><button class="modal-close" onclick="closeModal()">×</button></div>
     <div style="font-size:12px;color:#64748b;margin:-4px 0 12px;">${esc(r.employee_name)} · ${esc(r.department||'')}</div>
-    <div class="form-group"><label class="form-label">ประเภทลา</label><select id="le-type" class="form-control">${typeOpts}</select></div>
+    <div class="form-group"><label class="form-label">ประเภทลา</label><select id="le-type" class="form-control" onchange="document.getElementById('le-cert-grp').style.display=(this.value==='sick')?'':'none';">${typeOpts}</select></div>
     <div class="form-group"><label class="form-label">วันเริ่ม</label><input type="date" id="le-start" class="form-control" value="${r.start_date}"></div>
     <div class="form-group"><label class="form-label">วันสิ้นสุด</label><input type="date" id="le-end" class="form-control" value="${r.end_date}"></div>
     <div class="form-group"><label class="form-label">จำนวนวัน</label><input type="number" step="0.5" id="le-days" class="form-control" value="${r.days}"></div>
     <div class="form-group"><label class="form-label">เหตุผล</label><textarea id="le-reason" class="form-control" rows="2">${esc(r.reason||'')}</textarea></div>
+    <div class="form-group" id="le-cert-grp" style="${r.type_code==='sick'?'':'display:none;'}">
+      <label class="form-label">ใบรับรองแพทย์</label>
+      <select id="le-cert-status" class="form-control">${certOpts}</select>
+    </div>
     <div class="form-group"><label class="form-label">สถานะ</label><select id="le-status" class="form-control">${statusOpts}</select></div>
     <div id="le-err" style="color:#ef4444;font-size:12px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:10px;">
@@ -2264,10 +2377,13 @@ async function _saveLeaveEdit(id) {
   const days       = parseFloat(document.getElementById('le-days').value);
   const reason     = document.getElementById('le-reason').value.trim();
   const status     = document.getElementById('le-status').value;
+  const certSel    = document.getElementById('le-cert-status');
+  // สถานะใบรับรองแพทย์ — เก็บเฉพาะเมื่อประเภทลาเป็น "ลาป่วย" ไม่งั้นล้างค่าทิ้ง (เผื่อแก้ประเภทลาออกจากลาป่วย)
+  const cert_status = (type_code === 'sick' && certSel && certSel.value) ? certSel.value : null;
   const err        = document.getElementById('le-err');
   if (!start_date || !end_date || !days) { err.textContent = 'กรุณาระบุวันที่และจำนวนวันให้ครบ'; return; }
 
-  const payload = { type_code, type_name, start_date, end_date, days, reason: reason||null, status };
+  const payload = { type_code, type_name, start_date, end_date, days, reason: reason||null, status, cert_status };
   if (status === 'approved') {
     payload.approver_id   = currentUser?.id||'';
     payload.approver_name = currentUser?.full_name||'';
@@ -3485,10 +3601,16 @@ async function sendOtLineNotify(otId, r, event) {
 // ─────────────────────────────────────────────────────────────
 // SECTION 12 — Report
 // ─────────────────────────────────────────────────────────────
-let _reportData     = []; // cache สำหรับ export — การลา
-let _passReportData = []; // cache สำหรับ export — ออกนอกบริษัท
-let _otReportData   = []; // cache สำหรับ export — โอที
+let _reportData     = []; // cache สำหรับ export — การลา (รายปี)
+let _passReportData = []; // cache สำหรับ export — ออกนอกบริษัท (รายปี)
+let _otReportData   = []; // cache สำหรับ export — โอที (รายปี)
 let _reportYear = thisYear();
+
+// cache สำหรับรายงานสรุปรายเดือน (เพิ่ม 2026-10-01 — ตามคำขอ "เน้นเป็นรายงานสรุปรายเดือนก่อน")
+let _monthlyReportData     = []; // การลา
+let _monthlyPassReportData = []; // ออกนอกบริษัท
+let _monthlyOtReportData   = []; // โอที
+let _reportMonth = (new Date()).getMonth() + 1; // 1-12
 
 // คำนวณนาทีระหว่างเวลาออก-กลับ (ออกนอกบริษัท) — กันกรณีข้ามเที่ยงคืน
 function _passMinutesBetween(outStr, retStr) {
@@ -3500,41 +3622,29 @@ function _passMinutesBetween(outStr, retStr) {
   return mins;
 }
 
-async function renderReport() {
-  if(!can('viewAll')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
+// ช่วงวันที่เริ่ม-สิ้นสุดของเดือนที่กำหนด (สำหรับรายงานสรุปรายเดือน)
+function _monthRange(year, month) {
+  const mm = String(month).padStart(2,'0');
+  const start = `${year}-${mm}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${mm}-${String(lastDay).padStart(2,'0')}`;
+  return [start, end];
+}
 
-  const year = _reportYear;
-  const yStart = `${year}-01-01`, yEnd = `${year}-12-31`;
-
-  const [leaveRes, passRes, otRes] = await Promise.all([
-    sb.from('leave_requests').select('*').eq('status','approved')
-      .gte('start_date',yStart).lte('start_date',yEnd)
-      .order('department').order('employee_name'),
-    sb.from('pass_requests').select('*').eq('status','approved')
-      .gte('request_date',yStart).lte('request_date',yEnd)
-      .order('department').order('employee_name'),
-    sb.from('ot_requests').select('*').eq('status','approved')
-      .gte('ot_date',yStart).lte('ot_date',yEnd)
-      .order('department').order('employee_name')
-  ]);
-
-  _reportData     = leaveRes.data||[];
-  _passReportData = passRes.data||[];
-  _otReportData   = otRes.data||[];
-
-  // ── 1) รายงานการลา — group by แผนก/พนักงาน ──
-  const byDeptLeave = {};
-  _reportData.forEach(r=>{
+// ── ตัวช่วยสร้างตารางสรุป group by แผนก/พนักงาน — ใช้ร่วมกันทั้งรายงานรายเดือนและรายปี ──
+function _buildLeaveReportSections(rows) {
+  const byDept = {};
+  rows.forEach(r=>{
     const d=r.department||'ไม่ระบุแผนก';
-    if(!byDeptLeave[d]) byDeptLeave[d]={};
-    if(!byDeptLeave[d][r.employee_name]) byDeptLeave[d][r.employee_name]={sick:0,personal:0,annual:0,out:0,total:0};
-    byDeptLeave[d][r.employee_name][r.type_code||'other'] = (byDeptLeave[d][r.employee_name][r.type_code||'other']||0)+Number(r.days);
-    byDeptLeave[d][r.employee_name].total += Number(r.days);
+    if(!byDept[d]) byDept[d]={};
+    if(!byDept[d][r.employee_name]) byDept[d][r.employee_name]={sick:0,personal:0,annual:0,out:0,total:0};
+    byDept[d][r.employee_name][r.type_code||'other'] = (byDept[d][r.employee_name][r.type_code||'other']||0)+Number(r.days);
+    byDept[d][r.employee_name].total += Number(r.days);
   });
-  const leaveSections = Object.entries(byDeptLeave).map(([dept,emps])=>{
-    const rows = Object.entries(emps).map(([name,days])=>{
-      // "อื่นๆ" = รวมประเภทลาที่ไม่มีคอลัมน์ของตัวเอง (ลาสมรส/ลาคลอดบุตร/ลาอุปสมบท/ลาฌาปนกิจ/ลาฝึกอบรม ฯลฯ)
-      // คำนวณจาก total - 4 ประเภทหลัก เพื่อให้ผลรวมของคอลัมน์ที่เห็นตรงกับ "รวม (วัน)" เสมอ ไม่ต้องแก้ตอนสะสมข้อมูล
+  return Object.entries(byDept).map(([dept,emps])=>{
+    // "อื่นๆ" = รวมประเภทลาที่ไม่มีคอลัมน์ของตัวเอง (ลาสมรส/ลาคลอดบุตร/ลาอุปสมบท/ลาฌาปนกิจ/ลาฝึกอบรม ฯลฯ)
+    // คำนวณจาก total - 4 ประเภทหลัก เพื่อให้ผลรวมของคอลัมน์ที่เห็นตรงกับ "รวม (วัน)" เสมอ ไม่ต้องแก้ตอนสะสมข้อมูล
+    const rows2 = Object.entries(emps).map(([name,days])=>{
       const other = days.total - (days.sick||0) - (days.personal||0) - (days.annual||0) - (days.out||0);
       return `
       <tr>
@@ -3553,22 +3663,23 @@ async function renderReport() {
       <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">"อื่นๆ" = ลาสมรส / ลาคลอดบุตร / ลาอุปสมบท / ลาฌาปนกิจ / ลาฝึกอบรม ฯลฯ — ดูรายละเอียดรายบุคคลได้ใน Export Excel</p>
       <div class="tbl-wrap">
         <table><thead><tr><th>ชื่อ</th><th>🤒 ป่วย</th><th>📌 กิจ</th><th>🏖️ พักร้อน</th><th>🚗 ออกนอก</th><th>📋 อื่นๆ</th><th>รวม (วัน)</th></tr></thead>
-        <tbody>${rows}</tbody></table>
+        <tbody>${rows2}</tbody></table>
       </div>
     </div>`;
   }).join('');
+}
 
-  // ── 2) รายงานออกนอกบริษัท (Pass) — group by แผนก/พนักงาน ──
-  const byDeptPass = {};
-  _passReportData.forEach(r=>{
+function _buildPassReportSections(rows) {
+  const byDept = {};
+  rows.forEach(r=>{
     const d=r.department||'ไม่ระบุแผนก';
-    if(!byDeptPass[d]) byDeptPass[d]={};
-    if(!byDeptPass[d][r.employee_name]) byDeptPass[d][r.employee_name]={count:0,minutes:0};
-    byDeptPass[d][r.employee_name].count += 1;
-    byDeptPass[d][r.employee_name].minutes += _passMinutesBetween(r.out_time, r.expected_return);
+    if(!byDept[d]) byDept[d]={};
+    if(!byDept[d][r.employee_name]) byDept[d][r.employee_name]={count:0,minutes:0};
+    byDept[d][r.employee_name].count += 1;
+    byDept[d][r.employee_name].minutes += _passMinutesBetween(r.out_time, r.expected_return);
   });
-  const passSections = Object.entries(byDeptPass).map(([dept,emps])=>{
-    const rows = Object.entries(emps).map(([name,v])=>`
+  return Object.entries(byDept).map(([dept,emps])=>{
+    const rows2 = Object.entries(emps).map(([name,v])=>`
       <tr>
         <td>${esc(name)}</td>
         <td style="font-weight:600;">${v.count} ครั้ง</td>
@@ -3579,47 +3690,140 @@ async function renderReport() {
       <div class="card-title" style="margin-bottom:12px;">🏭 ${esc(dept)}</div>
       <div class="tbl-wrap">
         <table><thead><tr><th>ชื่อ</th><th>จำนวนครั้ง</th><th>รวมเวลาออกนอก</th></tr></thead>
-        <tbody>${rows}</tbody></table>
+        <tbody>${rows2}</tbody></table>
       </div>
     </div>`;
   }).join('');
+}
 
-  // ── 3) รายงานโอที (OT) — group by แผนก/พนักงาน ──
-  const byDeptOt = {};
-  _otReportData.forEach(r=>{
+// opts.clickHandler = ชื่อฟังก์ชัน global สำหรับ onclick ดูรายละเอียดรายวัน (ไม่ส่ง = แสดงชื่อเฉยๆ ไม่คลิกได้)
+function _buildOtReportSections(rows, opts) {
+  opts = opts || {};
+  const byDept = {};
+  rows.forEach(r=>{
     const d=r.department||'ไม่ระบุแผนก';
-    if(!byDeptOt[d]) byDeptOt[d]={};
-    if(!byDeptOt[d][r.employee_name]) byDeptOt[d][r.employee_name]={eid:r.employee_id,count:0,hours:0};
-    byDeptOt[d][r.employee_name].count += 1;
-    byDeptOt[d][r.employee_name].hours += Number(r.actual_hours ?? r.estimated_hours ?? 0);
+    if(!byDept[d]) byDept[d]={};
+    if(!byDept[d][r.employee_name]) byDept[d][r.employee_name]={eid:r.employee_id,count:0,hours:0};
+    byDept[d][r.employee_name].count += 1;
+    byDept[d][r.employee_name].hours += Number(r.actual_hours ?? r.estimated_hours ?? 0);
   });
-  // คลิกชื่อพนักงาน → ดูรายละเอียดโอทีรายวัน (เหมือน checkin.html) — ดึงจาก _otReportData ที่โหลดไว้แล้ว ไม่ต้อง query ใหม่
-  const otSections = Object.entries(byDeptOt).map(([dept,emps])=>{
-    const rows = Object.entries(emps).map(([name,v])=>`
+  return Object.entries(byDept).map(([dept,emps])=>{
+    const rows2 = Object.entries(emps).map(([name,v])=>{
+      const nameCell = opts.clickHandler
+        ? `<td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="${opts.clickHandler}('${v.eid}','${name.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดโอทีรายวัน">${esc(name)}</td>`
+        : `<td style="font-weight:600;">${esc(name)}</td>`;
+      return `
       <tr>
-        <td style="font-weight:600;color:#0f766e;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="_showOtReportDetail('${v.eid}','${name.replace(/'/g,"\\'")}')" title="คลิกดูรายละเอียดโอทีรายวัน">${esc(name)}</td>
+        ${nameCell}
         <td style="font-weight:600;">${v.count} ครั้ง</td>
         <td style="font-weight:700;">${v.hours.toFixed(1)} ชม.</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     return `
     <div class="card">
       <div class="card-title" style="margin-bottom:4px;">🏭 ${esc(dept)}</div>
-      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">📌 คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดโอทีรายวันในปีนี้</p>
+      ${opts.clickHandler ? `<p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">📌 คลิกที่ <b>ชื่อพนักงาน</b> เพื่อดูรายละเอียดโอทีรายวัน</p>` : ''}
       <div class="tbl-wrap">
         <table><thead><tr><th>ชื่อ</th><th>จำนวนครั้ง</th><th>รวมชั่วโมงโอที</th></tr></thead>
-        <tbody>${rows}</tbody></table>
+        <tbody>${rows2}</tbody></table>
       </div>
     </div>`;
   }).join('');
+}
 
-  // Year selector
+async function renderReport() {
+  if(!can('viewAll')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
+
+  const year = _reportYear;
+  const yStart = `${year}-01-01`, yEnd = `${year}-12-31`;
+  const [mStart, mEnd] = _monthRange(year, _reportMonth);
+
+  const [leaveRes, passRes, otRes, mLeaveRes, mPassRes, mOtRes] = await Promise.all([
+    sb.from('leave_requests').select('*').eq('status','approved')
+      .gte('start_date',yStart).lte('start_date',yEnd)
+      .order('department').order('employee_name'),
+    sb.from('pass_requests').select('*').eq('status','approved')
+      .gte('request_date',yStart).lte('request_date',yEnd)
+      .order('department').order('employee_name'),
+    sb.from('ot_requests').select('*').eq('status','approved')
+      .gte('ot_date',yStart).lte('ot_date',yEnd)
+      .order('department').order('employee_name'),
+    // ── สรุปรายงานประจำเดือน (เพิ่ม 2026-10-01) ──
+    sb.from('leave_requests').select('*').eq('status','approved')
+      .gte('start_date',mStart).lte('start_date',mEnd)
+      .order('department').order('employee_name'),
+    sb.from('pass_requests').select('*').eq('status','approved')
+      .gte('request_date',mStart).lte('request_date',mEnd)
+      .order('department').order('employee_name'),
+    sb.from('ot_requests').select('*').eq('status','approved')
+      .gte('ot_date',mStart).lte('ot_date',mEnd)
+      .order('department').order('employee_name')
+  ]);
+
+  _reportData     = leaveRes.data||[];
+  _passReportData = passRes.data||[];
+  _otReportData    = otRes.data||[];
+  _monthlyReportData     = mLeaveRes.data||[];
+  _monthlyPassReportData = mPassRes.data||[];
+  _monthlyOtReportData   = mOtRes.data||[];
+
+  // ── สรุปรายงานประจำเดือน ──
+  const monthlyLeaveSections = _buildLeaveReportSections(_monthlyReportData);
+  const monthlyPassSections  = _buildPassReportSections(_monthlyPassReportData);
+  const monthlyOtSections    = _buildOtReportSections(_monthlyOtReportData, { clickHandler: '_showMonthlyOtReportDetail' });
+
+  // ── สรุปรายงานประจำปี ──
+  const leaveSections = _buildLeaveReportSections(_reportData);
+  const passSections  = _buildPassReportSections(_passReportData);
+  const otSections    = _buildOtReportSections(_otReportData, { clickHandler: '_showOtReportDetail' });
+
+  // ตัวเลือกเดือน/ปี
   const curYear = thisYear();
   const yearOpts = [curYear, curYear-1, curYear-2].map(y=>
     `<option value="${y}" ${y===year?'selected':''}>${y+543}</option>`).join('');
+  const monthOpts = HOL_MONTHS_TH.map((m,i)=>
+    `<option value="${i+1}" ${i+1===_reportMonth?'selected':''}>${m}</option>`).join('');
+  const monthLabel = `${HOL_MONTHS_TH[_reportMonth-1]} ${year+543}`;
 
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:900px;">
+
+    <!-- ── สรุปรายงานประจำเดือน (เน้นเป็นอันดับแรก) ── -->
     <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin:0;">📅 สรุปรายงานประจำเดือน</h2>
+        <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">เฉพาะคำขอที่ได้รับการอนุมัติ — ${esc(monthLabel)}</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select class="form-control" style="width:auto;" onchange="_reportMonth=parseInt(this.value);renderReport();">
+          ${monthOpts}
+        </select>
+        <select class="form-control" style="width:auto;" onchange="_reportYear=parseInt(this.value);renderReport();">
+          ${yearOpts}
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">📋 รายงานการลา</h3>
+      <button class="btn btn-success btn-sm" onclick="exportMonthlyReportCSV()">📥 CSV</button>
+    </div>
+    ${monthlyLeaveSections||`<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลการลาที่อนุมัติในเดือนนี้</p></div>`}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">🔑 รายงานออกนอกบริษัท</h3>
+      <button class="btn btn-success btn-sm" onclick="exportMonthlyPassReportCSV()">📥 CSV</button>
+    </div>
+    ${monthlyPassSections||`<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลออกนอกบริษัทที่อนุมัติในเดือนนี้</p></div>`}
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 10px;">
+      <h3 style="font-size:15px;font-weight:700;margin:0;">⏱️ รายงานโอที</h3>
+      <button class="btn btn-success btn-sm" onclick="exportMonthlyOtReportCSV()">📥 CSV</button>
+    </div>
+    ${monthlyOtSections||`<div class="card"><p style="text-align:center;color:#94a3b8;">ยังไม่มีข้อมูลโอทีที่อนุมัติในเดือนนี้</p></div>`}
+
+    <!-- ── สรุปรายงานประจำปี ── -->
+    <div style="margin:36px 0 14px;padding-top:24px;border-top:2px dashed #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
         <h2 style="font-size:18px;font-weight:700;margin:0;">📊 สรุปรายงานประจำปี</h2>
         <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">เฉพาะคำขอที่ได้รับการอนุมัติ — ครอบคลุมทุกหัวข้อ: การลา, ออกนอกบริษัท, โอที</p>
@@ -3679,14 +3883,54 @@ function exportOtReportCSV() {
   _downloadCSV(rows, `ot_report_${_reportYear}.csv`);
 }
 
+// ── Export CSV สำหรับรายงานสรุปรายเดือน (เพิ่ม 2026-10-01) ──
+function exportMonthlyReportCSV() {
+  if(!_monthlyReportData.length) { showToast('ไม่มีข้อมูลการลา','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','ประเภทลา','วันเริ่ม','วันสิ้นสุด','จำนวนวัน','เหตุผล','สถานะ','ผู้อนุมัติ','วันที่อนุมัติ']];
+  _monthlyReportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.type_name||'',r.start_date,r.end_date,r.days,r.reason||'','อนุมัติ',r.approver_name||'',r.approved_at?r.approved_at.slice(0,10):'']);
+  });
+  _downloadCSV(rows, `leave_report_${_reportYear}_${String(_reportMonth).padStart(2,'0')}.csv`);
+}
+
+function exportMonthlyPassReportCSV() {
+  if(!_monthlyPassReportData.length) { showToast('ไม่มีข้อมูลออกนอกบริษัท','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','เหตุผล','วันที่','เวลาออก','เวลากลับ(คาด)','นาทีที่ใช้','สถานะ','ผู้อนุมัติ']];
+  _monthlyPassReportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.reason_name||'',r.request_date,r.out_time?.slice(0,5)||'',r.expected_return?.slice(0,5)||'',_passMinutesBetween(r.out_time,r.expected_return),'อนุมัติ',r.approver_name||'']);
+  });
+  _downloadCSV(rows, `pass_report_${_reportYear}_${String(_reportMonth).padStart(2,'0')}.csv`);
+}
+
+function exportMonthlyOtReportCSV() {
+  if(!_monthlyOtReportData.length) { showToast('ไม่มีข้อมูลโอที','info'); return; }
+  const rows = [['รหัสพนักงาน','ชื่อ','แผนก','วันที่','เวลาเริ่ม','เวลาสิ้นสุด','ชั่วโมง','วันหยุด/ปกติ','เหตุผล','สถานะ','ผู้อนุมัติ']];
+  _monthlyOtReportData.forEach(r=>{
+    rows.push([r.employee_id,r.employee_name,r.department||'',r.ot_date,r.start_time?.slice(0,5)||'',r.end_time?.slice(0,5)||'',Number(r.actual_hours ?? r.estimated_hours ?? 0),r.is_holiday?'วันหยุด':'วันทำงานปกติ',r.reason||'','อนุมัติ',r.approver_name||'']);
+  });
+  _downloadCSV(rows, `ot_report_${_reportYear}_${String(_reportMonth).padStart(2,'0')}.csv`);
+}
+
 // ป็อบอัพรายละเอียดโอทีรายวันของพนักงาน — คลิกชื่อในตารางสรุปโอที (รายงานประจำปี)
 // ใช้แบบเดียวกับ _showOtEmployeeDetail ใน checkin.html แต่ไม่ query ใหม่ (ใช้ _otReportData ที่โหลดไว้ทั้งปีอยู่แล้ว เฉพาะที่อนุมัติแล้ว)
 // แถวที่เป็นโอทีวันหยุด (is_holiday) ไฮไลท์พื้นหลังสีแดงอ่อน ให้เห็นชัดเจน เหมือนกฎเดียวกับ Export Excel/checkin.html
 function _showOtReportDetail(eid, ename) {
+  _renderOtDetailModal(eid, ename, _otReportData, `ปี ${_reportYear+543} (เฉพาะคำขอที่อนุมัติแล้ว)`, 'ในปีนี้');
+}
+
+// รายละเอียดโอทีรายวันของพนักงาน — เวอร์ชันรายเดือน ใช้ _monthlyOtReportData (เพิ่ม 2026-10-01)
+function _showMonthlyOtReportDetail(eid, ename) {
+  const periodLabel = `${HOL_MONTHS_TH[_reportMonth-1]} ${_reportYear+543} (เฉพาะคำขอที่อนุมัติแล้ว)`;
+  _renderOtDetailModal(eid, ename, _monthlyOtReportData, periodLabel, 'ในเดือนนี้');
+}
+
+// ตัวช่วยกลางสร้างป็อบอัพรายละเอียดโอทีรายวัน — ใช้ร่วมกันทั้งเวอร์ชันรายปี/รายเดือน
+// dataArr = ชุดข้อมูลที่จะกรองตาม eid, periodLabel = ข้อความช่วงเวลาที่แสดงใต้หัวข้อ, emptyPeriodText = คำต่อท้ายข้อความ "ไม่มีข้อมูล...ของพนักงานคนนี้<emptyPeriodText>"
+function _renderOtDetailModal(eid, ename, dataArr, periodLabel, emptyPeriodText) {
   const existing = document.getElementById('ot-report-detail-modal');
   if (existing) existing.remove();
 
-  const rows = (_otReportData||[]).filter(r=>r.employee_id===eid).sort((a,b)=>(a.ot_date||'').localeCompare(b.ot_date||''));
+  const rows = (dataArr||[]).filter(r=>r.employee_id===eid).sort((a,b)=>(a.ot_date||'').localeCompare(b.ot_date||''));
 
   const modal = document.createElement('div');
   modal.id = 'ot-report-detail-modal';
@@ -3712,10 +3956,10 @@ function _showOtReportDetail(eid, ename) {
       <span>⏱️ รายละเอียดโอที — ${esc(ename)}</span>
       <button onclick="document.getElementById('ot-report-detail-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
     </div>
-    <div style="font-size:12px;color:#94a3b8;margin:-8px 0 12px;">ปี ${_reportYear+543} (เฉพาะคำขอที่อนุมัติแล้ว)</div>
+    <div style="font-size:12px;color:#94a3b8;margin:-8px 0 12px;">${esc(periodLabel)}</div>
     ${rows.length ? `
     <div style="background:#f0fdfa;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#115e59;">
-      รวมชั่วโมงโอทีที่อนุมัติแล้วในปีนี้: <b>${totalHours.toFixed(1)} ชม.</b> (${rows.length} ครั้ง)
+      รวมชั่วโมงโอทีที่อนุมัติแล้ว: <b>${totalHours.toFixed(1)} ชม.</b> (${rows.length} ครั้ง)
     </div>
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;">
@@ -3727,7 +3971,7 @@ function _showOtReportDetail(eid, ename) {
         </tr></thead>
         <tbody>${trs}</tbody>
       </table>
-    </div>` : '<div style="text-align:center;padding:24px;color:#94a3b8;">ไม่มีข้อมูลโอทีของพนักงานคนนี้ในปีนี้</div>'}
+    </div>` : `<div style="text-align:center;padding:24px;color:#94a3b8;">ไม่มีข้อมูลโอทีของพนักงานคนนี้${emptyPeriodText}</div>`}
   </div>`;
   document.body.appendChild(modal);
 }
@@ -5006,6 +5250,7 @@ async function _checkApproverPendingSummary() {
     if (document.getElementById('approver-pending-modal')) return;
     const dept = (!can('admin') && currentUser?.department) ? currentUser.department : null;
     const today = new Date().toISOString().slice(0,10);
+    const next7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
 
     let lq = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
     if (dept) lq = lq.eq('department', dept);
@@ -5013,11 +5258,17 @@ async function _checkApproverPendingSummary() {
     if (dept) pq = pq.eq('department', dept);
     let oq = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
     if (dept) oq = oq.eq('department', dept);
+    // ใหม่: กันลืม — ใครลาวันนี้ / กำลังจะลาใน 7 วันข้างหน้า (เฉพาะที่อนุมัติแล้ว)
+    let tq = sb.from('leave_requests').select('employee_name').eq('status','approved').lte('start_date',today).gte('end_date',today);
+    if (dept) tq = tq.eq('department', dept);
+    let uq = sb.from('leave_requests').select('employee_name,start_date').eq('status','approved').gt('start_date',today).lte('start_date',next7).order('start_date');
+    if (dept) uq = uq.eq('department', dept);
 
-    const [lRes, pRes, oRes] = await Promise.all([lq, pq, oq]);
+    const [lRes, pRes, oRes, tRes, uRes] = await Promise.all([lq, pq, oq, tq, uq]);
     const lc = lRes.count||0, pc = pRes.count||0, oc = oRes.count||0;
+    const todayLeaves = tRes.data||[], upcomingLeaves = uRes.data||[];
     const total = lc + pc + oc;
-    if (total === 0) return;
+    if (total === 0 && todayLeaves.length === 0 && upcomingLeaves.length === 0) return;
     if (document.getElementById('approver-pending-modal')) return;
 
     const rows = [];
@@ -5034,21 +5285,40 @@ async function _checkApproverPendingSummary() {
       <span style="background:#f59e0b;color:#fff;border-radius:20px;font-size:12px;font-weight:700;padding:2px 10px;">${oc}</span>
     </div>`);
 
+    // ส่วนใหม่: สรุปภาพรวมทีม (ข้อมูลอย่างเดียว ไม่ต้องคลิกไปหน้าอื่น — กดดูรายละเอียดเต็มได้ที่แดชบอร์ด)
+    let teamHtml = '';
+    if (todayLeaves.length || upcomingLeaves.length) {
+      const nameList = arr => arr.map(r=>esc(r.employee_name)).join(', ');
+      teamHtml = `<div style="border-top:1px solid #e2e8f0;margin-top:2px;padding-top:12px;">
+        <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px;">👥 ภาพรวมทีม (กันลืม)</div>
+        ${todayLeaves.length
+          ? `<div style="font-size:12px;color:#475569;margin-bottom:6px;">📅 วันนี้ลา <b>${todayLeaves.length}</b> คน: ${nameList(todayLeaves)}</div>`
+          : `<div style="font-size:12px;color:#22c55e;margin-bottom:6px;">✅ วันนี้ไม่มีใครลา</div>`}
+        ${upcomingLeaves.length
+          ? `<div style="font-size:12px;color:#475569;">🔜 อีก 7 วันข้างหน้า <b>${upcomingLeaves.length}</b> คน: ${upcomingLeaves.slice(0,5).map(r=>`${esc(r.employee_name)} (${fmtDate(r.start_date)})`).join(', ')}${upcomingLeaves.length>5?' ...':''}</div>`
+          : ''}
+      </div>`;
+    }
+
     const modal = document.createElement('div');
     modal.id = 'approver-pending-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
     modal.innerHTML = `
-      <div style="background:#fff;border-radius:12px;width:100%;max-width:380px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+      <div style="background:#fff;border-radius:12px;width:100%;max-width:380px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:85vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <h3 style="margin:0;font-size:16px;font-weight:700;">🔔 มีคำขอรออนุมัติ ${total} รายการ</h3>
+          <h3 style="margin:0;font-size:16px;font-weight:700;">🔔 ${total>0?`มีคำขอรออนุมัติ ${total} รายการ`:'สรุปประจำวัน'}</h3>
           <button onclick="document.getElementById('approver-pending-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">✕</button>
         </div>
         ${rows.join('')}
-        <button onclick="document.getElementById('approver-pending-modal').remove()" style="width:100%;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:4px;">ปิด</button>
+        ${teamHtml}
+        <button onclick="document.getElementById('approver-pending-modal').remove()" style="width:100%;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-top:16px;">ปิด</button>
       </div>`;
     document.body.appendChild(modal);
 
-    _showDesktopNotification(`🔔 มีคำขอรออนุมัติ ${total} รายการ`, `ลา ${lc} · Pass ${pc} · OT ${oc}`);
+    _showDesktopNotification(
+      total>0 ? `🔔 มีคำขอรออนุมัติ ${total} รายการ` : '🔔 สรุปประจำวัน',
+      `ลา ${lc} · Pass ${pc} · OT ${oc}${todayLeaves.length?` · วันนี้ลา ${todayLeaves.length} คน`:''}`
+    );
   } catch (_) { /* ไม่ขัดการทำงานหลัก */ }
 }
 
