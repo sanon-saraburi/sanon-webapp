@@ -1091,6 +1091,22 @@ async function _submitSupPin() {
 
 async function _proceedSupLogin() {
   const u = _supSelected;
+  const err = document.getElementById('sup-pin-err');
+
+  // ตรวจสอบสิทธิ์จริงจากตาราง leave_dept_supervisors ก่อนอนุญาตให้เป็น "หัวหน้า"
+  // (กันพนักงานทั่วไปที่ตั้ง/รู้ PIN ของตัวเองแล้วเข้าแท็บนี้ได้สิทธิ์อนุมัติไปโดยไม่ได้รับอนุญาต)
+  const { data: supRows, error: supErr } = await sb.from('leave_dept_supervisors')
+    .select('department').eq('supervisor_id', u.employee_id);
+  if (supErr) {
+    if (err) err.textContent = 'ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาลองใหม่';
+    return;
+  }
+  if (!supRows || !supRows.length) {
+    if (err) err.textContent = '❌ คุณไม่มีสิทธิ์เข้าใช้งานในฐานะหัวหน้า/Admin กรุณาติดต่อผู้ดูแลระบบ';
+    _shakeSupPins();
+    return;
+  }
+
   currentUser = {
     id: u.employee_id, username: u.employee_id,
     full_name: u.name, role: 'supervisor',
