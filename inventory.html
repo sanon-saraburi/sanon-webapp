@@ -289,13 +289,14 @@ const INV_MENUS_MAIN = [
   { key:'inv-approvals',  label:'รออนุมัติ',       icon:'clipboard-check', badge:true },
   { key:'inv-po',         label:'ใบสั่งซื้อ (PO)', icon:'file-text' },
   { key:'inv-report',     label:'รายงาน',           icon:'bar-chart-2' },
+  { key:'inv-audit',      label:'ตรวจสอบสต็อก',    icon:'shield-check' },
   { key:'inv-settings',   label:'ตั้งค่า',          icon:'settings' },
 ];
 
 // สิทธิ์ default แต่ละ role (ถ้าไม่มี extra_manage override)
 const ROLE_DEFAULT_MENUS = {
   admin      : INV_MENUS_MAIN.map(m=>m.key),
-  manager    : ['inv-dashboard','inv-balance','inv-qr','inv-stock','inv-withdraw','inv-approvals','inv-po','inv-chem','inv-report'],
+  manager    : ['inv-dashboard','inv-balance','inv-qr','inv-stock','inv-withdraw','inv-approvals','inv-po','inv-chem','inv-report','inv-audit'],
   // role อื่น ต้องได้รับสิทธิ์ inv- จาก admin โดยตรง ถึงจะเข้าได้
   user       : [],
   management : [],
@@ -3622,6 +3623,7 @@ async function openUserPermModal(u, currentInvPerms){
     {key:'inv-po',label:'ใบสั่งซื้อ (PO)'},
     {key:'inv-chem',label:'สารตกตะกอน'},
     {key:'inv-report',label:'รายงาน'},
+    {key:'inv-audit',label:'ตรวจสอบสต็อก'},
     {key:'inv-settings',label:'ตั้งค่า (Admin)'},
   ];
   // Load all user_permissions for this user (to preserve non-inv keys)
@@ -3752,6 +3754,11 @@ function openItemModal(item){
       <input id="it-code" value="${escapeHtml(item?.code||'')}" placeholder="สร้างอัตโนมัติ" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
     <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">ชื่อ <span class="text-red-500">*</span></label>
       <input id="it-name" required value="${escapeHtml(item?.name||'')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/></div>
+    ${!item?`<div class="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <label class="text-xs text-amber-700 font-semibold mb-1 block">ยอดคงเหลือเริ่มต้น (ยอดยกมา)</label>
+      <input id="it-openqty" type="number" min="0" step="any" value="0" class="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm"/>
+      <p class="text-xs text-amber-600 mt-1">ถ้ามีของอยู่แล้วตอนเพิ่มวัสดุนี้ ให้ใส่จำนวนที่มีจริง ระบบจะบันทึกเป็นรายการ "รับเข้า — ยอดยกมา" ให้อัตโนมัติ เพื่อป้องกันยอดคลาดเคลื่อนในอนาคต (ถ้าไม่มีของให้ใส่ 0)</p>
+    </div>`:''}
     <div><label class="text-xs text-gray-500 mb-1 block">ประเภท</label>
       <select id="it-cat" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="">-- เลือก --</option>${cats}</select></div>
     <div><label class="text-xs text-gray-500 mb-1 block">หน่วย</label>
@@ -3809,14 +3816,40 @@ async function saveItem(){
   else{({error}=await db.from('inventory_items').insert({...payload,code,created_by:currentUser.id}));}
   if(error){showToast('เกิดข้อผิดพลาด: '+error.message,'error');return;}
   // วัสดุใหม่ (ยังไม่มี id ตอน insert) → อัปโหลดรูปหลังจากทราบ id แล้ว
-  if(!id && _itemPhotoFile){
+  let _newId=null;
+  if(!id){
     const {data:_newRow}=await db.from('inventory_items').select('id').eq('code',code).limit(1);
-    const newId=_newRow?.[0]?.id;
-    if(newId){
+    _newId=_newRow?.[0]?.id||null;
+  }
+  if(!id && _newId && _itemPhotoFile){
+    try{
+      const url=await uploadItemImage(_newId,_itemPhotoFile);
+      await db.from('inventory_items').update({image_url:url}).eq('id',_newId);
+    }catch(e){ showToast('บันทึกวัสดุสำเร็จ แต่อัปโหลดรูปไม่สำเร็จ: '+e.message,'error'); }
+  }
+  // บันทึก "ยอดยกมา" เป็นรายการรับเข้าอัตโนมัติ — ป้องกันปัญหายอดเริ่มต้นหายจากระบบ (ต้นเหตุปัญหาคลังที่เคยเกิดมาก่อน)
+  if(!id && _newId){
+    const openQty=parseFloat(qs('#it-openqty')?.value||0);
+    if(openQty>0){
       try{
-        const url=await uploadItemImage(newId,_itemPhotoFile);
-        await db.from('inventory_items').update({image_url:url}).eq('id',newId);
-      }catch(e){ showToast('บันทึกวัสดุสำเร็จ แต่อัปโหลดรูปไม่สำเร็จ: '+e.message,'error'); }
+        const lot_no=genLotNo(todayISO());
+        const _seq=await nextSeq('seq_OPEN');
+        const doc_no=genRunNo('OPEN',_seq);
+        const unitCost=payload.unit_price||0;
+        const {error:oe}=await db.from('inventory_transactions').insert({
+          item_id:_newId,transaction_type:'receive',quantity:openQty,
+          unit_price:unitCost,unit_cost:unitCost,total_amount:openQty*unitCost,
+          lot_no,note:'ยอดยกมา (เปิดรายการวัสดุใหม่)',doc_no,
+          status:'approved',created_by:currentUser.id
+        });
+        if(oe)throw oe;
+        const {error:ole}=await db.from('inventory_lots').insert({
+          item_id:_newId,lot_no,received_date:todayISO(),
+          initial_qty:openQty,remaining_qty:openQty,
+          unit_cost:unitCost,reference_no:doc_no
+        });
+        if(ole)throw ole;
+      }catch(e){ showToast('บันทึกวัสดุสำเร็จ แต่บันทึกยอดยกมาไม่สำเร็จ: '+e.message,'error'); }
     }
   }
   _itemPhotoFile=null; _itemPhotoDeleted=false;
@@ -4628,6 +4661,147 @@ function showStockCheckModal(item) {
       <button onclick="closeModal();openWithdrawModal(${JSON.stringify(item).replace(/"/g,'&quot;')})" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600">เบิก</button>
       <button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ปิด</button>`
   });
+}
+
+
+// =====================================================================
+// SECTION 13B2: inv-audit — ตรวจสอบความถูกต้องของสต็อก
+// =====================================================================
+PAGE_RENDERERS['inv-audit'] = async function(el) {
+  el.innerHTML = `
+  <div class="space-y-4 pb-4">
+    <div class="bg-white rounded-2xl px-5 py-4 shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 class="text-sm font-semibold text-gray-700 flex items-center gap-2"><i data-lucide="shield-check" class="w-4 h-4 text-blue-500"></i> ตรวจสอบความถูกต้องของสต็อก</h3>
+        <p class="text-xs text-gray-400 mt-1">เทียบยอดคงเหลือในระบบ กับยอดที่คำนวณจาก "ยอดยกมา" (ล็อตแรกสุด) บวกประวัติรับเข้า/เบิกทั้งหมดหลังจากนั้น</p>
+      </div>
+      <button onclick="loadStockAudit()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 flex items-center gap-1.5"><i data-lucide="refresh-cw" class="w-4 h-4"></i> ตรวจสอบใหม่</button>
+    </div>
+    <div id="audit-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="overflow-auto" style="max-height:65vh">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 sticky top-0">
+            <tr>
+              <th class="px-3 py-2.5 text-left font-medium">รหัส</th>
+              <th class="px-3 py-2.5 text-left font-medium">ชื่อวัสดุ</th>
+              <th class="px-3 py-2.5 text-right font-medium">ยอดในระบบ</th>
+              <th class="px-3 py-2.5 text-right font-medium">ยอดยกมา</th>
+              <th class="px-3 py-2.5 text-left font-medium">วันที่ยกมา</th>
+              <th class="px-3 py-2.5 text-right font-medium">รับเข้าหลังจากนั้น</th>
+              <th class="px-3 py-2.5 text-right font-medium">เบิกหลังจากนั้น</th>
+              <th class="px-3 py-2.5 text-right font-medium">ยอดที่ควรจะเป็น</th>
+              <th class="px-3 py-2.5 text-right font-medium">ส่วนต่าง</th>
+              <th class="px-3 py-2.5 text-center font-medium">สถานะ</th>
+              <th class="px-3 py-2.5 text-center font-medium">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="audit-body"><tr><td colspan="11" class="text-center text-gray-400 py-8">กำลังตรวจสอบ...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+  refreshIcons();
+  await loadStockAudit();
+};
+
+let _auditRows = [];
+
+async function loadStockAudit() {
+  const body = qs('#audit-body');
+  if (body) body.innerHTML = `<tr><td colspan="11" class="text-center text-gray-400 py-8">กำลังตรวจสอบ...</td></tr>`;
+
+  const [{data:items}, {data:stocks}, {data:lots}, {data:txs}] = await Promise.all([
+    db.from('inventory_items').select('id,code,name'),
+    db.from('inventory_stock').select('item_id,current_quantity'),
+    db.from('inventory_lots').select('item_id,lot_no,initial_qty,received_date'),
+    db.from('inventory_transactions').select('item_id,transaction_type,quantity,status,created_at').eq('status','approved'),
+  ]);
+
+  const stockMap = {};
+  (stocks||[]).forEach(s => { stockMap[s.item_id] = Number(s.current_quantity)||0; });
+
+  // หาจุดตั้งต้น (ล็อตยอดยกมา LOT-MIGRATE หรือ LOT-OPEN) ที่เก่าสุดต่อ item
+  const anchorMap = {};
+  (lots||[]).filter(l => /^LOT-(MIGRATE|OPEN)/.test(l.lot_no||'')).forEach(l => {
+    const cur = anchorMap[l.item_id];
+    if (!cur || (l.received_date||'') < cur.date) {
+      anchorMap[l.item_id] = { qty: Number(l.initial_qty)||0, date: l.received_date };
+    }
+  });
+
+  // สะสมรับเข้า/เบิก (อนุมัติแล้ว) ที่เกิดหลังวันที่ยกมา
+  const movMap = {};
+  (txs||[]).forEach(t => {
+    const a = anchorMap[t.item_id];
+    if (!a) return;
+    const txDate = (t.created_at||'').substring(0,10);
+    if (txDate <= a.date) return;
+    if (!movMap[t.item_id]) movMap[t.item_id] = { recv:0, wd:0 };
+    if (t.transaction_type === 'receive') movMap[t.item_id].recv += Number(t.quantity)||0;
+    else if (t.transaction_type === 'withdraw') movMap[t.item_id].wd += Number(t.quantity)||0;
+  });
+
+  const rows = (items||[]).map(it => {
+    const now = stockMap[it.id] ?? 0;
+    const a = anchorMap[it.id];
+    if (!a) {
+      return { code: it.code, name: it.name, item_id: it.id, now, hasAnchor:false, anchor:null, anchorDate:null, recv:0, wd:0, expected:null, diff:null };
+    }
+    const m = movMap[it.id] || { recv:0, wd:0 };
+    const expected = a.qty + m.recv - m.wd;
+    return { code: it.code, name: it.name, item_id: it.id, now, hasAnchor:true, anchor:a.qty, anchorDate:a.date, recv:m.recv, wd:m.wd, expected, diff: now - expected };
+  });
+
+  rows.sort((x,y) => {
+    const ax = x.hasAnchor ? Math.abs(x.diff) : -1;
+    const ay = y.hasAnchor ? Math.abs(y.diff) : -1;
+    return ay - ax;
+  });
+
+  _auditRows = rows;
+
+  const okCount  = rows.filter(r=>r.hasAnchor && r.diff===0).length;
+  const badCount = rows.filter(r=>r.hasAnchor && r.diff!==0).length;
+  const noAnchor = rows.filter(r=>!r.hasAnchor).length;
+
+  const sum = qs('#audit-summary');
+  if (sum) sum.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3"><div class="text-xs text-gray-400">ตรวจสอบทั้งหมด</div><div class="text-xl font-bold text-gray-700">${rows.length}</div></div>
+    <div class="bg-white rounded-xl border border-emerald-100 shadow-sm px-4 py-3"><div class="text-xs text-emerald-500">ยอดตรงกัน</div><div class="text-xl font-bold text-emerald-600">${okCount}</div></div>
+    <div class="bg-white rounded-xl border border-red-100 shadow-sm px-4 py-3"><div class="text-xs text-red-500">ยอดไม่ตรง</div><div class="text-xl font-bold text-red-600">${badCount}</div></div>
+    <div class="bg-white rounded-xl border border-amber-100 shadow-sm px-4 py-3"><div class="text-xs text-amber-500">ไม่มีข้อมูลตั้งต้น</div><div class="text-xl font-bold text-amber-600">${noAnchor}</div></div>`;
+
+  if (body) body.innerHTML = rows.map(r => {
+    let statusBadge, rowCls='';
+    if (!r.hasAnchor) { statusBadge = `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">ไม่มีข้อมูลตั้งต้น</span>`; }
+    else if (r.diff === 0) { statusBadge = `<span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">ตรงกัน</span>`; }
+    else { statusBadge = `<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">ไม่ตรง</span>`; rowCls='bg-red-50/40'; }
+    return `<tr class="border-t border-gray-50 ${rowCls}">
+      <td class="px-3 py-2 font-mono">${escapeHtml(r.code||'')}</td>
+      <td class="px-3 py-2">${escapeHtml(r.name||'')}</td>
+      <td class="px-3 py-2 text-right font-semibold">${fmtNum(r.now)}</td>
+      <td class="px-3 py-2 text-right">${r.hasAnchor?fmtNum(r.anchor):'-'}</td>
+      <td class="px-3 py-2">${r.hasAnchor?r.anchorDate:'-'}</td>
+      <td class="px-3 py-2 text-right text-emerald-600">${r.hasAnchor?('+'+fmtNum(r.recv)):'-'}</td>
+      <td class="px-3 py-2 text-right text-red-500">${r.hasAnchor?('-'+fmtNum(r.wd)):'-'}</td>
+      <td class="px-3 py-2 text-right font-semibold">${r.hasAnchor?fmtNum(r.expected):'-'}</td>
+      <td class="px-3 py-2 text-right">${r.hasAnchor?fmtNum(r.diff):'-'}</td>
+      <td class="px-3 py-2 text-center">${statusBadge}</td>
+      <td class="px-3 py-2 text-center">${(r.hasAnchor && r.diff!==0)?`<button onclick="applyAuditFix('${r.item_id}', ${r.expected})" class="text-xs px-2.5 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700">ใช้ค่านี้</button>`:''}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="11" class="text-center text-gray-400 py-8">ไม่พบข้อมูล</td></tr>`;
+
+  refreshIcons();
+}
+
+async function applyAuditFix(item_id, newQty) {
+  if (!confirm(`ยืนยันปรับยอดคงเหลือเป็น ${fmtNum(newQty)} หน่วย?\n(อ้างอิงจากยอดยกมา + ประวัติรับเข้า/เบิกหลังจากนั้น)`)) return;
+  const { error } = await db.from('inventory_stock')
+    .upsert({ item_id, current_quantity: newQty, last_updated: new Date().toISOString() }, { onConflict:'item_id' });
+  if (error) { showToast('ปรับยอดไม่สำเร็จ: '+error.message, 'error'); return; }
+  showToast('ปรับยอดสำเร็จ', 'success');
+  await loadStockAudit();
 }
 
 // =====================================================================
