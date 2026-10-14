@@ -274,6 +274,8 @@ let _suppliers    = [];  // inv_suppliers
 let _pendingCount = 0;   // จำนวนรออนุมัติ (withdraw pending)
 let _woAllItems   = [];  // items visible for withdraw modal (cache for filter)
 let _approvalChannel = null; // Supabase Realtime channel สำหรับหน้ารออนุมัติ
+let _balanceChannel  = null; // Supabase Realtime channel สำหรับหน้าวัสดุคงเหลือ
+let _balanceRtTimer  = null; // debounce timer สำหรับ Realtime วัสดุคงเหลือ
 
 // =====================================================================
 // SECTION 2: MENU DEFINITIONS
@@ -751,8 +753,9 @@ const PAGE_RENDERERS = {};  // registered by each section: PAGE_RENDERERS['inv-x
 
 async function navigateTo(page) {
   currentPage = page;
-  // Unsubscribe Realtime เมื่อออกจากหน้ารออนุมัติ
+  // Unsubscribe Realtime เมื่อออกจากหน้ารออนุมัติ / วัสดุคงเหลือ
   if (_approvalChannel) { try { db.removeChannel(_approvalChannel); } catch(_){} _approvalChannel = null; }
+  if (_balanceChannel)  { try { db.removeChannel(_balanceChannel);  } catch(_){} _balanceChannel  = null; }
   try { sessionStorage.setItem('_sn_inv_page', page); } catch(_) {}
   // ปิด mobile sidebar drawer ทุกครั้งที่ navigate
   closeSidebar();
@@ -1584,11 +1587,16 @@ PAGE_RENDERERS['inv-stock'] = async function(el) {
 
 function siFilterItems(){
   const fac = qs('#si-factory')?.value || '';
+  const cat = qs('#si-cat')?.value || '';
   const sel = qs('#si-item');
   if(!sel) return;
-  const filtered = !fac ? _invItems : _invItems.filter(i=>{
-    if(!i.allowed_factories || i.allowed_factories.length===0) return true; // ของส่วนกลาง — แสดงทุกโรงงาน
-    return i.allowed_factories.includes(fac);
+  const filtered = _invItems.filter(i=>{
+    if(fac){
+      const facOk = !i.allowed_factories || i.allowed_factories.length===0 || i.allowed_factories.includes(fac); // ของส่วนกลาง — แสดงทุกโรงงาน
+      if(!facOk) return false;
+    }
+    if(cat && normCat(i.category)!==normCat(cat)) return false;
+    return true;
   });
   const curVal = sel.value;
   sel.innerHTML = '<option value="">-- เลือกวัสดุ --</option>' +
@@ -3853,7 +3861,7 @@ async function saveItem(){
     }
   }
   _itemPhotoFile=null; _itemPhotoDeleted=false;
-  await loadInvItems();
+  await Promise.all([loadInvItems(), loadStockData(), loadLots()]);
   if(!id) {
     // วัสดุใหม่ → หา item ที่เพิ่งบันทึก แล้วเด้ง QR modal
     const newItem = _invItems.find(i=>i.code===code) || _invItems[_invItems.length-1];
@@ -4018,7 +4026,23 @@ PAGE_RENDERERS['inv-balance'] = async function(el) {
 
   refreshIcons();
   renderBalanceTable();
+
+  // ── Supabase Realtime — รีเฟรชอัตโนมัติเมื่อยอดคงเหลือ/รายการวัสดุเปลี่ยน ──
+  if (_balanceChannel) { try { db.removeChannel(_balanceChannel); } catch(_){} }
+  _balanceChannel = db.channel('inv-balance-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_stock' }, balanceRtRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' },  balanceRtRefresh)
+    .subscribe();
 };
+
+// debounce 400ms กันกรณีมีหลาย event ยิงรัวๆพร้อมกัน (เช่น แก้ไขทีละหลายรายการ)
+function balanceRtRefresh() {
+  clearTimeout(_balanceRtTimer);
+  _balanceRtTimer = setTimeout(async () => {
+    await Promise.all([loadInvItems(), loadStockData()]);
+    if (currentPage === 'inv-balance') renderBalanceTable();
+  }, 400);
+}
 
 function _extractFactory(item) {
   const match = (item.location||'').match(/\(([^)]+)\)/);
@@ -4428,6 +4452,9 @@ function openStockInModal(preItem=null) {
   const itemOpts = _invItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
   const supOpts = _suppliers.map(s=>`<option value="${s.id}">${escapeHtml(s.code)} — ${escapeHtml(s.name)}</option>`).join('');
   const facOpts = FACTORIES().map(f=>`<option>${f}</option>`).join('');
+  const siCats = (_invConfig.categories||[]).length>0 ? _invConfig.categories
+    : [...new Set(_invItems.map(i=>normCat(i.category)).filter(Boolean))].sort();
+  const siCatOpts = siCats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   showModal({
     title: '📦 บันทึกรับวัสดุเข้า',
     body: `
@@ -4438,6 +4465,9 @@ function openStockInModal(preItem=null) {
         <div><label class="text-xs text-gray-500 mb-1 block">โรงงาน <span class="text-gray-400 font-normal">(กรองรายการวัสดุ)</span></label>
           <select id="si-factory" onchange="siFilterItems()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             <option value="">-- ทุกโรง --</option>${facOpts}</select></div>
+        <div><label class="text-xs text-gray-500 mb-1 block">ประเภท <span class="text-gray-400 font-normal">(กรองรายการวัสดุ)</span></label>
+          <select id="si-cat" onchange="siFilterItems()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">-- ทุกประเภท --</option>${siCatOpts}</select></div>
         <div class="col-span-2"><label class="text-xs text-gray-500 mb-1 block">ผู้จำหน่าย</label>
           <select id="si-supplier" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
             <option value="">-- ไม่ระบุ --</option>${supOpts}</select></div>
