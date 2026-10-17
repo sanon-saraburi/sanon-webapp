@@ -623,6 +623,15 @@ async function doLogin() {
     factory: data.factory||'', meeting_access: data.meeting_access||false, _extraManage: data._extraManage||[] };
   currentMode = 'supervisor';
 
+  // หัวหน้าที่ดูแลหลายแผนก — ดึงรายชื่อแผนกทั้งหมดที่ได้รับสิทธิ์จาก leave_dept_supervisors
+  // (รองรับ 1 คนมีได้หลายแถว คนละแผนก) ใช้แทน department เดี่ยวสำหรับกรองข้อมูลตอนอนุมัติ/ดูรายงาน
+  if (currentUser.role === 'supervisor') {
+    const { data: supDepts } = await sb.from('leave_dept_supervisors')
+      .select('department').eq('supervisor_id', data.id);
+    currentUser.departments = [...new Set((supDepts||[]).map(r=>r.department).filter(Boolean))];
+    if (!currentUser.department && currentUser.departments.length) currentUser.department = currentUser.departments[0];
+  }
+
   saveRecentLvUser(username);   // จำ username ไว้สำหรับ autocomplete ครั้งต่อไป
 
   const sessData = { user: currentUser, mode: currentMode, t: Date.now() };
@@ -1095,8 +1104,10 @@ async function _proceedSupLogin() {
 
   // ตรวจสอบสิทธิ์จริงจากตาราง leave_dept_supervisors ก่อนอนุญาตให้เป็น "หัวหน้า"
   // (กันพนักงานทั่วไปที่ตั้ง/รู้ PIN ของตัวเองแล้วเข้าแท็บนี้ได้สิทธิ์อนุมัติไปโดยไม่ได้รับอนุญาต)
+  // ⚠️ ใช้คอลัมน์ emp_id (ผูกกับ checkin_employees.employee_id) ไม่ใช่ supervisor_id
+  //    เพราะ supervisor_id ผูกกับ app_users.id (บัญชี Username/Password) คนละ ID space กับ PIN login นี้
   const { data: supRows, error: supErr } = await sb.from('leave_dept_supervisors')
-    .select('department').eq('supervisor_id', u.employee_id);
+    .select('department').eq('emp_id', u.employee_id);
   if (supErr) {
     if (err) err.textContent = 'ตรวจสอบสิทธิ์ไม่สำเร็จ กรุณาลองใหม่';
     return;
@@ -1107,10 +1118,14 @@ async function _proceedSupLogin() {
     return;
   }
 
+  // หัวหน้าที่ดูแลหลายแผนก — supRows อาจมีหลายแถว (คนละแผนก) ถ้าถูกเพิ่มไว้มากกว่า 1 แผนก
+  const depts = [...new Set(supRows.map(r=>r.department).filter(Boolean))];
+
   currentUser = {
     id: u.employee_id, username: u.employee_id,
     full_name: u.name, role: 'supervisor',
-    department: u.department||'', factory: u.factory||''
+    department: u.department||depts[0]||'', departments: depts,
+    factory: u.factory||''
   };
   currentMode = 'supervisor';
   currentEmp  = u; // เก็บไว้ใช้ photo_url ใน LINE notify
@@ -1393,14 +1408,14 @@ async function _buildTeamLeaveOverviewCard() {
       let q = sb.from('leave_requests').select('*').eq('status','approved')
         .lte('start_date', todayStr).gte('end_date', todayStr)
         .order('department').order('employee_name');
-      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
       return q;
     })(),
     (()=>{
       let q = sb.from('leave_requests').select('*').eq('status','approved')
         .gt('start_date', todayStr).lte('start_date', next7Str)
         .order('start_date');
-      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
       return q;
     })()
   ]);
@@ -1470,7 +1485,7 @@ async function renderDashboard() {
       .order('created_at',{ascending:false}).limit(5),
     can('approve') ? (()=>{
       let q = sb.from('leave_requests').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(20);
-      if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+      if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
       return q;
     })() : Promise.resolve({data:[]}),
     sb.from('leave_balances').select('*').eq('employee_id', empId).eq('year', year),
@@ -2194,7 +2209,7 @@ async function renderApprovals() {
 
   // Admin sees all pending; supervisor sees their department
   let q = sb.from('leave_requests').select('*').eq('status','pending').order('created_at');
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const [{ data }, teamOverviewSection] = await Promise.all([
     q.limit(100),
     _buildTeamLeaveOverviewCard()
@@ -2430,7 +2445,7 @@ async function renderAllRequests() {
 
   let q = sb.from('leave_requests').select('*').order('created_at',{ascending:false});
   if(_allFilter.status) q=q.eq('status',_allFilter.status);
-  if(!can('admin')&&currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin')&&currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { data } = await q.limit(200);
   const reqs = data||[];
 
@@ -2828,7 +2843,7 @@ async function renderPassApprovals() {
   const today = new Date().toISOString().slice(0,10);
   let q = sb.from('pass_requests').select('*').in('status',['pending','approved','out'])
     .gte('request_date', today).order('request_date').order('out_time');
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { data } = await q.limit(200);
   const reqs = data||[];
 
@@ -3424,7 +3439,7 @@ async function renderOtApprovals() {
 
   let q = sb.from('ot_requests').select('*').in('status',['pending','approved'])
     .order('ot_date',{ascending:false}).order('start_time',{ascending:false});
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { data } = await q.limit(200);
   const reqs = data||[];
 
@@ -4423,6 +4438,7 @@ async function renderSettings() {
     const headsHtml = heads.length ? heads.map(h=>`
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
         <span>${h.supervisor_name?esc(h.supervisor_name):'<span style="color:#94a3b8;">(ไม่ระบุชื่อ)</span>'}</span>
+        <span style="font-size:10px;color:#64748b;background:#f1f5f9;border-radius:4px;padding:1px 5px;">${h.emp_id?'👤 PIN':'🔑 Password'}</span>
         <button class="btn btn-xs btn-outline" onclick="editDeptSupervisor('${esc(d)}',${h.id})">แก้ไข</button>
         <button class="btn btn-xs btn-danger" onclick="deleteDeptSupervisor(${h.id},'${esc(d)}')">ลบ</button>
       </div>`).join('') : '<span style="color:#94a3b8;">ยังไม่กำหนด</span>';
@@ -4916,23 +4932,45 @@ async function saveLeaveType(id) {
 }
 
 async function editDeptSupervisor(dept, id) {
-  // Load supervisors from app_users (same as System 1/2/3)
-  const { data: supList } = await sb.from('app_users').select('id,username,full_name,department')
-    .in('role',['admin','supervisor']).eq('status','active');
+  // ผู้ดำรงตำแหน่งหัวหน้า มี 2 แหล่งที่มาได้ (เลือกอย่างใดอย่างหนึ่งต่อแถว):
+  //  (1) app_users  — บัญชี Username/Password (login ผ่าน "เข้าด้วย password สำรอง") → เก็บใน supervisor_id (UUID)
+  //  (2) checkin_employees — พนักงานที่ login ด้วย PIN เร็ว (แท็บ "หัวหน้า / Admin") → เก็บใน emp_id (employee_id)
+  // หมายเหตุ: ไม่กรองพนักงานตามแผนกนี้ — หัวหน้า 1 คนอาจดูแลได้หลายแผนก (ข้ามแผนกต้นสังกัดของตัวเองได้)
+  // จึงให้เลือกได้จากพนักงาน active ทั้งหมด เรียงตามแผนก/ชื่อ เพื่อให้หาได้ง่าย
+  const [{ data: supList }, { data: empList }] = await Promise.all([
+    sb.from('app_users').select('id,username,full_name,department')
+      .in('role',['admin','supervisor']).eq('status','active'),
+    sb.from('checkin_employees').select('employee_id,name,department,status')
+      .eq('status','active').order('department').order('name')
+  ]);
   // id ถูกส่งมา = แก้ไขหัวหน้าคนที่มีอยู่แล้ว, id เป็น null = เพิ่มหัวหน้าคนใหม่ให้แผนกนี้
   let cur = null;
   if (id) {
     const { data } = await sb.from('leave_dept_supervisors').select('*').eq('id', id).maybeSingle();
     cur = data;
   }
+  const curSource = cur?.emp_id ? 'employee' : 'app_user';
 
-  const opts = (supList||[]).map(u=>`<option value="${u.id}" data-name="${esc(u.full_name||u.username)}" ${cur?.supervisor_id===u.id?'selected':''}>${esc(u.full_name||u.username)} (${u.username})</option>`).join('');
+  const appOpts = (supList||[]).map(u=>`<option value="${u.id}" data-name="${esc(u.full_name||u.username)}" ${cur?.supervisor_id===u.id?'selected':''}>${esc(u.full_name||u.username)} (${u.username})</option>`).join('');
+  const empOpts = (empList||[]).map(e=>`<option value="${esc(e.employee_id)}" data-name="${esc(e.name)}" ${cur?.emp_id===e.employee_id?'selected':''}>${esc(e.name)} (${esc(e.employee_id)}) — ${esc(e.department||'ไม่ระบุแผนก')}</option>`).join('');
 
   openModal(`
     <div class="modal-hd"><span class="modal-title">👔 ${id?'แก้ไข':'เพิ่ม'}หัวหน้า: ${esc(dept)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
     <div class="form-group">
-      <label class="form-label">หัวหน้าแผนก</label>
-      <select id="ds-sup" class="form-control"><option value="">-- เลือกหัวหน้า --</option>${opts}</select>
+      <label class="form-label">ประเภทบัญชีหัวหน้า</label>
+      <select id="ds-source" class="form-control" onchange="_dsSourceChange()">
+        <option value="employee" ${curSource==='employee'?'selected':''}>👤 พนักงาน (เข้าด้วย PIN — แท็บ "หัวหน้า / Admin")</option>
+        <option value="app_user" ${curSource==='app_user'?'selected':''}>🔑 บัญชีระบบ (Username/Password)</option>
+      </select>
+    </div>
+    <div id="ds-employee-wrap" class="form-group" style="display:${curSource==='employee'?'':'none'};">
+      <label class="form-label">เลือกพนักงาน (เลือกได้จากทุกแผนก — ไม่จำเป็นต้องเป็นแผนก ${esc(dept)})</label>
+      <select id="ds-emp" class="form-control"><option value="">-- เลือกพนักงาน --</option>${empOpts}</select>
+      ${!(empList||[]).length?'<div style="font-size:12px;color:#f59e0b;margin-top:4px;">⚠️ ไม่พบพนักงาน active ใน checkin_employees</div>':''}
+    </div>
+    <div id="ds-appuser-wrap" class="form-group" style="display:${curSource==='app_user'?'':'none'};">
+      <label class="form-label">เลือกบัญชีระบบ</label>
+      <select id="ds-sup" class="form-control"><option value="">-- เลือกบัญชี --</option>${appOpts}</select>
     </div>
     <div class="form-group">
       <label class="form-label">LINE Notify Token (เฉพาะคนนี้) — เว้นว่างใช้ token หลัก</label>
@@ -4945,29 +4983,43 @@ async function editDeptSupervisor(dept, id) {
     </div>`);
 }
 
+function _dsSourceChange() {
+  const source = document.getElementById('ds-source').value;
+  document.getElementById('ds-employee-wrap').style.display = source==='employee' ? '' : 'none';
+  document.getElementById('ds-appuser-wrap').style.display  = source==='app_user' ? '' : 'none';
+}
+
 async function saveDeptSupervisor(dept, id) {
-  const sel   = document.getElementById('ds-sup');
-  const supId = sel.value;
-  const supName = supId ? sel.options[sel.selectedIndex].dataset.name : '';
+  const source = document.getElementById('ds-source').value;
+  const errEl  = document.getElementById('ds-err');
+  let supId = null, empId = null, supName = '';
+
+  if (source === 'employee') {
+    const sel = document.getElementById('ds-emp');
+    empId = sel.value || null;
+    if (!empId) { if (errEl) errEl.textContent = 'กรุณาเลือกพนักงาน'; return; }
+    supName = sel.options[sel.selectedIndex].dataset.name;
+  } else {
+    const sel = document.getElementById('ds-sup');
+    supId = sel.value || null;
+    if (!supId) { if (errEl) errEl.textContent = 'กรุณาเลือกบัญชีระบบ'; return; }
+    supName = sel.options[sel.selectedIndex].dataset.name;
+  }
+
   const token = document.getElementById('ds-token').value.trim();
-  const errEl = document.getElementById('ds-err');
-  if (!supId) { if (errEl) errEl.textContent = 'กรุณาเลือกหัวหน้าแผนก'; return; }
+  const payload = { supervisor_id:supId, emp_id:empId, supervisor_name:supName, line_token:token||null };
 
   let error;
   if (id) {
-    // แก้ไขหัวหน้าคนที่มีอยู่แล้ว (update ตาม id)
-    ({ error } = await sb.from('leave_dept_supervisors').update({
-      supervisor_id:supId, supervisor_name:supName, line_token:token||null
-    }).eq('id', id));
+    // แก้ไขหัวหน้าคนที่มีอยู่แล้ว (update ตาม id) — payload เซ็ต field ที่ไม่ได้ใช้เป็น null เสมอ กันข้อมูลค้างจากแหล่งเดิม
+    ({ error } = await sb.from('leave_dept_supervisors').update(payload).eq('id', id));
   } else {
     // เพิ่มหัวหน้าคนใหม่ให้แผนกนี้ (insert แถวใหม่ — ต้องรัน leave_schema_v7_patch.sql ก่อน ถ้าแผนกนี้มีหัวหน้าอยู่แล้ว)
-    ({ error } = await sb.from('leave_dept_supervisors').insert({
-      department:dept, supervisor_id:supId, supervisor_name:supName, line_token:token||null
-    }));
+    ({ error } = await sb.from('leave_dept_supervisors').insert({ department:dept, ...payload }));
   }
 
   if (error) {
-    if (errEl) errEl.textContent = 'บันทึกไม่สำเร็จ — อาจต้องรัน leave_schema_v7_patch.sql ใน Supabase ก่อน (' + error.message + ')';
+    if (errEl) errEl.textContent = 'บันทึกไม่สำเร็จ — อาจต้องรัน leave_schema_v9_patch.sql ใน Supabase ก่อน (' + error.message + ')';
     return;
   }
 
@@ -5028,7 +5080,8 @@ async function _bootApp() {
   document.getElementById('sb-role').textContent = ROLE_LABELS[role]||role;
   document.getElementById('sb-avatar').textContent = name.charAt(0)||'?';
   document.getElementById('topbar-user-name').textContent = name;
-  document.getElementById('topbar-user-dept').textContent = currentUser?.department||'';
+  document.getElementById('topbar-user-dept').textContent =
+    (currentUser?.departments?.length > 1) ? currentUser.departments.join(' / ') : (currentUser?.department||'');
   document.getElementById('topbar-user-info').style.display='';
 
   // Reset role-gated sections ก่อนเสมอ (ป้องกัน sidebar ค้างจาก session ก่อนหน้า)
@@ -5264,21 +5317,21 @@ async function _checkApproverPendingSummary() {
   if (!can('approve')) return;
   try {
     if (document.getElementById('approver-pending-modal')) return;
-    const dept = (!can('admin') && currentUser?.department) ? currentUser.department : null;
+    const depts = (!can('admin') && currentUser?.departments?.length) ? currentUser.departments : null;
     const today = new Date().toISOString().slice(0,10);
     const next7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
 
     let lq = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
-    if (dept) lq = lq.eq('department', dept);
+    if (depts) lq = lq.in('department', depts);
     let pq = sb.from('pass_requests').select('pass_id', { count: 'exact', head: true }).eq('status','pending').gte('request_date', today);
-    if (dept) pq = pq.eq('department', dept);
+    if (depts) pq = pq.in('department', depts);
     let oq = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
-    if (dept) oq = oq.eq('department', dept);
+    if (depts) oq = oq.in('department', depts);
     // ใหม่: กันลืม — ใครลาวันนี้ / กำลังจะลาใน 7 วันข้างหน้า (เฉพาะที่อนุมัติแล้ว)
     let tq = sb.from('leave_requests').select('employee_name').eq('status','approved').lte('start_date',today).gte('end_date',today);
-    if (dept) tq = tq.eq('department', dept);
+    if (depts) tq = tq.in('department', depts);
     let uq = sb.from('leave_requests').select('employee_name,start_date').eq('status','approved').gt('start_date',today).lte('start_date',next7).order('start_date');
-    if (dept) uq = uq.eq('department', dept);
+    if (depts) uq = uq.in('department', depts);
 
     const [lRes, pRes, oRes, tRes, uRes] = await Promise.all([lq, pq, oq, tq, uq]);
     const lc = lRes.count||0, pc = pRes.count||0, oc = oRes.count||0;
@@ -5360,7 +5413,7 @@ function _broadcastNewRequestToApprovers(kind, r) {
 function _onNewApproverRequest(payload) {
   if (!can('approve')) return;
   // Supervisor (ไม่ใช่ admin) เห็นเฉพาะแผนกตัวเอง — คำขอแผนกอื่นไม่ต้องแจ้ง (ไม่มีสิทธิ์เห็นอยู่แล้ว)
-  if (!can('admin') && currentUser?.department && payload?.department && payload.department !== currentUser.department) return;
+  if (!can('admin') && currentUser?.departments?.length && payload?.department && !currentUser.departments.includes(payload.department)) return;
 
   const kindLabel = payload?.kind === 'pass' ? '🚪 ขอออกนอกบริเวณ'
                    : payload?.kind === 'ot'   ? '⏱️ คำขอโอที'
@@ -5385,7 +5438,7 @@ function _onNewApproverRequest(payload) {
 async function _refreshApproveBadgeOnly() {
   if (!can('approve')) return;
   let q = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { count } = await q;
   const badge = document.getElementById('sb-badge-approve');
   if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
@@ -5398,7 +5451,7 @@ async function _refreshPassBadgeOnly() {
   if (!can('approve')) return;
   const today = new Date().toISOString().slice(0,10);
   let q = sb.from('pass_requests').select('pass_id', { count: 'exact', head: true }).eq('status','pending').gte('request_date', today);
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { count } = await q;
   const badge = document.getElementById('sb-badge-pass');
   if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
@@ -5408,7 +5461,7 @@ async function _refreshPassBadgeOnly() {
 async function _refreshOtBadgeOnly() {
   if (!can('approve')) return;
   let q = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
-  if(!can('admin') && currentUser?.department) q=q.eq('department',currentUser.department);
+  if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { count } = await q;
   const badge = document.getElementById('sb-badge-ot');
   if(badge){ badge.textContent=count||''; badge.style.display=count>0?'':'none'; }
