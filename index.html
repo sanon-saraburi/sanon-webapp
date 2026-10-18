@@ -5584,9 +5584,11 @@ async function importDroneStockExcel(e) {
 // plantKey → factory_code ใน production_daily_status
 const PLANT_FACTORY_CODE = { cde:'CDE', propel:'Propel', sanon1:'Sanon1', sanon2:'Sanon2', mobile:'Mobile' };
 
+// factoryDbName = ชื่อโรงงานแบบเป๊ะเดียวกับคอลัมน์ `factories.name` ใน DB ใช้จับคู่กับรายงานรายปี/Executive Summary อัตโนมัติ — เพิ่มโรงงานใหม่ แก้แค่ 2 บรรทัดนี้ (factoryDbName, color) + productColumns แล้วรายงานรายปี/Executive Summary จะดึงมาใช้เองโดยไม่ต้องแก้ไฟล์นี้ซ้ำอีกจุด (ดู Changelog 2026-10-18)
 const PRODUCTION_PLANT_CONFIG = {
   cde: {
     table: 'production_cde', title: 'ยอดผลิต CDE', hourMeterMode: true, hasFlowmeter: true,
+    factoryDbName: 'CDE', color: '#0D9488',
     productColumns: [
       { key: 'os_ton', label: 'O/S' },
       { key: 'stone_3_4_ton', label: 'หิน 3/4' },
@@ -5597,6 +5599,7 @@ const PRODUCTION_PLANT_CONFIG = {
   },
   propel: {
     table: 'production_propel', title: 'ยอดผลิต Propel', hourMeterMode: true, hasFlowmeter: true,
+    factoryDbName: 'Propel', color: '#0891B2',
     productColumns: [
       { key: 'os_ton', label: 'O/S' },
       { key: 'stone_3_4_ton', label: 'หิน 3/4' },
@@ -5608,6 +5611,7 @@ const PRODUCTION_PLANT_CONFIG = {
   },
   sanon1: {
     table: 'production_sanon1', title: 'ยอดผลิต Sanon1', hourMeterMode: true,
+    factoryDbName: 'Sanon 1', color: '#7C3AED',
     productColumns: [
       { key: 'stone_6_8_ton', label: 'หิน 6/8' },
       { key: 'stone_3_4_ton', label: 'หิน 3/4' },
@@ -5617,6 +5621,7 @@ const PRODUCTION_PLANT_CONFIG = {
   },
   sanon2: {
     table: 'production_sanon2', title: 'ยอดผลิต Sanon2', hourMeterMode: true,
+    factoryDbName: 'Sanon 2', color: '#DC2626',
     productColumns: [
       { key: 'stone_6_8_ton', label: 'หิน 6/8' },
       { key: 'stone_3_4_ton', label: 'หิน 3/4' },
@@ -5628,6 +5633,7 @@ const PRODUCTION_PLANT_CONFIG = {
   },
   mobile: {
     table: 'production_mobile', title: 'ยอดผลิต Mobile Plant', hourMeterMode: true,
+    factoryDbName: 'Mobile Plant', color: '#EA580C',
     productColumns: [
       { key: 'uh312_stone_3_4_ton',  label: 'UH312 หิน 3/4' },
       { key: 'uh312_stone_dust_ton', label: 'UH312 หินฝุ่น' },
@@ -5638,6 +5644,13 @@ const PRODUCTION_PLANT_CONFIG = {
     ],
   },
 };
+
+// factories.name -> { plantKey, table, color } — ใช้หาตารางยอดผลิตของโรงงานแบบ dynamic
+// (Executive Summary / รายงานรายปี) แทนการ hardcode ชื่อโรงงานซ้ำอีกที่
+const PRODUCTION_FACTORY_MAP = {};
+Object.entries(PRODUCTION_PLANT_CONFIG).forEach(([key, c]) => {
+  if (c.factoryDbName) PRODUCTION_FACTORY_MAP[c.factoryDbName] = { plantKey: key, table: c.table, color: c.color };
+});
 
 const _mProdState = {}; // plantKey -> { rows, materialsCache, search, rawMaterialFilter, materialFilter, month, year, editingId, distinctRawMaterials, latestRow }
 function getMProdState(plantKey) {
@@ -11068,43 +11081,53 @@ async function renderDashboardExecutive(container) {
     const dateTo   = `${year}-${mStr}-${lastDay}`;
     const MN = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
-    // ดึงข้อมูลพร้อมกัน
+    // ดึงรายชื่อโรงงาน active ทั้งหมด + ข้อมูลอื่นพร้อมกัน (ไม่ hardcode โรงงานอีกต่อไป — ดู Changelog 2026-10-18)
     const [
-      { data: cdeProd },
-      { data: propelProd },
-      { data: s1Prod },
-      { data: s2Prod },
+      { data: activeFactories },
       { data: elecData },
       { data: salesData },
       { data: invPending },
     ] = await Promise.all([
-      db.from('production_cde').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
-      db.from('production_propel').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
-      db.from('production_sanon1').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
-      db.from('production_sanon2').select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved'),
+      db.from('factories').select('name,target_month,target_throughput').eq('status','active').order('created_at',{ascending:true}),
       db.from('electricity_costs').select('factory,baht,kwh').eq('year',year).eq('month',month),
       db.from('sales').select('amount_baht').gte('sale_date',dateFrom).lte('sale_date',dateTo),
       db.from('inventory_transactions').select('id').eq('transaction_type','withdraw').eq('status','pending'),
     ]);
 
     const sumTon = arr => (arr||[]).reduce((s,r)=>s+(r.feed_ton||0),0);
-    const cdeTon    = sumTon(cdeProd);
-    const propelTon = sumTon(propelProd);
-    const s1Ton     = sumTon(s1Prod);
-    const s2Ton     = sumTon(s2Prod);
-    const totalTon  = cdeTon + propelTon + s1Ton + s2Ton;
+    const factoryList = activeFactories || [];
+
+    // แต่ละโรงงาน active จับคู่กับตารางยอดผลิตที่รู้จัก (ผ่าน PRODUCTION_FACTORY_MAP ที่ derive จาก PRODUCTION_PLANT_CONFIG)
+    // โรงงานที่ยังไม่มีตารางยอดผลิตผูกไว้ (เช่น เพิ่งเพิ่มใหม่ ยังไม่ได้สร้างหน้าบันทึกยอดผลิต) จะข้าม query (ton=0, noMapping:true)
+    const prodResults = await Promise.all(
+      factoryList.map(f => {
+        const m = PRODUCTION_FACTORY_MAP[f.name];
+        return m
+          ? db.from(m.table).select('feed_ton,runtime_minute').gte('production_date',dateFrom).lte('production_date',dateTo).eq('status','approved')
+          : Promise.resolve({ data: null });
+      })
+    );
+
+    const factories = factoryList.map((f, i) => {
+      const m = PRODUCTION_FACTORY_MAP[f.name];
+      return {
+        name: f.name,
+        ton: m ? sumTon(prodResults[i].data) : 0,
+        target: Number(f.target_month) || 0,
+        noMapping: !m,
+      };
+    });
+
+    const totalTon  = factories.reduce((s,f)=>s+f.ton,0);
     const totalElec = (elecData||[]).reduce((s,r)=>s+(r.baht||0),0);
     const totalSales= (salesData||[]).reduce((s,r)=>s+(r.amount_baht||0),0);
     const elecPerTon= totalTon > 0 ? totalElec/totalTon : 0;
     const invPendingCount = (invPending||[]).length;
 
-    // ข้อมูลผลิตรายโรง
-    const factories = [
-      { name:'CDE',    ton:cdeTon,    target:120*lastDay,  color:'teal'   },
-      { name:'Propel', ton:propelTon, target:180*lastDay,  color:'cyan'   },
-      { name:'Sanon1', ton:s1Ton,     target:500*lastDay,  color:'violet' },
-      { name:'Sanon2', ton:s2Ton,     target:400*lastDay,  color:'rose'   },
-    ];
+    // ใช้จับคู่ยอดผลิตของแต่ละโรงงานกับแถวค่าไฟฟ้า (ตารางค่าไฟรายโรงด้านล่าง) — normalize ชื่อให้ไม่สนตัวพิมพ์เล็ก/ใหญ่และช่องว่าง
+    const normFactoryKey = s => String(s||'').trim().toLowerCase().replace(/\s+/g,'');
+    const tonByFactory = {};
+    factories.forEach(f => { tonByFactory[normFactoryKey(f.name)] = f.ton; });
 
     container.innerHTML = `
     <div class="space-y-5 fade-in">
@@ -11151,24 +11174,38 @@ async function renderDashboardExecutive(container) {
           <i data-lucide="factory" class="w-4 h-4 text-blue-500"></i>ผลผลิตรายโรงงาน — ${MN[month]} ${year+543}
         </h3>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          ${factories.map(f => {
-            const pct = f.target > 0 ? Math.min(100, f.ton/f.target*100) : 0;
-            const color = pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red';
+          ${factories.length ? factories.map(f => {
+            if (f.noMapping) {
+              return `
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-sm font-semibold text-secondary-700">${escapeHtml(f.name)}</span>
+                  <span class="text-xs text-secondary-400">ยังไม่ผูกข้อมูล</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2"></div>
+                <div class="flex justify-between text-xs text-secondary-300">
+                  <span>-</span><span>-</span>
+                </div>
+              </div>`;
+            }
+            const hasTarget = f.target > 0;
+            const pct = hasTarget ? Math.min(100, f.ton/f.target*100) : 0;
+            const color = !hasTarget ? 'gray' : pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red';
             return `
             <div class="space-y-2">
               <div class="flex justify-between items-center">
-                <span class="text-sm font-semibold text-secondary-700">${f.name}</span>
-                <span class="text-xs text-${color}-600 font-bold">${pct.toFixed(0)}%</span>
+                <span class="text-sm font-semibold text-secondary-700">${escapeHtml(f.name)}</span>
+                <span class="text-xs text-${color}-600 font-bold">${hasTarget ? pct.toFixed(0)+'%' : 'ไม่มีเป้า'}</span>
               </div>
               <div class="w-full bg-gray-200 rounded-full h-2">
-                <div class="h-2 rounded-full bg-${color}-500 transition-all" style="width:${pct.toFixed(1)}%"></div>
+                <div class="h-2 rounded-full bg-${color}-500 transition-all" style="width:${hasTarget?pct.toFixed(1):0}%"></div>
               </div>
               <div class="flex justify-between text-xs text-secondary-400">
                 <span>${fmtNum(f.ton)} ตัน</span>
-                <span>เป้า ${fmtNum(f.target)}</span>
+                <span>${hasTarget ? 'เป้า '+fmtNum(f.target) : '-'}</span>
               </div>
             </div>`;
-          }).join('')}
+          }).join('') : `<p class="col-span-full text-center text-secondary-400 text-sm py-4">ไม่มีโรงงาน Active ในระบบ</p>`}
         </div>
       </div>
 
@@ -11191,8 +11228,7 @@ async function renderDashboardExecutive(container) {
           </thead>
           <tbody>
             ${(elecData||[]).map(r => {
-              const facKey = r.factory?.toLowerCase().replace(' ','');
-              const ton = facKey==='cde'?cdeTon:facKey==='propel'?propelTon:facKey==='sanon1'?s1Ton:facKey==='sanon2'?s2Ton:0;
+              const ton = tonByFactory[normFactoryKey(r.factory)] || 0;
               const bpt = ton > 0 ? r.baht/ton : 0;
               return `<tr class="border-t hover:bg-gray-50">
                 <td class="px-4 py-2.5 font-medium">${escapeHtml(r.factory)}</td>
@@ -11227,9 +11263,10 @@ async function renderDashboardExecutive(container) {
 // =====================================================================
 // SECTION 29B: ANNUAL REPORT DASHBOARD (dash-annual)
 // =====================================================================
-const ANNUAL_PLANT_LABELS = { cde:'CDE', propel:'Propel', sanon1:'Sanon 1', sanon2:'Sanon 2', mobile:'Mobile Plant' };
-const ANNUAL_FACTORY_NAMES = { cde:'CDE', propel:'Propel', sanon1:'Sanon 1', sanon2:'Sanon 2', mobile:'Mobile Plant' };
-const ANNUAL_PLANT_COLORS = { cde:'#0D9488', propel:'#0891B2', sanon1:'#7C3AED', sanon2:'#DC2626', mobile:'#EA580C' };
+// สร้างจาก PRODUCTION_PLANT_CONFIG โดยอัตโนมัติ — เพิ่มโรงงานใหม่แค่เพิ่ม entry ใน PRODUCTION_PLANT_CONFIG ด้านบน รายงานรายปีจะขึ้นให้เองโดยไม่ต้องแก้สามค่านี้ซ้ำอีก (เดิมต้องแก้ 4 จุดแยกกัน)
+const ANNUAL_PLANT_LABELS  = Object.fromEntries(Object.entries(PRODUCTION_PLANT_CONFIG).map(([k,c]) => [k, c.factoryDbName]));
+const ANNUAL_FACTORY_NAMES = Object.fromEntries(Object.entries(PRODUCTION_PLANT_CONFIG).map(([k,c]) => [k, c.factoryDbName]));
+const ANNUAL_PLANT_COLORS  = Object.fromEntries(Object.entries(PRODUCTION_PLANT_CONFIG).map(([k,c]) => [k, c.color]));
 const ANNUAL_PLANT_HEX   = { cde:'0D9488', propel:'0891B2', sanon1:'7C3AED', sanon2:'DC2626', mobile:'EA580C' };
 const TH_MONTHS_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
@@ -11393,6 +11430,19 @@ function annualRenderContent(el, d) {
     return `<tr><td class="px-2 py-1 text-xs text-secondary-700 whitespace-nowrap font-medium">${c.label}</td>${cells}</tr>`;
   }).join('');
 
+  // ตาราง %Yield แยกตามผลิตภัณฑ์รายเดือน (สัดส่วนของแต่ละชนิด = ผลิตภัณฑ์ชนิดนั้น / หินป้อนรวมของเดือน × 100)
+  const yieldPctRows = cfg.productColumns.map(c => {
+    const pTotal = monthly.reduce((s,m)=>s+m.products[c.key],0);
+    const totalPct = totalFeed > 0 ? (pTotal / totalFeed * 100) : 0;
+    const cells = monthly.map(m => {
+      const pct = m.feed > 0 ? (m.products[c.key] / m.feed * 100) : 0;
+      return m.feed > 0
+        ? `<td class="text-center px-1 py-1 text-xs whitespace-nowrap">${fmtNum(pct,1)}%</td>`
+        : `<td class="text-center px-1 py-1 text-xs text-secondary-200">-</td>`;
+    }).join('') + `<td class="text-center px-2 py-1 text-xs font-bold">${totalFeed > 0 ? fmtNum(totalPct,1) + '%' : '-'}</td>`;
+    return `<tr><td class="px-2 py-1 text-xs text-secondary-700 whitespace-nowrap font-medium">${c.label}</td>${cells}</tr>`;
+  }).join('');
+
   el.innerHTML = `
     <!-- KPI Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -11462,7 +11512,7 @@ function annualRenderContent(el, d) {
     </div>
 
     <!-- Product Breakdown -->
-    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 overflow-x-auto">
+    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 overflow-x-auto mb-4">
       <div class="font-semibold text-sm text-secondary-700 mb-3">
         ผลิตภัณฑ์แยกรายเดือน (ตัน)
       </div>
@@ -11475,6 +11525,24 @@ function annualRenderContent(el, d) {
         </thead>
         <tbody>
           ${productRows}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Yield % Breakdown -->
+    <div class="bg-white rounded-2xl border border-secondary-100 shadow-sm p-4 overflow-x-auto">
+      <div class="font-semibold text-sm text-secondary-700 mb-3">
+        %Yield แยกตามผลิตภัณฑ์รายเดือน (% ของหินป้อน)
+      </div>
+      <table class="min-w-full text-xs border-collapse">
+        <thead>
+          <tr style="background:${color};color:#fff">
+            <th class="text-left px-2 py-1.5 text-xs">ผลิตภัณฑ์</th>
+            ${headerCells}
+          </tr>
+        </thead>
+        <tbody>
+          ${yieldPctRows}
         </tbody>
       </table>
     </div>`;
@@ -11543,6 +11611,16 @@ function printAnnualReport() {
       <td class="r ttl">${pTotal>0?fmtNum(pTotal,0):'-'}</td></tr>`;
   }).join('');
 
+  // %Yield แยกตามผลิตภัณฑ์รายเดือน (ผลิตภัณฑ์ชนิดนั้น / หินป้อนรวมของเดือน × 100)
+  const yieldPctRows = cfg.productColumns.map((c,ci) => {
+    const pTotal = monthly.reduce((s,m)=>s+(m.products[c.key]||0),0);
+    const totalPct = totalFeed > 0 ? (pTotal / totalFeed * 100) : 0;
+    const bg = ci%2===1?'background:#f8fafc':'';
+    return `<tr style="${bg}"><td class="prod-label">${c.label}</td>
+      ${monthly.map(m=>{const pct = m.feed>0 ? (m.products[c.key]||0)/m.feed*100 : null; return `<td class="c">${pct!=null?fmtNum(pct,1)+'%':'-'}</td>`;}).join('')}
+      <td class="c ttl">${totalFeed>0?fmtNum(totalPct,1)+'%':'-'}</td></tr>`;
+  }).join('');
+
   const colHex = color.replace('#','');
   const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
 <title>รายงานผลิตรายปี ${ANNUAL_PLANT_LABELS[plantKey]} ${thYear}</title>
@@ -11601,6 +11679,11 @@ tr:nth-child(even) td{background:#f8fafc}
 <table>
   <thead><tr><th>ผลิตภัณฑ์</th>${TH_MONTHS_SHORT.map(m=>`<th>${m}</th>`).join('')}<th>รวม</th></tr></thead>
   <tbody>${prodRows}</tbody>
+</table>
+<div class="section-title">%Yield แยกตามผลิตภัณฑ์รายเดือน (% ของหินป้อน)</div>
+<table>
+  <thead><tr><th>ผลิตภัณฑ์</th>${TH_MONTHS_SHORT.map(m=>`<th>${m}</th>`).join('')}<th>รวม</th></tr></thead>
+  <tbody>${yieldPctRows}</tbody>
 </table>
 </div></body></html>`;
 
