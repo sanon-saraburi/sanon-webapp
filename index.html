@@ -6455,8 +6455,12 @@ async function importProductionExcel(e, plantKey, finalMode = false) {
         const fc = PLANT_FACTORY_CODE[plantKey];
         const sp = uniqueDates.map(d => ({ factory_code:fc, production_date:d, status:'confirmed', confirmed_by:currentUser.id, confirmed_at:new Date().toISOString(), note:'อัตโนมัติ - นำเข้ายอดจริงสิ้นเดือน' }));
         try {
-          await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' });
-        } catch(e) { console.warn('auto-confirm:', e); }
+          const { error: autoConfirmError } = await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' });
+          if (autoConfirmError) throw autoConfirmError;
+        } catch(e) {
+          console.warn('auto-confirm:', e);
+          showToast('นำเข้าข้อมูลสำเร็จ แต่ปรับสถานะ "ยืนยันแล้ว" อัตโนมัติไม่สำเร็จ (' + (e.message || '') + ') กรุณาตรวจสอบและยืนยันสถานะด้วยตนเองที่หน้าจัดการ', 'warning', 9000);
+        }
       }
     } else {
       const { error } = await db.from(cfg.table).insert(rows);
@@ -11090,7 +11094,7 @@ async function renderDashboardExecutive(container) {
     ] = await Promise.all([
       db.from('factories').select('name,target_month,target_throughput').eq('status','active').order('created_at',{ascending:true}),
       db.from('electricity_costs').select('factory,baht,kwh').eq('year',year).eq('month',month),
-      db.from('sales').select('amount_baht').gte('sale_date',dateFrom).lte('sale_date',dateTo),
+      db.from('sales').select('total_value').gte('sale_date',dateFrom).lte('sale_date',dateTo),
       db.from('inventory_transactions').select('id').eq('transaction_type','withdraw').eq('status','pending'),
     ]);
 
@@ -11120,7 +11124,7 @@ async function renderDashboardExecutive(container) {
 
     const totalTon  = factories.reduce((s,f)=>s+f.ton,0);
     const totalElec = (elecData||[]).reduce((s,r)=>s+(r.baht||0),0);
-    const totalSales= (salesData||[]).reduce((s,r)=>s+(r.amount_baht||0),0);
+    const totalSales= (salesData||[]).reduce((s,r)=>s+(Number(r.total_value)||0),0);
     const elecPerTon= totalTon > 0 ? totalElec/totalTon : 0;
     const invPendingCount = (invPending||[]).length;
 

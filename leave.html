@@ -413,6 +413,9 @@ td{padding:9px 12px;color:#1e293b;vertical-align:middle;}
 
       <div class="sb-section" id="sb-sec-approve" style="display:none;">
         <div class="sb-label">จัดการ</div>
+        <div class="sb-link" id="sb-lv-proxy" onclick="navigateTo('lv-proxy')">
+          <span class="ic">🧑‍🤝‍🧑</span> แจ้งแทนพนักงาน
+        </div>
         <div class="sb-link" id="sb-lv-approvals" onclick="navigateTo('lv-approvals')">
           <span class="ic">✅</span> อนุมัติคำขอลา
           <span id="sb-badge-approve" style="display:none;background:#ef4444;color:#fff;border-radius:20px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;"></span>
@@ -549,6 +552,9 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 let currentUser   = null;   // { id, username, full_name, role, department } จาก checkin_users
 let currentEmp    = null;   // { employee_id, name, department, ... } จาก checkin_employees (employee mode)
 let currentMode   = null;   // 'supervisor' | 'employee'
+// พนักงานที่หัวหน้ากำลัง "แจ้งแทน" (proxy submission) — null = โหมดปกติ ยื่นคำขอของตัวเอง — เพิ่ม 2026-10-21
+// { employee_id, name, department, photo_url } จาก checkin_employees — ใช้แทน currentUser/currentEmp ตอนกรอกฟอร์ม ลา/ออกนอกบริษัท/โอที
+let _proxyEmp     = null;
 let currentPage   = '';
 let _leaveTypes   = [];     // cache
 let _leaveSettings= {};
@@ -1338,9 +1344,13 @@ const PAGE_TITLES = {
   'lv-dashboard':'แดชบอร์ด','lv-request':'ยื่นคำขอลา','lv-my-hist':'ประวัติของฉัน',
   'lv-approvals':'อนุมัติคำขอลา','lv-all':'ทุกคำขอ','lv-report':'รายงาน','lv-settings':'ตั้งค่าระบบ',
   'lv-pass':'ขอออกนอกบริษัท','lv-pass-hist':'ประวัติอนุญาต','lv-pass-approve':'อนุมัติออกนอกบริษัท',
-  'lv-ot':'ขอทำโอที','lv-ot-hist':'ประวัติโอทีของฉัน','lv-ot-approve':'อนุมัติ OT'
+  'lv-ot':'ขอทำโอที','lv-ot-hist':'ประวัติโอทีของฉัน','lv-ot-approve':'อนุมัติ OT',
+  'lv-proxy':'แจ้งแทนพนักงาน'
 };
-function navigateTo(page) {
+function navigateTo(page, _keepProxy) {
+  // เคลียร์โหมด "แจ้งแทนพนักงาน" ทุกครั้งที่เปลี่ยนหน้า เว้นแต่เป็นการนำทางจากหน้าแจ้งแทนเองที่ตั้งใจคงโหมดนี้ไว้ (_keepProxy=true)
+  // ป้องกันบั๊ก: ถ้าเข้าฟอร์มลา/ออกนอกบริษัท/โอทีผ่านเมนูปกติหลังเคยแจ้งแทนค้างไว้ จะไม่ไปติดโหมดแจ้งแทนโดยไม่ตั้งใจ
+  if (!_keepProxy) _proxyEmp = null;
   currentPage = page;
   closeMobileMenu(); // ปิดเมนู hamburger overlay อัตโนมัติเมื่อเลือกหน้าใหม่ (กันปัญหาเมนูค้างทับเนื้อหา)
   // Update sidebar
@@ -1369,6 +1379,7 @@ function navigateTo(page) {
     case 'lv-ot':            renderOtRequest(); break;
     case 'lv-ot-hist':       renderMyOtHistory(); break;
     case 'lv-ot-approve':    renderOtApprovals(); break;
+    case 'lv-proxy':         renderProxySelect(); break;
     default: pc.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่พบหน้านี้</div>';
   }
 }
@@ -1710,9 +1721,10 @@ async function renderNewRequest() {
     _leaveTypes = data||[];
   }
 
-  const empId   = currentUser?.id||currentEmp?.employee_id||'';
-  const empName = currentUser?.full_name||currentEmp?.name||'';
-  const dept    = currentUser?.department||currentEmp?.department||'';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21: ถ้า _proxyEmp ถูกตั้งไว้ (มาจากหน้า "แจ้งแทนพนักงาน") ใช้ข้อมูลพนักงานคนนั้นแทนผู้ใช้ปัจจุบัน
+  const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id||currentEmp?.employee_id||'');
+  const empName = _proxyEmp ? _proxyEmp.name         : (currentUser?.full_name||currentEmp?.name||'');
+  const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department||currentEmp?.department||'');
   const today   = todayISO();
 
   const typeCardsHtml = _leaveTypes.filter(t=>t.code!=='out').map(t => `
@@ -1722,10 +1734,17 @@ async function renderNewRequest() {
       ${t.default_quota>0?`<div class="tc-quota">${t.default_quota} วัน/ปี</div>`:'<div class="tc-quota">ไม่จำกัด</div>'}
     </div>`).join('');
 
+  const proxyBanner = _proxyEmp ? `
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">🧑‍🤝‍🧑</span>
+        <div style="font-size:12px;color:#4338ca;"><b>กำลังแจ้งแทนพนักงาน</b> — คำขอนี้จะถูกบันทึกเป็นของ ${esc(empName)} และต้องผ่านการอนุมัติตามปกติ</div>
+      </div>` : '';
+
   document.getElementById('page-content').innerHTML = `
   <div style="max-width:600px;">
     <div class="card">
-      <div class="card-hd"><div class="card-title">✏️ ยื่นคำขอลา</div></div>
+      <div class="card-hd"><div class="card-title">✏️ ${_proxyEmp?'แจ้งลาแทนพนักงาน':'ยื่นคำขอลา'}</div></div>
+      ${proxyBanner}
 
       <!-- ผู้ยื่น -->
       <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;gap:12px;align-items:center;">
@@ -1793,7 +1812,7 @@ async function renderNewRequest() {
         <button class="btn btn-primary" onclick="submitRequest()" style="flex:1;justify-content:center;">
           📤 ส่งคำขอ
         </button>
-        <button class="btn btn-outline" onclick="navigateTo('lv-dashboard')">ยกเลิก</button>
+        <button class="btn btn-outline" onclick="navigateTo('${_proxyEmp?'lv-proxy':'lv-dashboard'}')">ยกเลิก</button>
       </div>
     </div>
   </div>`;
@@ -1886,9 +1905,10 @@ async function submitRequest() {
 
   const days   = _halfDay ? 0.5 : calcWorkingDays(start,end);
   const reason = document.getElementById('req-reason').value.trim();
-  const empId  = currentUser?.id||currentEmp?.employee_id;
-  const empName= currentUser?.full_name||currentEmp?.name||'';
-  const dept   = currentUser?.department||currentEmp?.department||'';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21: ข้อมูล/โควต้าต้องผูกกับพนักงานตัวจริง ไม่ใช่หัวหน้าที่กรอกแทน
+  const empId  = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id||currentEmp?.employee_id);
+  const empName= _proxyEmp ? _proxyEmp.name          : (currentUser?.full_name||currentEmp?.name||'');
+  const dept   = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department||currentEmp?.department||'');
 
   // ตรวจโควต้า — แจ้งเตือนแต่ยังยื่นได้
   let overQuotaNote = '';
@@ -1918,7 +1938,10 @@ async function submitRequest() {
     start_date: start, end_date: end, days, half_day: _halfDay||null,
     reason: overQuotaNote ? `${overQuotaNote}${reason?` ${reason}`:''}` : (reason||null),
     status:'pending',
-    cert_status: _reqTypeCode === 'sick' ? _certStatus : null // สถานะใบรับรองแพทย์ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01
+    cert_status: _reqTypeCode === 'sick' ? _certStatus : null, // สถานะใบรับรองแพทย์ (เฉพาะลาป่วย) — เพิ่ม 2026-10-01
+    // แจ้งแทนพนักงาน (proxy submission) — เพิ่ม 2026-10-21: บันทึกว่าใครเป็นผู้แจ้งแทน (ยังต้องผ่านอนุมัติปกติ)
+    proxy_by_id:   _proxyEmp ? (currentUser?.id||currentEmp?.employee_id||null) : null,
+    proxy_by_name: _proxyEmp ? (currentUser?.full_name||currentEmp?.name||null) : null
   };
 
   const { data, error } = await sb.from('leave_requests').insert([payload]).select().single();
@@ -1930,8 +1953,13 @@ async function submitRequest() {
   // แจ้งเตือนหัวหน้า/Admin แบบ Realtime ในระบบ — เห็นทันทีไม่ต้องรีเฟรชหน้าจอ
   _broadcastNewRequestToApprovers('leave', data);
 
-  showToast('ส่งคำขอลาเรียบร้อยแล้ว ✅','success');
-  navigateTo('lv-my-hist');
+  if (_proxyEmp) {
+    showToast(`แจ้งลาแทน ${empName} เรียบร้อยแล้ว ✅ รอการอนุมัติ`,'success');
+    navigateTo('lv-proxy'); // กลับไปหน้าแจ้งแทนพนักงาน (เคลียร์ _proxyEmp โดยอัตโนมัติ)
+  } else {
+    showToast('ส่งคำขอลาเรียบร้อยแล้ว ✅','success');
+    navigateTo('lv-my-hist');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2236,6 +2264,9 @@ async function renderApprovals() {
     // แจ้งเตือนกรณีลาป่วยที่ยัง "จะนำมาส่งภายหลัง" — ใบรับรองแพทย์ยังไม่ได้รับ — เพิ่ม 2026-10-01
     const certBadge = (r.type_code==='sick' && r.cert_status==='จะนำมาส่งภายหลัง')
       ? `<span style="font-size:9px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;">⏳ รอใบรับรองแพทย์</span>` : '';
+    // แจ้งแทนโดยหัวหน้า (proxy submission) — เพิ่ม 2026-10-21
+    const proxyBadge = r.proxy_by_name
+      ? `<span style="font-size:9px;background:#e0e7ff;color:#4338ca;border-radius:4px;padding:1px 5px;">👤 แจ้งแทนโดย ${esc(r.proxy_by_name)}</span>` : '';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:10px;">
@@ -2243,6 +2274,7 @@ async function renderApprovals() {
           <div>
             <div style="font-weight:700;color:#0f172a;font-size:15px;">${esc(r.employee_name)}</div>
             <div style="font-size:12px;color:#94a3b8;">${esc(r.department||'—')}</div>
+            ${proxyBadge?`<div style="margin-top:3px;">${proxyBadge}</div>`:''}
           </div>
           <span style="color:${typeColor(r.type_code)};font-weight:700;font-size:13px;white-space:nowrap;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>
         </div>
@@ -2260,7 +2292,7 @@ async function renderApprovals() {
     }
     // Desktop: table row
     return `<tr>
-      <td><div style="font-weight:600;color:#0f172a;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td><div style="font-weight:600;color:#0f172a;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>${proxyBadge?`<div style="margin-top:2px;">${proxyBadge}</div>`:''}</td>
       <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}${certBadge ? ' '+certBadge : ''}</td>
       <td>${dateRange}</td>
       <td style="font-weight:700;">${r.days} วัน</td>
@@ -2463,6 +2495,9 @@ async function renderAllRequests() {
     const autoBadge = isAuto ? `<span style="font-size:9px;background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 5px;">🔄 บัตรตอก</span>` : '';
     const halfLabel = r.half_day ? (r.half_day==='am' ? ' (½เช้า)' : ' (½บ่าย)') : '';
     const dateRange = fmtDate(r.start_date)+(r.start_date!==r.end_date?' – '+fmtDate(r.end_date):'');
+    // แจ้งแทนโดยหัวหน้า (proxy submission) — เพิ่ม 2026-10-21
+    const proxyBadge = r.proxy_by_name
+      ? `<span style="font-size:9px;background:#e0e7ff;color:#4338ca;border-radius:4px;padding:1px 5px;">👤 แจ้งแทนโดย ${esc(r.proxy_by_name)}</span>` : '';
 
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
@@ -2470,6 +2505,7 @@ async function renderAllRequests() {
           <div>
             <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
             <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+            ${proxyBadge?`<div style="margin-top:3px;">${proxyBadge}</div>`:''}
           </div>
           ${statusBadge(r.status)}
         </div>
@@ -2485,7 +2521,7 @@ async function renderAllRequests() {
     return `
     <tr>
       <td style="font-size:12px;color:#64748b;">${fmtDate(r.created_at)}</td>
-      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>${proxyBadge?`<div style="margin-top:2px;">${proxyBadge}</div>`:''}</td>
       <td><span style="color:${typeColor(r.type_code)};font-weight:600;">${_typeIcon(r.type_code)} ${esc(r.type_name)}${halfLabel}</span>${autoBadge ? ' '+autoBadge : ''}</td>
       <td>${dateRange}</td>
       <td style="font-weight:700;">${r.days}</td>
@@ -2629,9 +2665,10 @@ async function loadPassReasons() {
 
 async function renderPassRequest() {
   await loadPassReasons();
-  const empId   = currentUser?.id || currentEmp?.employee_id || '';
-  const empName = currentUser?.full_name || currentEmp?.name || '';
-  const dept    = currentUser?.department || currentEmp?.department || '';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21
+  const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id || currentEmp?.employee_id || '');
+  const empName = _proxyEmp ? _proxyEmp.name          : (currentUser?.full_name || currentEmp?.name || '');
+  const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department || currentEmp?.department || '');
 
   const now = new Date();
   const todayISO = now.toISOString().slice(0,10);
@@ -2650,9 +2687,14 @@ async function renderPassRequest() {
   <div style="max-width:600px;">
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">📋 กรอกรายละเอียด</div>
-        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-pass-hist')">ประวัติ →</button>
+        <div class="card-title">📋 ${_proxyEmp?'แจ้งแทนขอออกนอกบริษัท':'กรอกรายละเอียด'}</div>
+        ${_proxyEmp?'':'<button class="btn btn-outline btn-sm" onclick="navigateTo(\'lv-pass-hist\')">ประวัติ →</button>'}
       </div>
+      ${_proxyEmp ? `
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">🧑‍🤝‍🧑</span>
+        <div style="font-size:12px;color:#4338ca;"><b>กำลังแจ้งแทนพนักงาน</b> — คำขอนี้จะถูกบันทึกเป็นของ ${esc(empName)} และต้องผ่านการอนุมัติตามปกติ</div>
+      </div>` : ''}
 
       <!-- ข้อมูลผู้ขอ -->
       <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
@@ -2699,9 +2741,12 @@ async function renderPassRequest() {
         <strong>⚡ พักทานข้าว</strong> — ไม่ต้องรออนุมัติ ระบบแจ้งเตือน LINE ทันที
       </div>
 
-      <button class="btn btn-primary" onclick="submitPassRequest()" style="width:100%;">
-        🚪 ยื่นคำขอออก
-      </button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" onclick="submitPassRequest()" style="flex:1;justify-content:center;">
+          🚪 ยื่นคำขอออก
+        </button>
+        ${_proxyEmp?`<button class="btn btn-outline" onclick="navigateTo('lv-proxy')">ยกเลิก</button>`:''}
+      </div>
     </div>
   </div>`;
 
@@ -2740,9 +2785,10 @@ async function submitPassRequest() {
   if (!date || !outTime || !retTime) { err.textContent = 'กรุณาระบุวันและเวลา'; return; }
   if (retTime <= outTime) { err.textContent = 'เวลากลับต้องหลังเวลาออก'; return; }
 
-  const empId   = currentUser?.id || currentEmp?.employee_id || '';
-  const empName = currentUser?.full_name || currentEmp?.name || '';
-  const dept    = currentUser?.department || currentEmp?.department || '';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21
+  const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id || currentEmp?.employee_id || '');
+  const empName = _proxyEmp ? _proxyEmp.name          : (currentUser?.full_name || currentEmp?.name || '');
+  const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department || currentEmp?.department || '');
   const note    = document.getElementById('pass-note')?.value.trim();
 
   // ตรวจ: อื่นๆ ต้องระบุหมายเหตุ
@@ -2759,7 +2805,10 @@ async function submitPassRequest() {
     request_date: date, out_time: outTime, expected_return: retTime,
     note: note || null, status: 'pending',
     approver_name: null,
-    photo_url: currentEmp?.photo_url || null
+    photo_url: (_proxyEmp?.photo_url) || currentEmp?.photo_url || null,
+    // แจ้งแทนพนักงาน (proxy submission) — เพิ่ม 2026-10-21
+    proxy_by_id:   _proxyEmp ? (currentUser?.id||currentEmp?.employee_id||null) : null,
+    proxy_by_name: _proxyEmp ? (currentUser?.full_name||currentEmp?.name||null) : null
   };
 
   const { data, error } = await sb.from('pass_requests').insert([payload]).select('pass_id').single();
@@ -2771,8 +2820,13 @@ async function submitPassRequest() {
   // แจ้งเตือนหัวหน้า/Admin แบบ Realtime ในระบบ — เห็นทันทีไม่ต้องรีเฟรชหน้าจอ
   _broadcastNewRequestToApprovers('pass', payload);
 
-  showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
-  navigateTo('lv-pass-hist');
+  if (_proxyEmp) {
+    showToast(`แจ้งแทน ${empName} เรียบร้อยแล้ว ✅ รอการอนุมัติ`, 'info');
+    navigateTo('lv-proxy');
+  } else {
+    showToast('📝 ยื่นคำขอสำเร็จ รออนุมัติจากหัวหน้า', 'info');
+    navigateTo('lv-pass-hist');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2866,12 +2920,17 @@ async function renderPassApprovals() {
       <button class="btn btn-xs btn-outline" onclick="_editPassRecord(${r.pass_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
       <button class="btn btn-xs btn-outline" onclick="_deletePassRecord(${r.pass_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : '';
 
+    // แจ้งแทนโดยหัวหน้า (proxy submission) — เพิ่ม 2026-10-21
+    const proxyBadge = r.proxy_by_name
+      ? `<span style="font-size:9px;background:#e0e7ff;color:#4338ca;border-radius:4px;padding:1px 5px;">👤 แจ้งแทนโดย ${esc(r.proxy_by_name)}</span>` : '';
+
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
           <div>
             <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
             <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>
+            ${proxyBadge?`<div style="margin-top:3px;">${proxyBadge}</div>`:''}
           </div>
           <span style="background:${PASS_COLOR[r.status]||'#94a3b8'}22;color:${PASS_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${PASS_LABEL[r.status]||r.status}</span>
         </div>
@@ -2882,7 +2941,7 @@ async function renderPassApprovals() {
       </div>`;
     }
     return `<tr>
-      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>${proxyBadge?`<div style="margin-top:2px;">${proxyBadge}</div>`:''}</td>
       <td>${esc(r.reason_name)}</td>
       <td style="font-size:12px;">${r.request_date} ${r.out_time?.slice(0,5)}</td>
       <td style="font-size:12px;">~${r.expected_return?.slice(0,5)}</td>
@@ -3047,9 +3106,10 @@ let _otCache = {};               // cache ot_requests ที่โหลดม�
 let _editOtTypeSelected = 'advance'; // ประเภทคำขอที่เลือกอยู่ในโมดัลแก้ไข
 
 function renderOtRequest() {
-  const empId   = currentUser?.id || currentEmp?.employee_id || '';
-  const empName = currentUser?.full_name || currentEmp?.name || '';
-  const dept    = currentUser?.department || currentEmp?.department || '';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21
+  const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id || currentEmp?.employee_id || '');
+  const empName = _proxyEmp ? _proxyEmp.name          : (currentUser?.full_name || currentEmp?.name || '');
+  const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department || currentEmp?.department || '');
 
   const now = new Date();
   const todayISO = now.toISOString().slice(0,10);
@@ -3058,9 +3118,14 @@ function renderOtRequest() {
   <div style="max-width:600px;">
     <div class="card">
       <div class="card-hd">
-        <div class="card-title">⏱️ ยื่นขอทำโอที</div>
-        <button class="btn btn-outline btn-sm" onclick="navigateTo('lv-ot-hist')">ประวัติ →</button>
+        <div class="card-title">⏱️ ${_proxyEmp?'แจ้งแทนขอทำโอที':'ยื่นขอทำโอที'}</div>
+        ${_proxyEmp?'':'<button class="btn btn-outline btn-sm" onclick="navigateTo(\'lv-ot-hist\')">ประวัติ →</button>'}
       </div>
+      ${_proxyEmp ? `
+      <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">🧑‍🤝‍🧑</span>
+        <div style="font-size:12px;color:#4338ca;"><b>กำลังแจ้งแทนพนักงาน</b> — คำขอนี้จะถูกบันทึกเป็นของ ${esc(empName)} และต้องผ่านการอนุมัติตามปกติ</div>
+      </div>` : ''}
 
       <!-- ข้อมูลผู้ขอ -->
       <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
@@ -3129,9 +3194,12 @@ function renderOtRequest() {
 
       <div id="ot-err" style="color:#ef4444;font-size:13px;margin-bottom:10px;"></div>
 
-      <button class="btn btn-primary" id="ot-submit-btn" onclick="submitOtRequest()" style="width:100%;">
-        📝 ยื่นขอล่วงหน้า
-      </button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" id="ot-submit-btn" onclick="submitOtRequest()" style="flex:1;justify-content:center;">
+          📝 ยื่นขอล่วงหน้า
+        </button>
+        ${_proxyEmp?`<button class="btn btn-outline" onclick="navigateTo('lv-proxy')">ยกเลิก</button>`:''}
+      </div>
     </div>
   </div>`;
 
@@ -3206,9 +3274,10 @@ async function submitOtRequest() {
     actualHours = raw ? parseFloat(raw) : estimatedHours;
   }
 
-  const empId   = currentUser?.id || currentEmp?.employee_id || '';
-  const empName = currentUser?.full_name || currentEmp?.name || '';
-  const dept    = currentUser?.department || currentEmp?.department || '';
+  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21
+  const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id || currentEmp?.employee_id || '');
+  const empName = _proxyEmp ? _proxyEmp.name          : (currentUser?.full_name || currentEmp?.name || '');
+  const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department || currentEmp?.department || '');
 
   const payload = {
     employee_id: empId, employee_name: empName, department: dept,
@@ -3216,7 +3285,10 @@ async function submitOtRequest() {
     ot_date: date, start_time: start, end_time: end,
     estimated_hours: estimatedHours, is_holiday: isHoliday,
     actual_hours: actualHours,
-    reason, status: 'pending', approver_name: null
+    reason, status: 'pending', approver_name: null,
+    // แจ้งแทนพนักงาน (proxy submission) — เพิ่ม 2026-10-21
+    proxy_by_id:   _proxyEmp ? (currentUser?.id||currentEmp?.employee_id||null) : null,
+    proxy_by_name: _proxyEmp ? (currentUser?.full_name||currentEmp?.name||null) : null
   };
 
   const { data, error } = await sb.from('ot_requests').insert([payload]).select('ot_id').single();
@@ -3225,8 +3297,13 @@ async function submitOtRequest() {
   sendOtLineNotify(data.ot_id, payload, 'pending');
   _broadcastNewRequestToApprovers('ot', payload);
 
-  showToast('📝 ยื่นคำขอโอทีสำเร็จ รออนุมัติจากหัวหน้า', 'info');
-  navigateTo('lv-ot-hist');
+  if (_proxyEmp) {
+    showToast(`แจ้งโอทีแทน ${empName} เรียบร้อยแล้ว ✅ รอการอนุมัติ`, 'info');
+    navigateTo('lv-proxy');
+  } else {
+    showToast('📝 ยื่นคำขอโอทีสำเร็จ รออนุมัติจากหัวหน้า', 'info');
+    navigateTo('lv-ot-hist');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3461,12 +3538,17 @@ async function renderOtApprovals() {
       <button class="btn btn-xs btn-outline" onclick="_editOtRecord(${r.ot_id})" title="แก้ไข" style="color:#0369a1;">✏️</button>
       <button class="btn btn-xs btn-outline" onclick="_deleteOtRecord(${r.ot_id})" title="ลบ" style="color:#dc2626;">🗑️</button>` : '';
 
+    // แจ้งแทนโดยหัวหน้า (proxy submission) — เพิ่ม 2026-10-21
+    const proxyBadge = r.proxy_by_name
+      ? `<span style="font-size:9px;background:#e0e7ff;color:#4338ca;border-radius:4px;padding:1px 5px;">👤 แจ้งแทนโดย ${esc(r.proxy_by_name)}</span>` : '';
+
     if(isMobile) {
       return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
           <div>
             <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(r.employee_name)}</div>
             <div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')} · ${OT_TYPE_LABEL[r.request_type]||''}</div>
+            ${proxyBadge?`<div style="margin-top:3px;">${proxyBadge}</div>`:''}
           </div>
           <span style="background:${OT_COLOR[r.status]||'#94a3b8'}22;color:${OT_COLOR[r.status]||'#94a3b8'};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;">${OT_LABEL[r.status]||r.status}</span>
         </div>
@@ -3476,7 +3558,7 @@ async function renderOtApprovals() {
       </div>`;
     }
     return `<tr>
-      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div></td>
+      <td><div style="font-weight:600;">${esc(r.employee_name)}</div><div style="font-size:11px;color:#94a3b8;">${esc(r.department||'—')}</div>${proxyBadge?`<div style="margin-top:2px;">${proxyBadge}</div>`:''}</td>
       <td style="font-size:12px;">${OT_TYPE_LABEL[r.request_type]||r.request_type}</td>
       <td style="font-size:12px;">${r.ot_date} ${r.start_time?.slice(0,5)}→${r.end_time?.slice(0,5)}</td>
       <td style="font-size:12px;">${Number(r.estimated_hours||0).toFixed(1)} ชม.</td>
@@ -3627,6 +3709,81 @@ async function sendOtLineNotify(otId, r, event) {
       })
     }).catch(e => console.warn('OT LINE notify failed:', e));
   } catch(e) { console.warn('OT LINE notify error:', e); }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SECTION 11E — แจ้งแทนพนักงาน (Proxy Submission) — เพิ่ม 2026-10-21
+// สำหรับพนักงานที่ใช้งานระบบเองไม่ได้ (เช่น อายุมาก/ไม่คุ้นเทคโนโลยี) — หัวหน้ากรอกคำขอแทนได้
+// ข้อมูล/โควต้ายังผูกกับพนักงานตัวจริง (ผ่าน currentUser.departments) และต้องผ่านอนุมัติตามปกติ ไม่ auto-approve
+// ─────────────────────────────────────────────────────────────
+let _proxyEmpList = []; // cache รายชื่อพนักงานที่โหลดมาแสดงในหน้าเลือก
+async function renderProxySelect() {
+  if (!can('approve')) { document.getElementById('page-content').innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;">ไม่มีสิทธิ์</div>'; return; }
+
+  let q = sb.from('checkin_employees').select('employee_id,name,department,position,photo_url,status').eq('status','active').order('department').order('name');
+  if (!can('admin') && currentUser?.departments?.length) q = q.in('department', currentUser.departments);
+  const { data } = await q;
+  _proxyEmpList = data || [];
+
+  // ตัวเลือกแผนก — เพิ่ม 2026-10-21 ตามคำขอคุณใหญ่: หัวหน้าที่ดูแลหลายแผนก/admin ต้องกรองตามแผนกได้
+  const deptList = [...new Set(_proxyEmpList.map(e=>e.department).filter(Boolean))].sort();
+  const deptOptsHtml = deptList.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:720px;">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">🧑‍🤝‍🧑 แจ้งแทนพนักงาน</div></div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:14px;line-height:1.5;">
+        สำหรับพนักงานที่ไม่สามารถใช้งานระบบได้ด้วยตนเอง — เลือกพนักงาน แล้วเลือกประเภทคำขอที่จะกรอกแทน
+        ข้อมูลจะถูกบันทึกเป็นของพนักงานคนนั้น และยังต้องผ่าน<strong>การอนุมัติตามปกติ</strong>เสมอ
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <input type="text" id="proxy-search" class="form-control" placeholder="🔍 ค้นหาชื่อ/รหัสพนักงาน..." oninput="_proxyFilterList()" style="flex:1;min-width:200px;">
+        <select id="proxy-dept-filter" class="form-control" onchange="_proxyFilterList()" style="max-width:220px;">
+          <option value="">ทุกแผนก</option>
+          ${deptOptsHtml}
+        </select>
+      </div>
+      <div id="proxy-emp-list"></div>
+    </div>
+  </div>`;
+  _proxyFilterList();
+}
+
+function _proxyFilterList() {
+  const kw   = (document.getElementById('proxy-search')?.value||'').trim().toLowerCase();
+  const dept = document.getElementById('proxy-dept-filter')?.value || '';
+  const list = _proxyEmpList.filter(e => {
+    if (dept && (e.department||'') !== dept) return false;
+    if (!kw) return true;
+    return (e.name||'').toLowerCase().includes(kw) || (e.employee_id||'').toLowerCase().includes(kw) || (e.department||'').toLowerCase().includes(kw);
+  });
+  const box = document.getElementById('proxy-emp-list');
+  if (!box) return;
+  if (!list.length) { box.innerHTML = '<div style="padding:30px;text-align:center;color:#94a3b8;font-size:13px;">ไม่พบพนักงานในแผนกที่ดูแล</div>'; return; }
+  box.innerHTML = list.map(e => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="width:38px;height:38px;border-radius:50%;background:#4338ca;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;overflow:hidden;">
+        ${e.photo_url?`<img src="${esc(e.photo_url)}" style="width:100%;height:100%;object-fit:cover;">`:esc((e.name||'?').charAt(0))}
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <div style="font-weight:700;font-size:14px;color:#0f172a;">${esc(e.name)}</div>
+        <div style="font-size:11px;color:#94a3b8;">${esc(e.department||'ไม่ระบุแผนก')} · ${esc(e.employee_id)}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-xs btn-outline" onclick="_proxyPickById('${esc(e.employee_id)}','leave')">📋 ลา</button>
+        <button class="btn btn-xs btn-outline" onclick="_proxyPickById('${esc(e.employee_id)}','pass')">🔑 ออกนอก</button>
+        <button class="btn btn-xs btn-outline" onclick="_proxyPickById('${esc(e.employee_id)}','ot')">⏱️ โอที</button>
+      </div>
+    </div>`).join('');
+}
+
+function _proxyPickById(empId, type) {
+  const e = _proxyEmpList.find(x=>x.employee_id===empId);
+  if (!e) return;
+  _proxyEmp = { employee_id: e.employee_id, name: e.name, department: e.department||'', photo_url: e.photo_url||null };
+  const page = type==='leave' ? 'lv-request' : (type==='pass' ? 'lv-pass' : 'lv-ot');
+  navigateTo(page, true); // true = keepProxy — คง _proxyEmp ไว้ให้ฟอร์มใช้งาน
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -5133,7 +5290,10 @@ async function _bootApp() {
   // แจ้งเตือนหัวหน้า/Admin: realtime เมื่อมีคำขอใหม่เข้ามา — ไม่ต้องรีเฟรชหน้าจอเองอีกต่อไป
   if (can('approve')) {
     _startApproverRealtime();
-    _requestDesktopNotifPermission();
+    // ⚠️ แก้ไข 2026-10-21: เอา _requestDesktopNotifPermission() ออกจากตรงนี้ — เดิมขอสิทธิ์ Desktop Notification
+    // อัตโนมัติทุกครั้งที่ login/รีเฟรชหน้า ทำให้ browser เด้ง popup "ต้องการที่จะแสดงการแจ้งเตือน" ซ้ำทุกรอบ
+    // (โดยเฉพาะตอนเปิดไฟล์ผ่าน file:// โดยตรง ที่ Chrome มักไม่จำสิทธิ์ที่เคยกดอนุญาตไว้ข้ามการโหลดหน้า)
+    // ตอนนี้จะขอสิทธิ์เฉพาะตอนผู้ใช้กดปุ่มกระดิ่ง 🔔 เองเท่านั้น (ผ่าน _toggleDesktopNotifPermission())
     _updateNotifToggleIcon();
     // สรุปคำขอที่รออนุมัติอยู่แล้ว ณ ตอนเข้าสู่ระบบ — กันกรณีคำขอเข้ามาตอนที่ยังไม่ได้เปิดหน้าเว็บ
     setTimeout(() => _checkApproverPendingSummary(), 800);

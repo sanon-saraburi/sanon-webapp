@@ -12,6 +12,39 @@
 
 ---
 
+## 0A. ⚠️ เช็คลิสต์เพิ่มโรงงานใหม่ — ป้องกันปัญหาเดิมซ้ำ (อัปเดต 2026-10-18)
+
+**ทำไมต้องมีหัวข้อนี้:** ทุกครั้งที่เพิ่มโรงงานใหม่ (ล่าสุดคือ Mobile Plant) เจอ error เดิมซ้ำ ๆ จากตารางต่าง ๆ ทีละตาราง เพราะตารางเหล่านี้ถูกสร้างตั้งแต่ตอนระบบมีแค่ 4 โรงงาน (CDE/Propel/Sanon1/Sanon2) แล้วมี **CHECK constraint ที่ล็อกชื่อโรงงานไว้ตายตัวที่ชั้นฐานข้อมูล (Supabase)** ซึ่งแก้โค้ดฝั่ง UI ให้ dynamic แล้วก็ยังไม่พอ ต้องไปลบ constraint ที่ DB ด้วยเสมอ
+
+**ตารางที่เจอปัญหานี้มาแล้ว (แก้ไปแล้วทุกตัว ณ 2026-10-18):**
+
+| ตาราง | คอลัมน์ | ชื่อ constraint | แก้เมื่อ |
+|---|---|---|---|
+| `electricity_costs` | `factory` | `electricity_costs_factory_check` | 2026-10-18 |
+| `sales` | `factory_code` | `sales_factory_code_check` | 2026-10-18 |
+| `sales` | `factory_name` | `sales_factory_name_check` | 2026-10-18 |
+| `electric_loader` | `factory_name` | `electric_loader_factory_name_check` | 2026-10-18 |
+| `drone_stock` | `factory_name` | *(ตรวจแล้ว — ไม่มี constraint นี้ติดอยู่ ปลอดภัยอยู่แล้ว)* | ตรวจ 2026-10-18 |
+| `production_daily_status` | `factory_code` | `production_daily_status_factory_code_check` | 2026-10-18 |
+
+**ก่อนเพิ่มโรงงานใหม่ครั้งหน้า ให้รันคำสั่งนี้ใน Supabase SQL Editor ก่อนเสมอ** — จะไล่หา CHECK constraint ที่ยังล็อกชื่อโรงงานแบบเดิมค้างอยู่ทั้งฐานข้อมูล (ไม่ต้องเดาทีละตารางอีกต่อไป):
+```sql
+SELECT conrelid::regclass AS table_name, conname, pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE contype = 'c'
+  AND pg_get_constraintdef(oid) ILIKE '%CDE%'
+  AND pg_get_constraintdef(oid) ILIKE '%Propel%';
+```
+ถ้ามีผลลัพธ์ขึ้นมา แปลว่ายังมีตารางที่ล็อกชื่อโรงงานค้างอยู่ — ลบ constraint นั้นด้วย `ALTER TABLE <ตาราง> DROP CONSTRAINT <ชื่อ constraint>;` ได้เลย (ไม่กระทบข้อมูลเดิม เป็นแค่การลบกฎตรวจสอบ)
+
+**อาการที่บ่งชี้ว่าเจอปัญหานี้อีก:**
+- บันทึก/แก้ไขข้อมูลแล้วขึ้น error แบบ `violates check constraint "..._check"` → ไปรัน query ด้านบนหาแล้วลบทิ้งได้เลย
+- ปุ่ม/ฟอร์มทำงานเงียบ ๆ โดยไม่ขึ้น error แต่สถานะ/ป้ายไม่เปลี่ยนตามที่ควร (เช่นเคส `production_daily_status`) → มักเป็นเพราะโค้ดมี `try/catch` ดักไว้ไม่ให้ error ขึ้นจอ ต้องเปิด Console (F12) เพื่อหา error จริงที่ซ่อนอยู่
+
+**ถ้าเพิ่มตารางใหม่ที่มีคอลัมน์เก็บชื่อโรงงาน** (ทั้งฟีเจอร์ใหม่ หรือสร้างตาราง `production_xxx` ใหม่) — **อย่าก๊อปโครงสร้างจากตารางเก่าที่มี `CHECK (factory IN (...))` ตรง ๆ** ให้ตัด constraint นี้ออกตั้งแต่ตอนออกแบบตาราง แล้วปล่อยให้ชั้นแอปพลิเคชัน (ที่ดึงรายชื่อจากตาราง `factories` แบบ dynamic อยู่แล้ว) เป็นตัวควบคุมความถูกต้องของชื่อโรงงานแทน
+
+---
+
 ## 1. ข้อมูลระบบ
 
 - **ไฟล์:** `index.html` (~12,100+ บรรทัด)
@@ -188,6 +221,49 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 
 ## 11. Changelog
 
+### 2026-10-19 รอบ 2 — แก้ไข (correction) การ์ด "ยอดขายรวม" ใน Executive Summary ขึ้น 0 บาท เสมอ ทั้งที่มียอดขายจริงในระบบ
+
+**ที่มา:** ผู้ใช้ถามว่าหน้า Executive Summary (dash-executive) ต้องเพิ่มอะไรอีกไหม ระหว่างตรวจสอบโค้ดพบว่าการ์ด "ยอดขายรวม" query คอลัมน์ `amount_baht` จากตาราง `sales` — แต่ตาราง `sales` **ไม่มีคอลัมน์นี้เลย** (คอลัมน์จริงที่เก็บมูลค่าคือ `total_value` ตามที่ใช้ตรงกันทุกจุดอื่นในระบบ เช่น กราฟ Dashboard ยอดขาย, ตารางจัดการยอดขาย, รายงานรายปี) ทำให้ query คืนค่า `null`/undefined เงียบๆ (Supabase ไม่ throw error เมื่อ column ไม่ตรง แค่คืนค่าว่าง) และยอดขายรวมคำนวณได้ 0 เสมอไม่ว่าจะมียอดขายจริงเท่าไหร่ในเดือนนั้น
+
+**แก้ไข:** เปลี่ยน `.select('amount_baht')` → `.select('total_value')` และ `r.amount_baht` → `Number(r.total_value)||0` ในฟังก์ชัน `renderDashboardExecutive()`
+
+**บทเรียน:** เป็นอีกตัวอย่างของ "silent failure" แต่คนละแบบกับ Section 0A (ไม่ใช่ CHECK constraint แต่เป็นชื่อคอลัมน์ผิด) — จุดเสี่ยงแบบนี้คือ query ที่เขียนแยกไว้คนละที่กับจุดอื่นที่ query ตารางเดียวกัน ทำให้ชื่อคอลัมน์เพี้ยนได้โดยไม่มีใครสังเกต เวลาเพิ่ม dashboard/การ์ดสรุปใหม่ที่ query ตารางเดิมซ้ำ ควร copy ชื่อคอลัมน์จากจุดที่ query ตารางนั้นอยู่แล้วแทนการพิมพ์ชื่อคอลัมน์ขึ้นใหม่เอง
+
+**ไม่ต้องรัน SQL เพิ่ม — เป็นการแก้โค้ดฝั่ง frontend เท่านั้น**
+
+### 2026-10-19 — แก้ไข (correction) จุด Silent Error ที่สำคัญที่สุดในระบบ: auto-confirm สถานะ "ยืนยันแล้ว" หลังนำเข้ายอดจริงสิ้นเดือน ไม่แจ้งเตือนเมื่อล้มเหลว
+
+**ที่มา:** ต่อเนื่องจากปัญหา Mobile Plant สถานะไม่ขึ้นสีเขียว (บันทึกไว้แล้วด้านล่าง) ผู้ใช้ถามว่าระบบมีการแจ้งเตือนอะไรไหมถ้าเกิดข้อผิดพลาด ("มีผลอะไรไหมกับการบันทึกข้อมูลของระบบ... ถ้ามีปัญหาในระบบเราจะรู้ไหม") — จึงขอให้ตรวจค้นทุกจุดในโค้ดที่ error ถูก "ดักไว้เงียบๆ" (try/catch ที่ไม่ขึ้น toast แจ้งผู้ใช้) โดยเฉพาะจุดที่เกี่ยวกับการบันทึกข้อมูล (insert/update/upsert/delete)
+
+**วิธีตรวจสอบ:** เขียนสคริปต์ไล่จับคู่ `try{...}catch{...}` ทุกจุดในไฟล์ (139 คู่) ด้วยการนับวงเล็บปีกกาให้แม่นยำ (ไม่ใช่แค่เดาจากบรรทัดใกล้เคียง) แล้วกรองเฉพาะจุดที่ภายใน `try` มีการเรียก `.insert()/.update()/.upsert()/.delete()/.rpc()` **และ** ภายใน `catch` ไม่มีการเรียก `showToast` เลย — พบ 3 จุด ตรวจสอบทีละจุด:
+- `trySaveActiveForm()` (auto-save ฉุกเฉินตอน session timeout) — ไม่ต้องแก้ เพราะ caller (`handleSessionExpired`) เช็ค return value แล้วเลือกข้อความ toast ที่ถูกต้องอยู่แล้ว (ไม่หลอกผู้ใช้ว่า "บันทึกแล้ว" ถ้าจริงๆ ล้มเหลว)
+- `openRolePermissionsMatrix()` → ปุ่มบันทึกสิทธิ์ (`doSave`) — ไม่ต้องแก้ เพราะมี try/catch + showToast ของตัวเองแยกต่างหากอยู่แล้วตรงจุดที่ save จริง
+- **`importProductionExcel()` ส่วน auto-confirm `production_daily_status` (บรรทัด ~6458)** — **เป็นจุดที่พังจริง** และเป็น **root cause เดียวกับบั๊ก Mobile Plant ที่เพิ่งแก้ไป** แต่ฟังก์ชันนี้ใช้ร่วมกันทุกโรงงาน (CDE/Propel/Sanon1/Sanon2/Mobile ผ่าน `PLANT_FACTORY_CODE[plantKey]`) แปลว่าความเสี่ยงนี้มีกับทุกโรงงาน ไม่ใช่แค่ Mobile Plant — อีกทั้งโค้ดเดิมไม่เคยอ่านค่า `error` จาก response ของ `.upsert()` เลย (Supabase JS ไม่ throw error เองเมื่อ query ล้มเหลว ต้องเช็ค `{ error }` แล้ว throw เองเสมอ) ทำให้ catch ไม่เคยถูกเรียกจริงๆ ด้วยซ้ำ
+
+**แก้ไข (โค้ด, แก้ไปแล้ว):**
+```js
+// เดิม — ไม่เช็ค error, ไม่แจ้งผู้ใช้เลย
+try {
+  await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' });
+} catch(e) { console.warn('auto-confirm:', e); }
+
+// ใหม่ — เช็ค error แล้ว throw เอง + แจ้งเตือนผู้ใช้เป็น toast สีเหลือง (warning)
+try {
+  const { error: autoConfirmError } = await db.from('production_daily_status').upsert(sp, { onConflict:'factory_code,production_date' });
+  if (autoConfirmError) throw autoConfirmError;
+} catch(e) {
+  console.warn('auto-confirm:', e);
+  showToast('นำเข้าข้อมูลสำเร็จ แต่ปรับสถานะ "ยืนยันแล้ว" อัตโนมัติไม่สำเร็จ (' + (e.message || '') + ') กรุณาตรวจสอบและยืนยันสถานะด้วยตนเองที่หน้าจัดการ', 'warning', 9000);
+}
+```
+ผลคือ: ถ้ามี CHECK constraint ของโรงงานใหม่ตกหล่นแบบเดิมอีกในอนาคต (ดู Section 0A) ผู้ใช้จะ **เห็น toast เตือนทันทีหน้าจอ** แทนที่จะต้องรอสังเกตเองว่าสถานะไม่ขึ้นสีเขียว
+
+**จุดอื่นๆ ที่ตรวจแล้วไม่ใช่ความเสี่ยง (ไม่ได้แก้ เพื่อไม่ให้ toast รกจอเกินจำเป็น):** catch block อีก ~90 จุดในไฟล์เป็นของการ**โหลดข้อมูลมาแสดงผล** (dropdown, กราฟ, การ์ดสถิติ) ไม่ใช่การบันทึกข้อมูล — ทุกจุดมี fallback ที่ผู้ใช้เห็นอยู่แล้ว (ขึ้นข้อความ "โหลดไม่สำเร็จ" ในบล็อกนั้นๆ หรือ reset เป็นค่าว่างอย่างปลอดภัย) จึงไม่ใช่ "silent failure" ที่เป็นอันตรายในความหมายเดียวกับจุดที่แก้ไป
+
+**บทเรียนสำคัญ:** เวลาจะหาจุด error ที่ถูกดักเงียบในโค้ด ให้โฟกัสเฉพาะจุดที่เป็นการ **เขียน/บันทึกข้อมูล** (insert/update/upsert/delete/rpc) เท่านั้น เพราะเป็นจุดเดียวที่ "ความเงียบ" เท่ากับ "ข้อมูลอาจไม่ถูกบันทึกโดยที่ไม่มีใครรู้" — ส่วนจุดอ่านข้อมูลเพื่อแสดงผล ความเงียบมักไม่อันตรายเท่าเพราะอย่างมากก็แค่แสดงผลว่างหรือข้อความโหลดไม่สำเร็จ ไม่ทำให้ข้อมูลเสียหาย และเวลาตรวจแนะนำให้เขียนสคริปต์จับคู่วงเล็บปีกกาจริงแทนการเดาจาก "บรรทัดใกล้ๆ" เพราะจะได้ผลผิดพลาดสูง (กรณีนี้วิธีเดาบรรทัดใกล้เคียงรายงานผลบวกปลอมและลบปลอมหลายจุด)
+
+**ไม่ต้องรัน SQL เพิ่ม — เป็นการแก้โค้ดฝั่ง frontend เท่านั้น**
+
 ### 2026-09-26 รอบ 5 — แก้ root cause จริงระดับโครงสร้างแอป: #app-shell-main ไม่มี min-width:0 (ทุกหน้า ไม่ใช่แค่ Dashboard)
 
 **ที่มา:** หลังแก้รอบ 4 ผู้ใช้ตรวจสอบด้วย DevTools พบตัวเลขที่ดูเหมือนไม่ล้น (`innerWidth` 574px, เนื้อหาพอดี) แต่ภาพหน้าจอยังเห็นเหมือนล้นอยู่ — เมื่อขอให้ทดสอบบน**มือถือจริง** (ไม่ผ่าน DevTools) ผลออกมาว่า **ล้นจอจริง** ทั้ง OEE Gauge (กราฟ Performance ถูกตัดขอบ) และการ์ดสถิติ (หินป้อนรวม, Throughput ถูกตัดตัวเลขฝั่งขวา) — สรุปว่า DevTools ก่อนหน้านี้รายงานค่าคลาดเคลื่อน (อาจเป็นปัญหาของ DevTools เอง) แต่ปัญหาจริงบนมือถือยังคงอยู่
@@ -317,6 +393,26 @@ CSS (บรรทัด ~175):
 
 **ไม่ต้องรัน SQL เพิ่ม**
 
+### 2026-10-18 — แก้ไข (correction) "นำเข้า ยอดจริงสิ้นเดือน" ของ Mobile Plant ล้มเหลว: ไม่พบคอลัมน์ is_final
+
+**อาการ:** กดปุ่ม "นำเข้า ยอดจริงสิ้นเดือน" ที่หน้า "ยอดผลิต Mobile Plant" แล้วขึ้น error:
+```
+นำเข้าข้อมูลล้มเหลว: Could not find the 'is_final' column of 'production_mobile' in the schema cache
+```
+
+**Root cause:** ฟังก์ชัน `importProductionExcel(e, plantKey, finalMode)` (ใช้ร่วมกันทุกโรงงานผ่าน `PRODUCTION_PLANT_CONFIG[plantKey]`) ใส่ `is_final: finalMode` ในข้อมูลที่จะบันทึกเสมอ โดยคาดว่าทุกตาราง `production_*` มีคอลัมน์ `is_final` อยู่แล้ว — แต่ตาราง `production_mobile` ถูกสร้างเมื่อ 2026-09-02 (ไฟล์ `production_mobile_schema.sql`) **ก่อน** ที่ฟีเจอร์ `is_final` (ยอดเบื้องต้น vs ยอดจริงสิ้นเดือน) จะถูกเพิ่มเข้าตาราง `production_cde`/`production_propel`/`production_sanon1`/`production_sanon2` ภายหลัง จึงไม่เคยถูกเพิ่มคอลัมน์นี้ให้ `production_mobile` เลยตั้งแต่ต้น เป็นปัญหา schema drift แบบเดียวกับที่เจอกับ CHECK constraint ของค่าไฟฟ้า/ยอดขาย/สต็อกโดรน/รถตักไฟฟ้าก่อนหน้านี้
+
+**วิธีแก้ — รันที่ Supabase SQL Editor:**
+```sql
+ALTER TABLE production_mobile ADD COLUMN IF NOT EXISTS is_final boolean NOT NULL DEFAULT false;
+```
+ถ้ารันแล้วยังเจอ error เดิม (schema cache ของ PostgREST ยังไม่รีเฟรช) ให้รันคำสั่งนี้ตามเพื่อบังคับรีเฟรช:
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+**บทเรียน:** เวลาเพิ่มคอลัมน์ใหม่ให้ตาราง `production_*` ของโรงงานใดโรงงานหนึ่ง (เช่นฟีเจอร์ยอดจริงสิ้นเดือน) ต้องไล่เพิ่มให้ครบทุกตาราง `production_*` ของทุกโรงงานพร้อมกัน ไม่ใช่แค่โรงงานที่ทดสอบตอนนั้น — โดยเฉพาะโรงงานที่สร้างตารางทีหลัง (เช่น Mobile Plant) มักตกหล่นฟีเจอร์ที่เพิ่มเข้าตารางอื่นไปแล้ว
+
 ### 2026-10-18 — รายงานรายปี + Executive Summary ดึงรายชื่อโรงงานอัตโนมัติจาก `factories` — ไม่ต้อง hardcode ซ้ำอีกแล้ว
 
 **ที่มา:** ผู้ใช้ถามว่าเวลาเพิ่มโรงงานใหม่ จะให้โผล่ในรายงานรายปีและ Executive Summary ได้เองโดยไม่ต้องแก้โค้ดทุกครั้งได้หรือไม่ (เดิมทีเดียว `ANNUAL_PLANT_LABELS`/`ANNUAL_FACTORY_NAMES`/`ANNUAL_PLANT_COLORS` และ Executive Summary hardcode ชื่อโรงงานไว้คนละชุดแยกจากกัน เพิ่มโรงงานใหม่ทีเดียวต้องมาแก้สูงสุด 4 จุดในโค้ด)
@@ -338,6 +434,44 @@ CSS (บรรทัด ~175):
 3. **ยอดผลิต (บันทึกข้อมูลรายวัน)** — ยังต้องสร้างตาราง `production_xxx` ใหม่ + เพิ่ม entry ใน `PRODUCTION_PLANT_CONFIG` (ระบุ table/productColumns/factoryDbName/color) + เขียนหน้า manage/dashboard ยอดผลิตใหม่ — **พอเพิ่ม entry นี้แล้ว รายงานรายปี + Executive Summary จะดึงโรงงานนี้มาแสดงเองอัตโนมัติทันที ไม่ต้องแก้อะไรเพิ่ม**
 
 **ไม่ต้องรัน SQL เพิ่ม** — ใช้ตาราง `factories` เดิม แก้เฉพาะโค้ด index.html
+
+---
+
+### 2026-10-18 — แก้ไข (correction) เพิ่มโรงงานใหม่แล้วบันทึกยอดขาย/รถตักไฟฟ้าไม่ได้ (ชุดเดียวกับค่าไฟฟ้าด้านล่าง)
+
+**อาการ:** หลังแก้ `electricity_costs_factory_check` (ด้านล่าง) แล้ว ผู้ใช้ถามต่อว่าโมดูลอื่นจะเจอปัญหาเดียวกันไหม — ตรวจสอบเชิงรุกก่อนเจอ error จริง พบว่า `schema.sql` มี CHECK constraint แบบเดียวกันซ่อนอยู่อีก 3 จุด
+
+**ตรวจพบและแก้ไข (รันใน Supabase SQL Editor):**
+```sql
+ALTER TABLE sales DROP CONSTRAINT sales_factory_code_check;
+ALTER TABLE sales DROP CONSTRAINT sales_factory_name_check;
+ALTER TABLE electric_loader DROP CONSTRAINT electric_loader_factory_name_check;
+```
+**หมายเหตุ:** ตรวจ `drone_stock` ด้วย — ไม่มี constraint ชื่อ `drone_stock_factory_name_check` อยู่จริงในฐานข้อมูล (คอลัมน์ `factory_name` ของตารางนี้ไม่เคยถูกใส่ CHECK ไว้ตั้งแต่สร้าง) จึงไม่ต้องแก้อะไร
+
+**บทเรียน:** เจอ constraint แบบนี้ 1 ตารางแล้ว ควรไล่เช็คทุกตารางที่มีคอลัมน์ชื่อโรงงานทันที อย่ารอให้ผู้ใช้เจอ error ทีละจุด — ดูเช็คลิสต์รวมที่ Section 0A ด้านบน
+
+---
+
+### 2026-10-18 — แก้ไข (correction) สถานะ "ยืนยันแล้ว/ยอดจริง" ของ Mobile Plant ไม่เปลี่ยนเป็นสีเขียว แม้นำเข้ายอดจริงสำเร็จแล้ว (production_daily_status)
+
+**อาการ:** กด "นำเข้า ยอดจริงสิ้นเดือน" สำเร็จ (toast ขึ้น success) แต่ป้ายสถานะทั้งที่หน้า Dashboard Mobile Plant และหน้า "ยอดผลิต Mobile Plant" ยังค้างเป็น "🟡 เบื้องต้น" สีเหลืองไม่เปลี่ยนเป็น "🟢 จริง"
+
+**Root cause:** `importProductionExcel(..., finalMode=true)` หลังบันทึกตัวเลขลง `production_mobile` สำเร็จ จะพยายาม auto-upsert สถานะ `confirmed` ลงตาราง `production_daily_status` (`factory_code:'Mobile'`) แต่ตารางนี้มี CHECK constraint เดิม `production_daily_status_factory_code_check` ล็อกไว้แค่ 4 โรงงานเดิมเหมือนกรณีอื่น ๆ ทำให้ upsert ล้มเหลว — จุดที่ทำให้วินิจฉัยยากคือโค้ดดักส่วนนี้ด้วย `try/catch` แล้วแค่ `console.warn()` ไม่ขึ้น error ให้ผู้ใช้เห็นเลย (ผู้ใช้เห็นแค่ toast "สำเร็จ" ของการนำเข้าหลัก)
+
+**วิธีแก้ (รันใน Supabase SQL Editor):**
+```sql
+ALTER TABLE production_daily_status DROP CONSTRAINT production_daily_status_factory_code_check;
+
+INSERT INTO production_daily_status (factory_code, production_date, status, note)
+SELECT 'Mobile', production_date, 'confirmed', 'Backfill - แก้ constraint ย้อนหลัง'
+FROM production_mobile
+WHERE is_final = true
+ON CONFLICT (factory_code, production_date) DO UPDATE SET status = 'confirmed';
+```
+ขั้นแรกแก้ปัญหาการบันทึกในอนาคต ขั้นสองจำเป็นต้องรันคู่กันเสมอ เพราะวันที่เคยนำเข้าไปแล้วก่อนแก้ constraint ไม่เคยมี record `confirmed` เกิดขึ้นจริง ลบ constraint อย่างเดียวไม่ช่วยย้อนแก้ข้อมูลเก่า
+
+**บทเรียน:** โค้ดที่ดัก error ด้วย `try/catch` แล้วแค่ `console.warn` (ไม่ throw/ไม่แจ้ง toast) จะซ่อนปัญหา constraint แบบนี้ไว้ได้นาน ควรพิจารณาเปลี่ยนเป็นแจ้งเตือนผู้ใช้แบบเบา ๆ (เช่น toast warning) แทนการเงียบสนิท จะได้รู้ตัวเร็วกว่านี้
 
 ---
 
