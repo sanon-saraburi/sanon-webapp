@@ -4514,15 +4514,20 @@ function openStockInModal(preItem=null) {
 function woFilterItems(){
   const cat=(qs('#wo-cat-filter')?.value||'');
   const search=(qs('#wo-search-filter')?.value||'').toLowerCase();
+  const inStockOnly=qs('#wo-instock-only')?.checked ?? true;
   const sel=qs('#wo-item');
   if(!sel)return;
   const filtered=_woAllItems.filter(i=>{
     if(cat&&normCat(i.category)!==normCat(cat))return false;
     if(search&&!i.code?.toLowerCase().includes(search)&&!i.name?.toLowerCase().includes(search))return false;
+    if(inStockOnly&&(_stockMap[i.id]||0)<=0)return false;
     return true;
   });
   sel.innerHTML='<option value="">-- เลือกวัสดุ --</option>'+
-    filtered.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
+    filtered.map(i=>{
+      const out=(_stockMap[i.id]||0)<=0;
+      return `<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}"${out?' style="color:#ef4444"':''}>${escapeHtml(i.code)} — ${escapeHtml(i.name)}${out?' (หมดสต็อก)':''}</option>`;
+    }).join('');
   if(qs('#wo-bal'))qs('#wo-bal').value='';
   if(qs('#wo-fifo'))qs('#wo-fifo').innerHTML='';
   if(qs('#wo-total'))qs('#wo-total').value='';
@@ -4532,11 +4537,14 @@ function woFilterItems(){
   if(sug){
     if(search){
       const top=filtered.slice(0,30);
-      sug.innerHTML=top.length?top.map(i=>`
-        <div onmousedown="woPickItem('${i.id}')" class="px-3 py-2 text-sm hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-0">
+      sug.innerHTML=top.length?top.map(i=>{
+        const out=(_stockMap[i.id]||0)<=0;
+        return `
+        <div onmousedown="woPickItem('${i.id}')" class="px-3 py-2 text-sm hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-0${out?' text-red-500':''}">
           <span class="font-mono text-gray-500">${escapeHtml(i.code)}</span> — ${escapeHtml(i.name)}
           <span class="text-xs text-gray-400">(คงเหลือ ${fmtNum(_stockMap[i.id]||0)} ${escapeHtml(i.unit||'')})</span>
-        </div>`).join(''):`<div class="px-3 py-2 text-sm text-gray-400">ไม่พบวัสดุที่ตรงกับ "${escapeHtml(search)}"</div>`;
+        </div>`;
+      }).join(''):`<div class="px-3 py-2 text-sm text-gray-400">ไม่พบวัสดุที่ตรงกับ "${escapeHtml(search)}"</div>`;
       sug.classList.remove('hidden');
     }else{
       sug.classList.add('hidden');sug.innerHTML='';
@@ -4579,7 +4587,6 @@ function openWithdrawModal(preItem=null, preQty=null, preNote=null) {
     if(!i.allowed_factories||i.allowed_factories.length===0) return true; // ของส่วนกลาง
     return userFac && i.allowed_factories.includes(userFac);
   });
-  const itemOpts = _woAllItems.map(i=>`<option value="${i.id}" data-unit="${escapeHtml(i.unit||'')}" data-price="${i.unit_price||0}" data-stock="${_stockMap[i.id]||0}">${escapeHtml(i.code)} — ${escapeHtml(i.name)}</option>`).join('');
   const woCats = (_invConfig.categories||[]).length>0 ? _invConfig.categories
     : [...new Set(_woAllItems.map(i=>normCat(i.category)).filter(Boolean))].sort();
   const catFilterOpts = woCats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
@@ -4617,8 +4624,12 @@ function openWithdrawModal(preItem=null, preQty=null, preNote=null) {
               <i data-lucide="scan-line" class="w-5 h-5"></i>
             </button>
           </div>
+          <label class="flex items-center gap-2 mb-2 text-xs text-gray-600 select-none">
+            <input type="checkbox" id="wo-instock-only" checked onchange="woFilterItems()" class="rounded border-gray-300"/>
+            แสดงเฉพาะที่มีของในสต็อก
+          </label>
           <select id="wo-item" required onchange="woItemChange()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-            <option value="">-- เลือกวัสดุ --</option>${itemOpts}</select>
+            <option value="">-- เลือกวัสดุ --</option></select>
           <div id="wo-item-photo" class="mt-2"></div>
         </div>
         <div><label class="text-xs text-gray-500 mb-1 block">คงเหลือในคลัง</label>
@@ -4641,7 +4652,11 @@ function openWithdrawModal(preItem=null, preQty=null, preNote=null) {
         ${apv?'เบิกวัสดุ':'ส่งคำขอเบิก'}</button>`
   });
   refreshIcons();
+  woFilterItems();
   if(preItem) setTimeout(() => {
+    const stockQty = _stockMap[preItem.id] || 0;
+    const cb = qs('#wo-instock-only');
+    if(stockQty<=0 && cb && cb.checked) { cb.checked = false; woFilterItems(); }
     const sel = qs('#wo-item'); if(sel) { sel.value = preItem.id; woItemChange(); }
     if(preQty)  { const q=qs('#wo-qty');     if(q) q.value = preQty; }
     if(preNote) { const n=qs('#wo-purpose'); if(n) n.value = preNote; }

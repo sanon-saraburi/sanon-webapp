@@ -1528,9 +1528,32 @@ async function updateLog(id) {
 
 async function deleteLog(id) {
   if (!confirm('ลบบันทึก PM นี้?')) return;
+
+  // เก็บ pm_item_id ไว้ก่อนลบ เพื่อย้อนค่า pm_items ทีหลัง
+  const log = _pmLogs.find(l => l.id === id);
+
   const { error } = await db.from('pm_logs').delete().eq('id', id);
   if (error) { showToast('ลบไม่สำเร็จ: '+error.message,'error'); return; }
-  showToast('ลบสำเร็จ','success');
+
+  // ย้อน pm_items.last_pm_date/last_pm_meter กลับไปตามบันทึกที่เหลืออยู่ (ล่าสุดถัดไปของรายการนี้)
+  // แก้บั๊ก: เดิมลบ log แล้วไม่อัปเดต pm_items เลย ทำให้ "คงเหลือ" ค้างค่าของ log ที่ลบไปแล้วตลอด
+  if (log?.pm_item_id) {
+    const { data: nextLatest } = await db.from('pm_logs')
+      .select('done_date, done_meter')
+      .eq('pm_item_id', log.pm_item_id)
+      .order('done_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const newDate  = nextLatest?.done_date  ?? null;
+    const newMeter = nextLatest?.done_meter ?? 0;
+
+    await db.from('pm_items').update({ last_pm_date: newDate, last_pm_meter: newMeter }).eq('id', log.pm_item_id);
+    const it = _pmItems.find(i => i.id === log.pm_item_id);
+    if (it) { it.last_pm_date = newDate; it.last_pm_meter = newMeter; }
+  }
+
+  showToast('ลบสำเร็จ — ปรับค่า "คงเหลือ" กลับตามบันทึกที่เหลือแล้ว','success');
   renderLogPage();
 }
 
