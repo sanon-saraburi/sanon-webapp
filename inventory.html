@@ -902,7 +902,7 @@ async function handleLogin(e) {
   showToast(`ยินดีต้อนรับ ${data.full_name || data.username}`, 'success');
   await loadAllMasterData();
   startSessionTimer();
-  navigateTo('inv-dashboard');
+  if (!checkPmHandoff()) navigateTo('inv-dashboard');
 }
 
 // =====================================================================
@@ -4551,7 +4551,27 @@ function woPickItem(id){
   if(inp){const opt=sel?.selectedOptions[0];inp.value=opt&&opt.value?opt.textContent:'';}
 }
 
-function openWithdrawModal(preItem=null) {
+// ตรวจ URL query params ที่ส่งมาจาก pm.html (บันทึกการซ่อม → เบิกอะไหล่คลังสต็อกกลาง) — เพิ่ม 2026-10-21
+// รูปแบบ: inventory.html?handoff=pm_repair&item_id=<uuid>&qty=<number>&note=<text>
+// ไม่หักสต็อกหรือข้าม FIFO/อนุมัติใดๆ — แค่เปิดฟอร์มเบิกวัสดุเดิมพร้อมเติมข้อมูลไว้ล่วงหน้าเท่านั้น
+function checkPmHandoff() {
+  try {
+    const p = new URLSearchParams(location.search);
+    if (p.get('handoff') !== 'pm_repair') return false;
+    const item_id = p.get('item_id') || '';
+    const qty = parseFloat(p.get('qty')||'0') || null;
+    const note = p.get('note') || '';
+    history.replaceState(null, '', location.pathname + location.hash);
+    navigateTo('inv-withdraw').then(() => {
+      const item = (_invItems||[]).find(i => String(i.id) === String(item_id));
+      if (item) { openWithdrawModal(item, qty, note); }
+      else { showToast('ไม่พบวัสดุที่ส่งมาจากระบบ PM ในคลัง — กรุณาเลือกเอง','error'); }
+    });
+    return true;
+  } catch(_) { return false; }
+}
+
+function openWithdrawModal(preItem=null, preQty=null, preNote=null) {
   const apv = isManager();
   const userFac = currentUser?.factory||'';
   // กรองวัสดุตามสิทธิ์โรงงาน — Admin/Manager เห็นทั้งหมด
@@ -4623,6 +4643,9 @@ function openWithdrawModal(preItem=null) {
   refreshIcons();
   if(preItem) setTimeout(() => {
     const sel = qs('#wo-item'); if(sel) { sel.value = preItem.id; woItemChange(); }
+    if(preQty)  { const q=qs('#wo-qty');     if(q) q.value = preQty; }
+    if(preNote) { const n=qs('#wo-purpose'); if(n) n.value = preNote; }
+    if(preQty)  woCalc();
   }, 120);
 }
 
@@ -5171,6 +5194,7 @@ function printSelectedLabels() {
       }
       await loadAllMasterData();
       startSessionTimer();
+      if (checkPmHandoff()) return;
       const lastPage = sessionStorage.getItem('_sn_inv_page') || 'inv-dashboard';
       navigateTo(lastPage);
       return;

@@ -177,29 +177,43 @@ let _pmTypes      = ['เปลี่ยนน้ำมันเครื่อ�
 let _pmFactories  = ['CDE','Propel','Sanon1','Sanon2','ทั่วไป']; // โหลดจาก pm_config
 let _pmParts      = [];  // pm_parts[]
 let _pmRepairs    = [];  // pm_repair_logs[]
+let _invItemsLite = [];  // inventory_items[] (id,code,name,unit,unit_price) — สำหรับ dropdown อะไหล่ที่เบิกจากคลังสต็อกกลาง
+let _invStockMap  = {};  // { item_id: current_quantity } จาก inventory_stock — ใช้โชว์ยอดคงเหลือเฉยๆ ไม่ได้หักจริง (หักที่ inventory.html)
 
 // =====================================================================
 // SECTION 2: MENU DEFINITIONS  (prefix: pm-)
 // =====================================================================
 const PM_MENUS = [
-  { key:'pm-dashboard',    label:'ตารางรอบ PM',        icon:'layout-dashboard' },
-  { key:'pm-log',          label:'บันทึก PM',           icon:'clipboard-check' },
-  { key:'pm-meter',        label:'บันทึกเลขมิเตอร์',   icon:'gauge' },
-  { key:'pm-meter-add',    label:'เพิ่มเครื่องจักร',    icon:'plus-circle', action:true },
-  { key:'pm-downtime',     label:'Downtime Log',        icon:'alert-triangle' },
-  { key:'pm-history',      label:'ประวัติต่อเครื่อง',   icon:'history' },
-  { key:'pm-items',        label:'รายการ PM',            icon:'list-checks' },
-  { key:'pm-repair',       label:'บันทึกซ่อม',          icon:'wrench' },
-  { key:'pm-parts',        label:'คลังอะไหล่',          icon:'package' },
-  { key:'pm-report',       label:'รายงาน PM',            icon:'file-bar-chart' },
-  { key:'pm-oee',          label:'OEE / Availability',   icon:'activity' },
-  { key:'pm-machines',     label:'เครื่องจักร',         icon:'settings-2' },
-  { key:'pm-settings',     label:'ตั้งค่า',              icon:'settings' },
+  { key:'pm-dashboard',    label:'ตารางรอบ PM',        icon:'layout-dashboard', group:'view' },
+  { key:'pm-log',          label:'บันทึก PM',           icon:'clipboard-check', group:'entry' },
+  { key:'pm-meter',        label:'บันทึกเลขมิเตอร์',   icon:'gauge', group:'entry' },
+  { key:'pm-meter-add',    label:'เพิ่มเครื่องจักร',    icon:'plus-circle', action:true, group:'entry' },
+  { key:'pm-downtime',     label:'Downtime Log',        icon:'alert-triangle', group:'entry' },
+  { key:'pm-history',      label:'ประวัติต่อเครื่อง',   icon:'history', group:'view' },
+  { key:'pm-items',        label:'รายการ PM',            icon:'list-checks', group:'manage' },
+  { key:'pm-repair',       label:'บันทึกซ่อม',          icon:'wrench', group:'manage' },
+  { key:'pm-parts',        label:'คลังอะไหล่',          icon:'package', group:'manage' },
+  { key:'pm-report',       label:'รายงาน PM',            icon:'file-bar-chart', group:'view' },
+  { key:'pm-parts-life',   label:'อายุการใช้งานอะไหล่', icon:'hourglass', group:'view' },
+  { key:'pm-oee',          label:'OEE / Availability',   icon:'activity', group:'view' },
+  { key:'pm-machines',     label:'เครื่องจักร',         icon:'settings-2', group:'manage' },
+  { key:'pm-settings',     label:'ตั้งค่า',              icon:'settings', group:'settings' },
+];
+
+// จัดหมวดหมู่เมนูไซด์บาร์ — เพิ่ม 2026-10-21 ตามคำขอคุณใหญ่ ให้แยกประเภทเมนูในไซด์บาร์ชัดเจนขึ้น
+// ⚠️ ใช้กลุ่ม/ชื่อกลุ่มเดียวกับ PM_PERM_GROUPS (หน้า "กำหนดสิทธิ์" ของแอดมิน ที่มีอยู่แล้วใน SECTION 15E ด้านล่าง)
+//    เพื่อให้แอดมินเห็นหมวดหมู่ตรงกันทั้งตอนกำหนดสิทธิ์และตอนใช้งานไซด์บาร์จริง — ถ้าแก้กลุ่มใดกลุ่มหนึ่ง ต้องแก้อีกจุดให้ตรงกันด้วย
+// ไม่มีกลุ่มไหนถูกบังคับแสดง — ถ้าผู้ใช้ไม่มีสิทธิ์เข้าเมนูใดในกลุ่มนั้นเลย กลุ่มนั้นจะถูกซ่อนไปเองอัตโนมัติ (ดูใน renderShell())
+const PM_MENU_GROUPS = [
+  { key:'view',     label:'ดูข้อมูล' },
+  { key:'entry',    label:'บันทึกข้อมูล' },
+  { key:'manage',   label:'จัดการ' },
+  { key:'settings', label:'ตั้งค่า' },
 ];
 
 const ROLE_DEFAULT_MENUS = {
   admin      : PM_MENUS.map(m=>m.key),
-  manager    : ['pm-dashboard','pm-log','pm-meter','pm-meter-add','pm-downtime','pm-history','pm-items','pm-repair','pm-parts','pm-report','pm-oee','pm-machines'],
+  manager    : ['pm-dashboard','pm-log','pm-meter','pm-meter-add','pm-downtime','pm-history','pm-items','pm-repair','pm-parts','pm-report','pm-parts-life','pm-oee','pm-machines'],
   // role อื่น ต้องได้รับสิทธิ์ pm- จาก admin โดยตรง ถึงจะเข้าได้
   user       : [],
   management : [],
@@ -464,22 +478,33 @@ function renderShell() {
   const menus = PM_MENUS.filter(m => canAccess(m.key));
   const mobileMenus = menus.slice(0, 4);
 
-  const sideLinks = menus.map(m => {
-    if (m.action) {
-      // เมนูที่เป็น action (ไม่ navigate — เปิด modal)
+  // จัดกลุ่มเมนูไซด์บาร์ตาม PM_MENU_GROUPS — เพิ่ม 2026-10-21 ตามคำขอคุณใหญ่
+  // ยังคง RBAC เดิมทุกจุด (กรองจาก `menus` ที่ผ่าน canAccess() มาแล้วด้านบน) — กลุ่มที่ไม่มีเมนูที่เข้าถึงได้เลยจะไม่แสดงหัวกลุ่ม
+  const sideLinks = PM_MENU_GROUPS.map((g, gi) => {
+    const groupMenus = menus.filter(m => m.group === g.key);
+    if (!groupMenus.length) return '';
+    const itemsHtml = groupMenus.map(m => {
+      if (m.action) {
+        // เมนูที่เป็น action (ไม่ navigate — เปิด modal)
+        return `
+        <a href="#" class="nav-link flex items-center gap-3 px-3 py-2 text-sm text-green-300 hover:text-green-100 ml-4"
+           onclick="event.preventDefault();navigateTo('pm-meter').then(()=>setTimeout(openAddMeterMachineModal,150))">
+          <i data-lucide="${m.icon}" class="w-3.5 h-3.5 flex-shrink-0"></i>
+          <span>${m.label}</span>
+        </a>`;
+      }
       return `
-      <a href="#" class="nav-link flex items-center gap-3 px-3 py-2 text-sm text-green-300 hover:text-green-100 ml-4"
-         onclick="event.preventDefault();navigateTo('pm-meter').then(()=>setTimeout(openAddMeterMachineModal,150))">
-        <i data-lucide="${m.icon}" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <a href="#" class="nav-link flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white"
+         data-page="${m.key}" onclick="navTo(event,'${m.key}')">
+        <i data-lucide="${m.icon}" class="w-4 h-4 flex-shrink-0"></i>
         <span>${m.label}</span>
       </a>`;
-    }
+    }).join('');
     return `
-    <a href="#" class="nav-link flex items-center gap-3 px-3 py-2.5 text-sm text-slate-300 hover:text-white"
-       data-page="${m.key}" onclick="navTo(event,'${m.key}')">
-      <i data-lucide="${m.icon}" class="w-4 h-4 flex-shrink-0"></i>
-      <span>${m.label}</span>
-    </a>`;
+    <div class="pm-nav-group">
+      <div class="text-slate-500 text-[10px] font-semibold uppercase tracking-widest px-3 ${gi===0?'pt-1':'pt-4'} pb-1">${g.label}</div>
+      ${itemsHtml}
+    </div>`;
   }).join('');
 
   const mobileLinks = mobileMenus.map(m => `
@@ -633,7 +658,7 @@ async function navigateTo(page) {
     'pm-meter':'บันทึกเลขมิเตอร์',
     'pm-downtime':'Downtime Log','pm-history':'ประวัติต่อเครื่อง',
     'pm-items':'รายการ PM','pm-repair':'บันทึกซ่อม','pm-parts':'คลังอะไหล่',
-    'pm-report':'รายงาน PM','pm-oee':'OEE / Availability',
+    'pm-report':'รายงาน PM','pm-parts-life':'อายุการใช้งานอะไหล่','pm-oee':'OEE / Availability',
     'pm-machines':'เครื่องจักร','pm-settings':'ตั้งค่า',
   };
   const titleEl = qs('#page-title');
@@ -654,6 +679,7 @@ async function navigateTo(page) {
     case 'pm-repair':      return renderRepairPage();
     case 'pm-parts':       return renderPartsPage();
     case 'pm-report':      return renderReportPage();
+    case 'pm-parts-life':  return renderPartsLifePage();
     case 'pm-oee':         return renderOeePage();
     case 'pm-machines':    return renderMachinesPage();
     case 'pm-settings':    return renderSettingsPage();
@@ -2074,12 +2100,18 @@ async function renderRepairPage() {
   const content = qs('#page-content');
   content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
   refreshIcons();
-  const [{ data: repairs }, { data: parts }] = await Promise.all([
+  const [{ data: repairs }, { data: parts }, invRes, stockRes] = await Promise.all([
     db.from('pm_repair_logs').select('*, pm_machines(name,factory)').order('repair_date',{ascending:false}).limit(200),
     db.from('pm_parts').select('*').eq('is_active',true).order('name'),
+    db.from('inventory_items').select('id,code,name,unit,unit_price').eq('status','active').order('name'),
+    db.from('inventory_stock').select('item_id,current_quantity'),
   ]);
   _pmRepairs = repairs || [];
   _pmParts   = parts   || [];
+  // อะไหล่จากคลังสต็อกกลาง (inventory.html) — ใช้แค่แสดงในดรอปดาวน์ ไม่ได้หักสต็อกที่นี่ (หักที่ inventory.html ตอนเบิกจริง)
+  _invItemsLite = (invRes?.data) || [];
+  _invStockMap  = {};
+  (stockRes?.data||[]).forEach(s => { _invStockMap[s.item_id] = s.current_quantity||0; });
   if (!_pmMachines.length) await loadPmData();
 
   // KPI
@@ -2151,40 +2183,58 @@ async function renderRepairPage() {
 }
 
 let _repairPartRows = 0;
-function addRepairPartRow(partId='', qty=1, price=0) {
+// รองรับ 3 แหล่งอะไหล่: pm: (คลังอะไหล่ PM เดิม) / inv: (คลังสต็อกกลาง inventory.html) / freetext (พิมพ์ชื่อเอง — ของที่ไม่อยู่ในคลังไหนเลย เช่น ลูกปืน สายพาน ที่รู้ตอนถอดเครื่อง)
+// เพิ่ม 2026-10-21 ตามคำขอคุณใหญ่ — เรื่องอายุการใช้งานอะไหล่ + เชื่อมกับคลังสต็อกกลาง
+function addRepairPartRow(selVal='', qty=1, price=0) {
   _repairPartRows++;
-  const partOpts = _pmParts.map(p =>
-    `<option value="${p.id}" data-price="${p.unit_price||0}" ${p.id===partId?'selected':''}>${escapeHtml(p.name)} (${fmtNum(p.stock_qty,1)} ${p.unit||'ชิ้น'})</option>`
+  const pmOpts = _pmParts.map(p =>
+    `<option value="pm:${p.id}" data-price="${p.unit_price||0}" ${selVal===`pm:${p.id}`?'selected':''}>${escapeHtml(p.name)} (${fmtNum(p.stock_qty,1)} ${p.unit||'ชิ้น'})</option>`
   ).join('');
+  const invOpts = (_invItemsLite||[]).map(i =>
+    `<option value="inv:${i.id}" data-price="${i.unit_price||0}" ${selVal===`inv:${i.id}`?'selected':''}>${escapeHtml(i.code?i.code+' — ':'')}${escapeHtml(i.name)} (${fmtNum(_invStockMap[i.id]||0,1)} ${i.unit||''})</option>`
+  ).join('');
+  const isFree = selVal === 'freetext';
   const row = document.createElement('tr');
   row.id = `rp-row-${_repairPartRows}`;
-  row.className = 'border-b';
+  row.className = 'border-b align-top';
   row.innerHTML = `
     <td class="px-2 py-1.5">
-      <select onchange="onRepairPartChange(this)" class="w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-400">
-        <option value="">-- เลือกอะไหล่ --</option>${partOpts}
+      <select onchange="onRepairPartChange(this)" class="rp-select w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-400">
+        <option value="">-- เลือกอะไหล่ --</option>
+        <option value="freetext" ${isFree?'selected':''}>✏️ ไม่อยู่ในคลัง / พิมพ์ชื่อเอง</option>
+        ${pmOpts?`<optgroup label="คลังอะไหล่ PM">${pmOpts}</optgroup>`:''}
+        ${invOpts?`<optgroup label="คลังสต็อกกลาง">${invOpts}</optgroup>`:''}
       </select>
+      <input type="text" placeholder="พิมพ์ชื่ออะไหล่ เช่น ลูกปืนสายพาน" onchange="calcRepairTotal()"
+        class="rp-freetext-name mt-1 w-full border rounded px-2 py-1 text-xs ${isFree?'':'hidden'}" />
     </td>
-    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0.01" value="${qty}" onchange="calcRepairTotal()" class="w-20 border rounded px-2 py-1 text-xs text-center" /></td>
-    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0" value="${price}" onchange="calcRepairTotal()" class="w-24 border rounded px-2 py-1 text-xs text-center rp-price" /></td>
+    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0.01" value="${qty}" onchange="calcRepairTotal()" class="rp-qty w-20 border rounded px-2 py-1 text-xs text-center" /></td>
+    <td class="px-2 py-1.5"><input type="number" step="0.01" min="0" value="${price}" onchange="calcRepairTotal()" class="rp-price w-24 border rounded px-2 py-1 text-xs text-center" /></td>
     <td class="px-2 py-1.5 text-center"><button onclick="this.closest('tr').remove();calcRepairTotal()" class="text-red-400 hover:text-red-600"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>`;
   qs('#repair-parts-body')?.appendChild(row);
   refreshIcons();
 }
 
 function onRepairPartChange(sel) {
-  const opt = sel.options[sel.selectedIndex];
-  const price = parseFloat(opt.dataset.price||0);
-  const priceInput = sel.closest('tr')?.querySelector('.rp-price');
-  if (priceInput) priceInput.value = price;
+  const tr = sel.closest('tr');
+  const freetextInput = tr?.querySelector('.rp-freetext-name');
+  const priceInput    = tr?.querySelector('.rp-price');
+  if (sel.value === 'freetext') {
+    freetextInput?.classList.remove('hidden');
+    freetextInput?.focus();
+  } else {
+    freetextInput?.classList.add('hidden');
+    const opt = sel.options[sel.selectedIndex];
+    if (sel.value && priceInput) priceInput.value = parseFloat(opt?.dataset.price||0);
+  }
   calcRepairTotal();
 }
 
 function calcRepairTotal() {
   let partsTotal = 0;
   qs('#repair-parts-body')?.querySelectorAll('tr').forEach(tr => {
-    const qty   = parseFloat(tr.querySelectorAll('input')[0]?.value||0)||0;
-    const price = parseFloat(tr.querySelectorAll('input')[1]?.value||0)||0;
+    const qty   = parseFloat(tr.querySelector('.rp-qty')?.value||0)||0;
+    const price = parseFloat(tr.querySelector('.rp-price')?.value||0)||0;
     partsTotal += qty * price;
   });
   const labor = parseFloat(qs('#repair-labor')?.value||0)||0;
@@ -2201,7 +2251,7 @@ function repairFormHtml(r=null) {
     <div class="grid grid-cols-2 gap-3">
       <div class="col-span-2">
         <label class="block text-sm font-medium text-gray-700 mb-1">เครื่องจักร *</label>
-        <select id="repair-machine" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+        <select id="repair-machine" onchange="onRepairMachineChange()" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
           <option value="">-- เลือกเครื่องจักร --</option>${machineOpts}
         </select>
       </div>
@@ -2213,6 +2263,14 @@ function repairFormHtml(r=null) {
         <label class="block text-sm font-medium text-gray-700 mb-1">ประเภทการซ่อม</label>
         <select id="repair-type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">${typeOpts}</select>
       </div>
+    </div>
+    <div class="border border-dashed border-amber-300 bg-amber-50/60 rounded-lg p-3">
+      <div class="flex items-center gap-2 mb-1">
+        <label class="text-sm font-medium text-amber-800">ชั่วโมงเครื่องจักรสะสม ณ ตอนซ่อม (ชม.)</label>
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">+ ใหม่</span>
+      </div>
+      <input id="repair-meter" type="number" step="0.1" min="0" value="${r?.meter_at_repair??''}" ${r?.meter_at_repair!=null?'data-touched="1"':''} oninput="this.dataset.touched='1'" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="0.0" />
+      <p id="repair-meter-hint" class="text-xs text-gray-400 mt-1">เลือกเครื่องจักรก่อน เพื่อดึงเลขมิเตอร์ล่าสุดอัตโนมัติ — แก้ไขเองได้ถ้าค่าจริงต่างจากนี้ ใช้คำนวณ "อายุการใช้งาน" ของอะไหล่ที่เปลี่ยนในครั้งนี้</p>
     </div>
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-1">อาการ / ปัญหาที่พบ</label>
@@ -2281,35 +2339,87 @@ function openAddRepairModal() {
   refreshIcons();
 }
 
+// ดึงเลขมิเตอร์ล่าสุดของเครื่องที่เลือกมาใส่ช่อง "ชั่วโมงเครื่องจักรสะสม ณ ตอนซ่อม" อัตโนมัติ (แก้ไขเองได้ — ถ้าแก้แล้วจะไม่ถูกเขียนทับอีก)
+function onRepairMachineChange() {
+  const sel = qs('#repair-machine');
+  const meterInput = qs('#repair-meter');
+  const hint = qs('#repair-meter-hint');
+  const m = _pmMachines.find(x => x.id === sel?.value);
+  if (!m) return;
+  if (meterInput && !meterInput.dataset.touched) {
+    meterInput.value = m.current_meter != null ? Number(m.current_meter).toFixed(1) : '';
+  }
+  if (hint) {
+    hint.textContent = m.current_meter != null
+      ? `📟 ดึงอัตโนมัติจากมิเตอร์ล่าสุดของเครื่อง (${fmtNum(m.current_meter,1)} ชม.) — แก้ไขเองได้ถ้าค่าจริงต่างจากนี้`
+      : 'เครื่องนี้ยังไม่มีข้อมูลมิเตอร์ — กรอกเองได้ (เว้นว่างได้ถ้าไม่ทราบ)';
+  }
+}
+
 async function saveRepair(id) {
   const machine_id = qs('#repair-machine')?.value;
   const repair_date = qs('#repair-date')?.value;
   if (!machine_id) { showToast('กรุณาเลือกเครื่องจักร','error'); return; }
   if (!repair_date) { showToast('กรุณากรอกวันที่','error'); return; }
 
-  // รวบรวมอะไหล่
+  // ถ้าเป็นการแก้ไขบันทึกเดิม — ดึงจำนวนอะไหล่คลัง PM ที่บันทึกนี้เคยหักสต็อกไปแล้ว มาคิด "คืนสต็อกเดิมก่อน" ตอนเช็คพอ/ไม่พอ
+  // (กันบั๊ก: ถ้าไม่ทำแบบนี้ แก้ไขบันทึกเดิมซ้ำจะโดนเช็คว่าสต็อกไม่พอ ทั้งที่จริงๆ คือของที่หักไปแล้วตั้งแต่ตอนบันทึกครั้งแรก)
+  let oldPmQtyMap = {}; // part_id -> จำนวนที่เคยหักไปแล้วจากบันทึกนี้ (รวมกรณีมีอะไหล่ชิ้นเดียวกันหลายแถว)
+  if (id) {
+    const { data: oldParts } = await db.from('pm_repair_parts').select('part_id,qty_used').eq('repair_id', id);
+    (oldParts||[]).forEach(p => {
+      if (!p.part_id) return;
+      oldPmQtyMap[p.part_id] = (oldPmQtyMap[p.part_id]||0) + (p.qty_used||0);
+    });
+  }
+
+  // รวบรวมอะไหล่ — รองรับ 3 แหล่ง: คลังอะไหล่ PM (pm:) / คลังสต็อกกลาง (inv:) / พิมพ์ชื่อเอง (freetext)
   const partRows = [];
   let partsCost = 0;
-  let hasStockError = false;
+  const invHandoffs = []; // อะไหล่ที่มาจากคลังสต็อกกลาง — เสนอปุ่มส่งต่อไปเบิกหลังบันทึกสำเร็จ
+  const newPmQtyMap = {}; // part_id -> จำนวนรวมที่ต้องการใช้ในฟอร์มตอนนี้
   qs('#repair-parts-body')?.querySelectorAll('tr').forEach(tr => {
-    const sel   = tr.querySelector('select');
-    const inputs = tr.querySelectorAll('input');
-    const partId = sel?.value;
-    const qty    = parseFloat(inputs[0]?.value||0)||0;
-    const price  = parseFloat(inputs[1]?.value||0)||0;
-    if (partId && qty > 0) {
-      const part = _pmParts.find(p => p.id === partId);
-      if (part && part.stock_qty < qty) {
-        showToast(`สต็อก "${part.name}" ไม่เพียงพอ (มี ${fmtNum(part.stock_qty,2)}, ต้องการ ${fmtNum(qty,2)})`, 'error');
-        hasStockError = true;
-      }
-      partRows.push({ part_id: partId, part_name: _pmParts.find(p=>p.id===partId)?.name||'', qty_used: qty, unit_price: price });
+    const sel   = tr.querySelector('.rp-select');
+    const qty   = parseFloat(tr.querySelector('.rp-qty')?.value||0)||0;
+    const price = parseFloat(tr.querySelector('.rp-price')?.value||0)||0;
+    const val   = sel?.value||'';
+    if (!val || qty <= 0) return;
+
+    if (val === 'freetext') {
+      const name = tr.querySelector('.rp-freetext-name')?.value?.trim();
+      if (!name) return; // ไม่กรอกชื่อ ก็ไม่บันทึกแถวนี้
+      partRows.push({ part_id:null, inventory_item_id:null, part_name:name, qty_used:qty, unit_price:price });
       partsCost += qty * price;
+    } else if (val.startsWith('pm:')) {
+      const partId = val.slice(3);
+      const part = _pmParts.find(p => p.id === partId);
+      partRows.push({ part_id: partId, inventory_item_id:null, part_name: part?.name||'', qty_used: qty, unit_price: price });
+      partsCost += qty * price;
+      newPmQtyMap[partId] = (newPmQtyMap[partId]||0) + qty;
+    } else if (val.startsWith('inv:')) {
+      const invId = val.slice(4);
+      const item = (_invItemsLite||[]).find(i => i.id === invId);
+      partRows.push({ part_id:null, inventory_item_id: invId, part_name: item?.name||'', qty_used: qty, unit_price: price });
+      partsCost += qty * price;
+      invHandoffs.push({ item_id: invId, qty, name: item?.name||'' });
+    }
+  });
+
+  // เช็คสต็อกพอไหม — เทียบจำนวนที่ต้องการใหม่ กับ "สต็อกปัจจุบัน + จำนวนที่บันทึกนี้เคยหักไปแล้ว" (คืนของเดิมก่อนเทียบ)
+  let hasStockError = false;
+  Object.keys(newPmQtyMap).forEach(partId => {
+    const part = _pmParts.find(p => p.id === partId);
+    if (!part) return;
+    const available = (part.stock_qty||0) + (oldPmQtyMap[partId]||0);
+    if (available < newPmQtyMap[partId]) {
+      showToast(`สต็อก "${part.name}" ไม่เพียงพอ (มี ${fmtNum(available,2)}, ต้องการ ${fmtNum(newPmQtyMap[partId],2)})`, 'error');
+      hasStockError = true;
     }
   });
   if (hasStockError) return;
 
   const laborCost = parseFloat(qs('#repair-labor')?.value||0)||0;
+  const meterVal = qs('#repair-meter')?.value;
   const data = {
     machine_id, repair_date,
     type:         qs('#repair-type')?.value||'breakdown',
@@ -2318,6 +2428,7 @@ async function saveRepair(id) {
     action_taken: qs('#repair-action')?.value?.trim()||null,
     technician:   qs('#repair-tech')?.value?.trim()||null,
     duration_hours: parseFloat(qs('#repair-duration')?.value||0)||null,
+    meter_at_repair: (meterVal!==''&&meterVal!=null) ? (parseFloat(meterVal)||null) : null,
     labor_cost:   laborCost,
     parts_cost:   partsCost,
     total_cost:   laborCost + partsCost,
@@ -2336,38 +2447,100 @@ async function saveRepair(id) {
     await db.from('pm_repair_parts').delete().eq('repair_id', id);
   }
 
-  // บันทึกอะไหล่ + หักสต็อก
+  // บันทึกอะไหล่ (หักสต็อกเฉพาะอะไหล่จากคลัง PM เท่านั้น — อะไหล่จากคลังสต็อกกลางให้ไปเบิกที่ inventory.html เอง ไม่หักซ้ำที่นี่)
   if (partRows.length) {
     const rp = partRows.map(r => ({ ...r, repair_id: repairId }));
     await db.from('pm_repair_parts').insert(rp);
-    // หักสต็อก
-    await Promise.all(partRows.map(async r => {
-      const part = _pmParts.find(p => p.id === r.part_id);
-      if (!part) return;
-      const newQty = (part.stock_qty||0) - r.qty_used;
-      await db.from('pm_parts').update({ stock_qty: newQty }).eq('id', r.part_id);
-      await db.from('pm_parts_stock_log').insert({
-        part_id: r.part_id, type:'out', qty: r.qty_used,
-        unit_price: r.unit_price, reference: `ซ่อม ${repair_date}`, done_by: currentUser?.username
-      });
-    }));
   }
+
+  // ปรับสต็อก pm_parts ตาม "ส่วนต่าง" ระหว่างจำนวนเดิม (oldPmQtyMap) กับจำนวนใหม่ (newPmQtyMap) ของแต่ละอะไหล่
+  // บันทึกใหม่ (ไม่มี id) → oldQty=0 เสมอ จึงหักสต็อกเต็มจำนวนเหมือนเดิม / แก้ไขบันทึกเดิม → หักหรือคืนเฉพาะส่วนต่างเท่านั้น กันหักซ้ำซ้อน
+  const allPmPartIds = new Set([...Object.keys(oldPmQtyMap), ...Object.keys(newPmQtyMap)]);
+  await Promise.all([...allPmPartIds].map(async partId => {
+    const part = _pmParts.find(p => p.id === partId);
+    if (!part) return;
+    const oldQty = oldPmQtyMap[partId] || 0;
+    const newQty = newPmQtyMap[partId] || 0;
+    const delta = newQty - oldQty; // > 0 = ต้องหักสต็อกเพิ่ม, < 0 = ต้องคืนสต็อก, = 0 = ไม่ต้องแก้อะไร
+    if (delta === 0) return;
+    const newStock = (part.stock_qty||0) - delta;
+    const rowForPrice = partRows.find(r => r.part_id === partId);
+    await db.from('pm_parts').update({ stock_qty: newStock }).eq('id', partId);
+    await db.from('pm_parts_stock_log').insert({
+      part_id: partId, type: delta>0?'out':'in', qty: Math.abs(delta),
+      unit_price: rowForPrice?.unit_price||0,
+      reference: `${id?'แก้ไข':''}ซ่อม ${repair_date}`, done_by: currentUser?.username
+    });
+  }));
 
   closeModal();
   showToast('บันทึกการซ่อมสำเร็จ','success');
   renderRepairPage();
+
+  // มีอะไหล่ที่เบิกจากคลังสต็อกกลาง — เสนอปุ่มส่งต่อไปเบิกที่ inventory.html พร้อมข้อมูลเติมไว้
+  if (invHandoffs.length) {
+    setTimeout(() => openRepairHandoffModal(invHandoffs, repair_date), 300);
+  }
+}
+
+// แสดงรายการอะไหล่ที่ต้องไปเบิกจากคลังสต็อกกลาง หลังบันทึกการซ่อมสำเร็จ — กดปุ่มแล้วเปิด inventory.html แท็บใหม่พร้อมข้อมูลเติมไว้
+function openRepairHandoffModal(items, repairDate) {
+  const rows = items.map(it => `
+    <div class="flex items-center justify-between gap-3 border rounded-lg px-3 py-2">
+      <div class="text-sm">
+        <div class="font-medium text-gray-700">${escapeHtml(it.name||'-')}</div>
+        <div class="text-xs text-gray-400">จำนวน ${fmtNum(it.qty,2)}</div>
+      </div>
+      <button onclick="handoffToInventoryWithdraw('${it.item_id}',${it.qty},'ใช้ซ่อม ${escapeHtml(repairDate)}')"
+        class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 whitespace-nowrap">
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i> ไปเบิกวัสดุ
+      </button>
+    </div>`).join('<div class="h-2"></div>');
+  openModal('🔗 มีอะไหล่จากคลังสต็อกกลาง',
+    `<div>
+      <p class="text-sm text-gray-500 mb-3">รายการซ่อมนี้ใช้อะไหล่จากคลังสต็อกกลาง — กด "ไปเบิกวัสดุ" เพื่อไปหน้าเบิกของระบบคลังสต็อก ข้อมูลวัสดุและจำนวนจะเติมไว้ให้อัตโนมัติ</p>
+      ${rows}
+    </div>`,
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ปิด</button>`,
+    '480px');
+  refreshIcons();
+}
+
+// ส่งต่อไปหน้าเบิกวัสดุของ inventory.html พร้อมข้อมูลเติมไว้ (ไม่หักสต็อกที่นี่ — ให้ inventory.html จัดการ FIFO/อนุมัติเองทั้งหมด)
+function handoffToInventoryWithdraw(itemId, qty, note) {
+  if (currentUser) {
+    const base = {
+      id: currentUser.id, username: currentUser.username,
+      display_name: currentUser.display_name, full_name: currentUser.full_name,
+      role: currentUser.role, status: currentUser.status,
+      factory: currentUser.factory || '', department: currentUser.department || '',
+      _extraManage: currentUser._extraManage || [],
+    };
+    try { sessionStorage.setItem('_sn_pm_sess',  JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_inv_sess', JSON.stringify(base)); } catch(_) {}
+    try { sessionStorage.setItem('_sn_sess', JSON.stringify({ user: base, page: null, loginAt: Date.now() })); } catch(_) {}
+  }
+  const params = new URLSearchParams({ handoff:'pm_repair', item_id:itemId, qty:String(qty||''), note:note||'' });
+  window.open('inventory.html?'+params.toString(), '_blank');
 }
 
 async function openRepairDetailModal(id) {
   const r = _pmRepairs.find(x => x.id === id);
   if (!r) return;
-  const { data: parts } = await db.from('pm_repair_parts').select('*, pm_parts(name,unit)').eq('repair_id', id);
+  const { data: parts } = await db.from('pm_repair_parts').select('*, pm_parts(name,unit), inventory_items(name,unit)').eq('repair_id', id);
   const machine = _pmMachines.find(m => m.id === r.machine_id);
   const partsHtml = (parts||[]).length === 0 ? '<div class="text-gray-400 text-sm">ไม่มีอะไหล่</div>'
-    : (parts||[]).map(p => `<div class="flex justify-between text-sm py-1 border-b">
-        <span>${escapeHtml(p.part_name||p.pm_parts?.name||'-')}</span>
-        <span class="text-gray-600">${fmtNum(p.qty_used,2)} ${p.pm_parts?.unit||'ชิ้น'} × ${fmtNum(p.unit_price,2)} ฿ = <strong>${fmtNum(p.qty_used*p.unit_price,2)} ฿</strong></span>
-      </div>`).join('');
+    : (parts||[]).map(p => {
+        const name = p.part_name || p.pm_parts?.name || p.inventory_items?.name || '-';
+        const unit = p.pm_parts?.unit || p.inventory_items?.unit || 'ชิ้น';
+        const srcBadge = p.inventory_item_id
+          ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 ml-1">คลังสต็อกกลาง</span>'
+          : (!p.part_id ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 ml-1">พิมพ์เอง</span>' : '');
+        return `<div class="flex justify-between text-sm py-1 border-b">
+        <span>${escapeHtml(name)}${srcBadge}</span>
+        <span class="text-gray-600">${fmtNum(p.qty_used,2)} ${unit} × ${fmtNum(p.unit_price,2)} ฿ = <strong>${fmtNum(p.qty_used*p.unit_price,2)} ฿</strong></span>
+      </div>`;
+      }).join('');
   const typeBadge = r.type === 'breakdown'
     ? `<span class="badge-overdue px-2 py-0.5 rounded-full text-xs">Breakdown</span>`
     : r.type === 'planned'
@@ -2380,6 +2553,7 @@ async function openRepairDetailModal(id) {
         <span class="text-gray-500">${fmtDate(r.repair_date)}</span>
         ${r.technician?`<span class="text-gray-500">ช่าง: ${escapeHtml(r.technician)}</span>`:''}
         ${r.duration_hours?`<span class="text-gray-500">ใช้เวลา ${fmtNum(r.duration_hours,1)} ชม.</span>`:''}
+        ${r.meter_at_repair!=null?`<span class="text-gray-500">มิเตอร์ ณ ตอนซ่อม: ${fmtNum(r.meter_at_repair,1)} ชม.</span>`:''}
       </div>
       ${r.symptoms?`<div><span class="font-medium text-gray-700">อาการ:</span> ${escapeHtml(r.symptoms)}</div>`:''}
       ${r.root_cause?`<div><span class="font-medium text-gray-700">สาเหตุ:</span> ${escapeHtml(r.root_cause)}</div>`:''}
@@ -2398,6 +2572,37 @@ async function openRepairDetailModal(id) {
     `${isManager()?`<button onclick="closeModal();openEditRepairModal('${id}')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600">แก้ไข</button>`:''}
      <button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ปิด</button>`,
     '560px');
+}
+
+// แก้ไขบันทึกการซ่อมที่มีอยู่แล้ว — เพิ่ม 2026-10-21 (เดิมปุ่ม "แก้ไข" เรียกฟังก์ชันนี้แต่ไม่เคยมีจริง กดแล้วไม่มีอะไรเกิดขึ้น)
+// ใช้บ่อยโดยเฉพาะกับบันทึกเก่าที่ยังไม่มี "มิเตอร์ ณ ตอนซ่อม" — เปิดแก้ไขแล้วกรอกย้อนหลังได้ที่นี่
+function openEditRepairModal(id) {
+  const r = _pmRepairs.find(x => x.id === id);
+  if (!r) { showToast('ไม่พบข้อมูลการซ่อมนี้','error'); return; }
+  _repairPartRows = 0;
+  openModal('แก้ไขบันทึกการซ่อม', repairFormHtml(r),
+    `<button onclick="closeModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">ยกเลิก</button>
+     <button onclick="saveRepair('${id}')" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">บันทึก</button>`,
+    '640px');
+  refreshIcons();
+  loadRepairPartsForEdit(id);
+}
+
+// เติมแถวอะไหล่เดิมของบันทึกการซ่อมนี้กลับเข้าฟอร์มแก้ไข — รองรับทั้ง 3 แหล่ง (pm/inv/freetext)
+async function loadRepairPartsForEdit(id) {
+  const { data: parts, error } = await db.from('pm_repair_parts').select('*').eq('repair_id', id);
+  if (error) { showToast('โหลดรายการอะไหล่ไม่สำเร็จ: '+error.message,'error'); return; }
+  (parts||[]).forEach(p => {
+    const selVal = p.inventory_item_id ? `inv:${p.inventory_item_id}` : (p.part_id ? `pm:${p.part_id}` : 'freetext');
+    addRepairPartRow(selVal, p.qty_used, p.unit_price);
+    if (selVal === 'freetext') {
+      const lastRow = qs('#repair-parts-body')?.lastElementChild;
+      const nameInput = lastRow?.querySelector('.rp-freetext-name');
+      if (nameInput) nameInput.value = p.part_name || '';
+    }
+  });
+  calcRepairTotal();
+  refreshIcons();
 }
 
 // =====================================================================
@@ -3508,6 +3713,216 @@ function printReport() {
 }
 
 // =====================================================================
+// SECTION 16B2: รายงานอายุการใช้งานอะไหล่ — เพิ่ม 2026-10-21 ตามคำขอคุณใหญ่
+// อายุการใช้งาน = ผลต่างระหว่างการซ่อม/เปลี่ยนอะไหล่ "ชื่อเดียวกัน" บน "เครื่องเดียวกัน" 2 ครั้งติดกัน
+// จัดกลุ่มด้วยชื่ออะไหล่ (part_name) ไม่ใช่ part_id/inventory_item_id — เพื่อให้ใช้ได้กับอะไหล่ที่พิมพ์ชื่อเอง (ไม่อยู่ในคลังไหนเลย) ด้วย
+// วัดอายุทั้ง 2 แบบพร้อมกัน: ชั่วโมงมิเตอร์สะสม (แม่นยำกว่า) และจำนวนวันตามปฏิทิน (ใช้ได้แม้ไม่มีมิเตอร์)
+// =====================================================================
+let _partsLifeSummary  = []; // cache สรุปทุกเครื่อง/ทุกอะไหล่ (ไม่กรอง) — ใช้ re-render ตอนกรองเครื่องจักรโดยไม่ query DB ซ้ำ
+let _partsLifeMachines = []; // [[machine_id, machine_name], ...] เฉพาะเครื่องที่มีข้อมูลในรายงานนี้ — สำหรับ dropdown กรอง
+
+async function renderPartsLifePage() {
+  const content = qs('#page-content');
+  content.innerHTML = `<div class="flex items-center justify-center py-20 text-gray-400 text-sm"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i>กำลังโหลด…</div>`;
+  refreshIcons();
+
+  const { data: logs, error } = await db.from('pm_repair_logs')
+    .select('id,repair_date,meter_at_repair,machine_id,pm_machines(name,factory),pm_repair_parts(part_name,qty_used,part_id,inventory_item_id)')
+    .order('repair_date',{ascending:true});
+  if (error) { content.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(error.message)}</div>`; return; }
+
+  // แตกแต่ละ "อะไหล่ที่ใช้" ในแต่ละครั้งซ่อม ให้เป็นแถวเดียว ผูกกับวันที่/มิเตอร์ของการซ่อมครั้งนั้น
+  // หมายเหตุ: บันทึกการซ่อมที่ "ไม่ได้กรอกอะไหล่ที่ใช้" เลย (เช่น กรอกแค่อาการ/วิธีแก้ไข ไม่เพิ่มแถวอะไหล่) จะไม่มีข้อมูลมาขึ้นหน้านี้ เพราะไม่มีอะไหล่ให้คำนวณอายุ
+  const flat = [];
+  (logs||[]).forEach(l => {
+    (l.pm_repair_parts||[]).forEach(p => {
+      const name = (p.part_name||'').trim();
+      if (!name) return;
+      flat.push({
+        machine_id: l.machine_id,
+        machine_name: l.pm_machines?.name || '-',
+        part_name: name,
+        repair_date: l.repair_date,
+        meter: l.meter_at_repair != null ? Number(l.meter_at_repair) : null,
+      });
+    });
+  });
+
+  // จัดกลุ่ม: เครื่องเดียวกัน + ชื่ออะไหล่เดียวกัน
+  const groups = {};
+  flat.forEach(r => {
+    const key = r.machine_id + '||' + r.part_name.toLowerCase();
+    (groups[key] = groups[key] || []).push(r);
+  });
+
+  const DAY_MS = 86400000;
+  const summary = Object.values(groups).map(list => {
+    list.sort((a,b) => (a.repair_date||'').localeCompare(b.repair_date||''));
+    const deltas = [];
+    for (let i=1;i<list.length;i++) {
+      const prev = list[i-1], cur = list[i];
+      const meterDelta = (prev.meter!=null && cur.meter!=null && cur.meter>=prev.meter) ? (cur.meter-prev.meter) : null;
+      const days = Math.round((new Date(cur.repair_date) - new Date(prev.repair_date))/DAY_MS);
+      deltas.push({ meterDelta, dayDelta: (isFinite(days)&&days>=0)?days:null });
+    }
+    const last = list[list.length-1];
+    const lastDelta = deltas[deltas.length-1] || null;
+    const meterDeltas = deltas.map(d=>d.meterDelta).filter(v=>v!=null);
+    const dayDeltas   = deltas.map(d=>d.dayDelta).filter(v=>v!=null);
+    const avgMeter = meterDeltas.length ? meterDeltas.reduce((s,v)=>s+v,0)/meterDeltas.length : null;
+    const avgDay   = dayDeltas.length ? dayDeltas.reduce((s,v)=>s+v,0)/dayDeltas.length : null;
+
+    let trend = 'neutral', trendLabel = 'ข้อมูลไม่พอ';
+    if (lastDelta) {
+      const lastVal = lastDelta.meterDelta!=null ? lastDelta.meterDelta : lastDelta.dayDelta;
+      const avgVal  = lastDelta.meterDelta!=null ? avgMeter : avgDay;
+      if (lastVal!=null && avgVal) {
+        const pct = Math.round((avgVal-lastVal)/avgVal*100);
+        if (pct > 30) { trend='serious'; trendLabel = `สั้นกว่าปกติ ${pct}%`; }
+        else { trend='good'; trendLabel = 'ปกติ'; }
+      }
+    }
+
+    return {
+      machine_id: last.machine_id, machine_name: last.machine_name,
+      part_name: last.part_name, last_date: last.repair_date,
+      count: list.length,
+      lastMeter: lastDelta?.meterDelta ?? null, lastDay: lastDelta?.dayDelta ?? null,
+      avgMeter, avgDay, trend, trendLabel, history: list,
+    };
+  }).sort((a,b) => (b.last_date||'').localeCompare(a.last_date||''));
+
+  _partsLifeSummary = summary;
+  const machMap = new Map();
+  summary.forEach(g => { if (g.machine_id && !machMap.has(g.machine_id)) machMap.set(g.machine_id, g.machine_name); });
+  _partsLifeMachines = [...machMap.entries()].sort((a,b) => (a[1]||'').localeCompare(b[1]||'','th'));
+
+  content.innerHTML = `
+  <div class="bg-white rounded-xl shadow-sm p-3 mb-4 flex items-center gap-2 flex-wrap">
+    <label class="text-xs text-gray-500">🏭 แยกตามเครื่องจักร:</label>
+    <select id="pl-filter-machine" onchange="renderPartsLifeBody()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+      <option value="">ทุกเครื่อง</option>
+      ${_partsLifeMachines.map(([mid,mname])=>`<option value="${mid}">${escapeHtml(mname)}</option>`).join('')}
+    </select>
+  </div>
+  <div id="pl-body"></div>`;
+  refreshIcons();
+  renderPartsLifeBody();
+}
+
+// เรนเดอร์สต็อกไทล์ + ตาราง ตามตัวกรองเครื่องจักรปัจจุบัน — เรียกซ้ำได้โดยไม่ query DB ใหม่ (ใช้ cache _partsLifeSummary)
+function renderPartsLifeBody() {
+  const body = qs('#pl-body');
+  if (!body) return;
+  const filterId = qs('#pl-filter-machine')?.value || '';
+  const summary = filterId ? _partsLifeSummary.filter(g => g.machine_id === filterId) : _partsLifeSummary;
+
+  const withLifespan = summary.filter(g => g.count >= 2);
+  const totalCalc = withLifespan.length;
+  const avgs = withLifespan.map(g=>g.avgMeter).filter(v=>v!=null);
+  const avgAllMeter = avgs.length ? avgs.reduce((s,v)=>s+v,0)/avgs.length : null;
+  const avgsDay = withLifespan.map(g=>g.avgDay).filter(v=>v!=null);
+  const avgAllDay = avgsDay.length ? avgsDay.reduce((s,v)=>s+v,0)/avgsDay.length : null;
+  const shortCount = withLifespan.filter(g => g.trend==='serious').length;
+
+  const rowsHtml = summary.length === 0
+    ? `<tr><td colspan="6" class="text-center py-10 text-gray-400">${filterId?'เครื่องนี้ยังไม่มีข้อมูลประวัติการซ่อมที่มีชื่ออะไหล่':'ยังไม่มีข้อมูลประวัติการซ่อมที่มีชื่ออะไหล่ — กรอกอะไหล่ที่ใช้ในฟอร์ม "บันทึกการซ่อม" เพื่อให้คำนวณได้'}</td></tr>`
+    : summary.map((g,idx) => {
+        const rid = 'pl-'+idx;
+        const lastCell = g.count>=2
+          ? `${g.lastMeter!=null?fmtNum(g.lastMeter,0)+' ชม.':'-'}${g.lastDay!=null?`<br><span class="text-gray-400 text-xs">≈ ${fmtNum(g.lastDay,0)} วัน</span>`:''}`
+          : '-';
+        const avgCell = g.count>=2
+          ? `${g.avgMeter!=null?fmtNum(g.avgMeter,0)+' ชม.':'-'}${g.avgDay!=null?`<br><span class="text-gray-400 text-xs">≈ ${fmtNum(g.avgDay,0)} วัน</span>`:''}`
+          : '-';
+        const badge = g.count<2
+          ? `<span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">ข้อมูลไม่พอ</span>`
+          : g.trend==='serious'
+          ? `<span class="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700">${escapeHtml(g.trendLabel)}</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">ปกติ</span>`;
+        return `<tr class="border-b hover:bg-gray-50 cursor-pointer" onclick="togglePartsLifeDetail('${rid}')">
+          <td class="px-3 py-2">
+            <div class="text-sm font-semibold text-gray-800">${escapeHtml(g.part_name)}</div>
+            <div class="text-xs text-gray-400">${escapeHtml(g.machine_name)}</div>
+            <div class="text-[10px] text-amber-600 mt-0.5">▸ คลิกดูประวัติทั้งหมด</div>
+          </td>
+          <td class="px-3 py-2 text-sm text-center">${fmtDate(g.last_date)}</td>
+          <td class="px-3 py-2 text-sm text-center">${lastCell}</td>
+          <td class="px-3 py-2 text-sm text-center">${avgCell}</td>
+          <td class="px-3 py-2 text-sm text-center">${g.count} ครั้ง</td>
+          <td class="px-3 py-2 text-center">${badge}</td>
+        </tr>
+        <tr id="${rid}" class="hidden bg-amber-50/30">
+          <td colspan="6" class="px-4 py-3">${partsLifeTimelineHtml(g)}</td>
+        </tr>`;
+      }).join('');
+
+  body.innerHTML = `
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold text-slate-700">${totalCalc}</div>
+      <div class="text-xs text-gray-500 mt-1">อะไหล่ที่คำนวณอายุได้ (ชนิด)</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-xl font-bold text-slate-700">${avgAllMeter!=null?fmtNum(avgAllMeter,0)+' ชม.':(avgAllDay!=null?fmtNum(avgAllDay,0)+' วัน':'-')}</div>
+      <div class="text-xs text-gray-500 mt-1">อายุใช้งานเฉลี่ยรวม${avgAllMeter!=null&&avgAllDay!=null?` (≈ ${fmtNum(avgAllDay,0)} วัน)`:''}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm p-4 text-center">
+      <div class="text-2xl font-bold ${shortCount>0?'text-orange-500':'text-slate-700'}">${shortCount}</div>
+      <div class="text-xs text-gray-500 mt-1">อายุสั้นผิดปกติ (รายการ)</div>
+    </div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="font-semibold text-gray-800">อายุการใช้งานอะไหล่ <span class="text-xs text-gray-400 ml-1">(คลิกแถวเพื่อดูประวัติ)</span></h2>
+    </div>
+    <div class="tbl-wrap" style="max-height:calc(100vh - 320px);">
+      <table class="text-sm w-full">
+        <thead><tr class="text-xs text-gray-500 bg-gray-50 border-b">
+          <th class="px-3 py-2 text-left sticky top-0 bg-gray-50">อะไหล่</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">เปลี่ยนล่าสุด</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">อายุครั้งล่าสุด</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">อายุเฉลี่ยสะสม</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">จำนวนครั้ง</th>
+          <th class="px-3 py-2 text-center sticky top-0 bg-gray-50">แนวโน้ม</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    <p class="text-xs text-gray-400 px-4 py-2 border-t">* "แนวโน้ม" เทียบอายุครั้งล่าสุดกับค่าเฉลี่ยสะสมของอะไหล่ชิ้นนั้น-เครื่องนั้นเอง — สั้นกว่าปกติเกิน 30% = เตือน, มีประวัติน้อยกว่า 2 ครั้ง = ข้อมูลไม่พอ</p>
+  </div>`;
+  refreshIcons();
+}
+
+function togglePartsLifeDetail(rid) {
+  qs('#'+rid)?.classList.toggle('hidden');
+}
+
+function partsLifeTimelineHtml(g) {
+  const items = [...g.history].reverse(); // ล่าสุดก่อน
+  return `<div class="text-xs text-gray-400 mb-2">ประวัติการซ่อม/เปลี่ยน ${g.history.length} ครั้ง — ${escapeHtml(g.part_name)} (${escapeHtml(g.machine_name)})</div>
+    <div class="space-y-2">
+    ${items.map((it, i) => {
+      const prevIdx = g.history.indexOf(it) - 1;
+      const prev = prevIdx >= 0 ? g.history[prevIdx] : null;
+      let deltaTxt = 'ไม่มีข้อมูลครั้งก่อนหน้า — เริ่มนับจากจุดนี้';
+      if (prev) {
+        const meterD = (it.meter!=null && prev.meter!=null) ? it.meter - prev.meter : null;
+        const days = Math.round((new Date(it.repair_date)-new Date(prev.repair_date))/86400000);
+        deltaTxt = `ใช้งานมาแล้ว ${meterD!=null?fmtNum(meterD,0)+' ชม.':'-'}${isFinite(days)?` (${days} วัน)`:''} จากครั้งก่อนหน้า`;
+      }
+      return `<div class="flex items-start gap-2 border-l-2 border-amber-300 pl-3">
+        <div>
+          <div class="text-sm font-semibold text-gray-700">${fmtDate(it.repair_date)}${i===0?' <span class="text-amber-600 text-xs">— ล่าสุด</span>':''}</div>
+          <div class="text-xs text-gray-500">${it.meter!=null?'มิเตอร์ตอนเปลี่ยน: '+fmtNum(it.meter,1)+' ชม.':'ไม่มีข้อมูลมิเตอร์'}</div>
+          <div class="text-xs ${prev?'text-amber-600 font-medium':'text-gray-400'} mt-0.5">${deltaTxt}</div>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>`;
+}
+
+// =====================================================================
 // SECTION 16C: OEE / AVAILABILITY
 // =====================================================================
 async function renderOeePage() {
@@ -3833,7 +4248,7 @@ async function renderSettingsPage() {
 // เมนู PM ที่กำหนดสิทธิ์ได้ (ไม่รวม action button)
 const PM_PERM_MENUS = PM_MENUS.filter(m => m.key !== 'pm-meter-add');
 const PM_PERM_GROUPS = [
-  { label:'ดูข้อมูล',    keys:['pm-dashboard','pm-history','pm-oee','pm-report'] },
+  { label:'ดูข้อมูล',    keys:['pm-dashboard','pm-history','pm-oee','pm-report','pm-parts-life'] },
   { label:'บันทึกข้อมูล', keys:['pm-log','pm-meter','pm-downtime'] },
   { label:'จัดการ',      keys:['pm-items','pm-repair','pm-parts','pm-machines'] },
   { label:'ตั้งค่า',     keys:['pm-settings'] },

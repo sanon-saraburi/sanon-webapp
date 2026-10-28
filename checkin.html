@@ -395,6 +395,7 @@ tbody tr:last-child td{border-bottom:none;}
         <div class="sb-group sb-g3">
           <div class="sb-sec">ข้อมูลการลา - โอที ประจำเดือน</div>
           <div class="sb-item perm-sup" onclick="nav('ck-leave-summary')">📅 <span>สรุปการลาประจำเดือน</span></div>
+          <div class="sb-item perm-sup" onclick="nav('ck-leave-calendar')">🗓️ <span>ปฏิทินการลา</span></div>
           <div class="sb-item perm-sup" onclick="nav('ck-leave-history')">📂 <span>ประวัติการลาทั้งหมด</span></div>
           <div class="sb-item perm-sup" onclick="nav('ck-pass-summary')">🚪 <span>สรุปออกนอกบริษัท</span></div>
           <div class="sb-item perm-sup" onclick="nav('ck-ot-summary')">⏱️ <span>สรุปโอที</span></div>
@@ -729,14 +730,15 @@ const CK_PERM_MENUS = [
   { id:'ck-tc-settings',    label:'⚙️ ตั้งค่า OT',           group:'จัดการระบบ'       },
   { id:'ck-users',          label:'🔑 จัดการผู้ใช้',         group:'จัดการระบบ'       },
   { id:'ck-leave-summary',  label:'📅 สรุปการลาประจำเดือน',  group:'ข้อมูลการลา-โอที' },
+  { id:'ck-leave-calendar', label:'🗓️ ปฏิทินการลา',        group:'ข้อมูลการลา-โอที' },
   { id:'ck-leave-history',  label:'📂 ประวัติการลาทั้งหมด',  group:'ข้อมูลการลา-โอที' },
   { id:'ck-pass-summary',   label:'🚪 สรุปออกนอกบริษัท',    group:'ข้อมูลการลา-โอที' },
   { id:'ck-ot-summary',     label:'⏱️ สรุปโอที',            group:'ข้อมูลการลา-โอที' },
 ];
 const CK_ROLE_PERMS = {
   guard:      ['ck-guard','ck-visitor','ck-pass'],
-  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-leave-summary','ck-leave-history','ck-pass-summary','ck-ot-summary'],
-  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users','ck-leave-summary','ck-leave-history','ck-pass-summary','ck-ot-summary'],
+  supervisor: ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-leave-summary','ck-leave-calendar','ck-leave-history','ck-pass-summary','ck-ot-summary'],
+  admin:      ['ck-guard','ck-visitor','ck-pass','ck-supervisor','ck-report','ck-stats','ck-employees','ck-timecard','ck-tc-settings','ck-users','ck-leave-summary','ck-leave-calendar','ck-leave-history','ck-pass-summary','ck-ot-summary'],
 };
 
 function ckCanAccess(page) {
@@ -764,6 +766,7 @@ const PAGE_TITLES = {
   'ck-tc-settings':   'ตั้งค่า OT',
   'ck-users':         'จัดการผู้ใช้',
   'ck-leave-summary': 'สรุปการลาประจำเดือน',
+  'ck-leave-calendar': 'ปฏิทินการลา',
   'ck-leave-history': 'ประวัติการลาทั้งหมด',
   'ck-pass-summary':  'สรุปออกนอกบริษัท',
   'ck-ot-summary':    'สรุปโอที',
@@ -800,6 +803,7 @@ function nav(page) {
   else if (page === 'ck-tc-settings')  renderTcSettings();
   else if (page === 'ck-users')        renderUsers();
   else if (page === 'ck-leave-summary') renderLeaveSummary();
+  else if (page === 'ck-leave-calendar') renderLeaveCalendarHR();
   else if (page === 'ck-leave-history') renderLeaveHistory();
   else if (page === 'ck-pass-summary')  renderPassSummary();
   else if (page === 'ck-ot-summary')    renderOtSummary();
@@ -4859,6 +4863,207 @@ async function renderLeaveSummary() {
     </div>
     ${empList.length ? sections : '<div style="text-align:center;padding:40px;color:#94a3b8;">ไม่มีข้อมูลการลาในเดือนนี้</div>'}
   </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ---- ปฏิทินการลา (ทั้งบริษัท) ---- เพิ่ม 2026-10-26
+// พอร์ตมาจากฟีเจอร์เดียวกันใน leave.html (หน้า Dashboard/อนุมัติคำขอลา) — คลิกวันที่ดูรายชื่อผู้ลา ไม่เปิดฟอร์มยื่นคำขอ (หน้านี้เป็นหน้าดูข้อมูลสำหรับหัวหน้า/Admin เท่านั้น)
+// ─────────────────────────────────────────────────────────────
+let _ckCalYear   = new Date().getFullYear();
+let _ckCalMonth  = new Date().getMonth(); // 0-11
+let _ckCalDayMap = {};
+let _ckLeaveTypesCache = null; // cache ประเภทการลา (มี .color ไว้แยกสีป้ายชื่อ) โหลดครั้งเดียว
+
+async function _ckLoadLeaveTypes() {
+  if (_ckLeaveTypesCache) return _ckLeaveTypesCache;
+  const { data } = await sb.from('leave_types').select('*').eq('is_active',true).order('sort_order');
+  _ckLeaveTypesCache = data || [];
+  return _ckLeaveTypesCache;
+}
+
+function _ckAddDaysISO(ds, n) {
+  const [y,m,d] = ds.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate()+n);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+// ดึงคำขอลาที่คาบเกี่ยวกับเดือนที่ระบุ — ทั้งบริษัท (ไม่กรองแผนก) สถานะอนุมัติแล้ว+รออนุมัติ แจกแจงเป็นรายวัน
+async function _ckFetchLeaveCalMonth(y, m) {
+  const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const monthEnd   = `${y}-${String(m+1).padStart(2,'0')}-${String(new Date(y,m+1,0).getDate()).padStart(2,'0')}`;
+  const { data } = await sb.from('leave_requests')
+    .select('request_id,employee_name,department,type_name,type_code,start_date,end_date,status,half_day')
+    .in('status',['approved','pending'])
+    .lte('start_date', monthEnd)
+    .gte('end_date', monthStart)
+    .order('employee_name');
+
+  const dayMap = {};
+  (data||[]).forEach(r => {
+    let d = r.start_date < monthStart ? monthStart : r.start_date;
+    const endClip = r.end_date > monthEnd ? monthEnd : r.end_date;
+    while (d <= endClip) {
+      (dayMap[d] = dayMap[d]||[]).push(r);
+      d = _ckAddDaysISO(d, 1);
+    }
+  });
+  return dayMap;
+}
+
+function _ckBuildLeaveCalHtml(y, m, dayMap, leaveTypes) {
+  const typeColorMap = {};
+  leaveTypes.forEach(t => { typeColorMap[t.code] = t.color || '#3b82f6'; });
+
+  const DOW_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const firstDay    = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const todayD      = todayStr();
+
+  let cells = '';
+  for (let i=0; i<firstDay; i++) cells += `<div class="ckc-cell ckc-empty"></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const entries = dayMap[ds] || [];
+    const isToday = ds === todayD;
+    const isSun   = new Date(y,m,d).getDay() === 0;
+    let cls = 'ckc-cell';
+    if (isToday) cls += ' ckc-today';
+    if (isSun)   cls += ' ckc-sun';
+
+    const maxShow = 3;
+    const shown = entries.slice(0, maxShow);
+    const extra = entries.length - shown.length;
+    const pillsHtml = shown.map(r => {
+      const pending  = r.status === 'pending';
+      const tColor   = typeColorMap[r.type_code] || '#3b82f6';
+      const pillStyle = pending
+        ? `background:color-mix(in srgb, ${tColor} 18%, #fff);color:${tColor};border:1px dashed ${tColor};`
+        : `background:${tColor};color:#fff;border:1px solid ${tColor};`;
+      const half = r.half_day ? (r.half_day==='am'?' (½เช้า)':' (½บ่าย)') : '';
+      const title = `${r.employee_name} — ${r.type_name}${half}${pending?' (รออนุมัติ)':''}${r.department?' · '+r.department:''}`;
+      return `<div class="ckc-pill" style="${pillStyle}" title="${escHtml(title)}">${pending?'⏳':''}${escHtml(r.employee_name)}</div>`;
+    }).join('');
+    const moreHtml = extra > 0 ? `<div class="ckc-more">+${extra} คนอื่น</div>` : '';
+
+    cells += `<div class="${cls}" onclick="_ckShowLeaveDayDetail('${ds}')" title="คลิกเพื่อดูรายชื่อผู้ลาวันที่ ${d}">
+      <span class="ckc-num">${d}</span>
+      <div class="ckc-pills">${pillsHtml}${moreHtml}</div>
+    </div>`;
+  }
+
+  const legendHtml = leaveTypes.filter(t=>t.code!=='out').map(t => `
+      <span style="display:inline-flex;align-items:center;"><span class="ckc-dot" style="background:${t.color||'#3b82f6'};"></span>${escHtml(t.name)}</span>`).join('');
+
+  return `
+    <style>
+      .ckc-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+      .ckc-nav-title{font-size:15px;font-weight:700;color:#1e293b;}
+      .ckc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px;}
+      .ckc-hd{text-align:center;font-size:11px;font-weight:700;color:#64748b;padding:4px 0;}
+      .ckc-hd:first-child{color:#ef4444;}
+      .ckc-cell{min-height:80px;border-radius:8px;padding:4px;cursor:pointer;border:1px solid #f1f5f9;background:#fafafa;transition:all .15s;display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+      .ckc-cell:hover{background:#eff6ff;border-color:#93c5fd;}
+      .ckc-empty{background:transparent;border:none;cursor:default;}
+      .ckc-today .ckc-num{background:#1a3a5c;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+      .ckc-sun .ckc-num{color:#ef4444;}
+      .ckc-num{font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .ckc-pills{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+      .ckc-pill{font-size:9px;border-radius:4px;padding:1px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+      .ckc-more{font-size:9px;color:#64748b;font-weight:600;padding:1px 4px;}
+      .ckc-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:middle;}
+      @media(max-width:640px){ .ckc-cell{min-height:56px;} .ckc-pill{font-size:8px;} }
+    </style>
+    <div class="ckc-nav">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-sm" onclick="_ckCalNav(-1)">‹</button>
+        <span class="ckc-nav-title">${TH_MONTHS[m+1]} ${y+543}</span>
+        <button class="btn btn-sm" onclick="_ckCalNav(1)">›</button>
+        <button class="btn btn-sm" onclick="_ckCalToday()">วันนี้</button>
+      </div>
+    </div>
+    <div class="ckc-grid">
+      ${DOW_TH.map((d,i)=>`<div class="ckc-hd" style="${i===0?'color:#ef4444':''}">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:#64748b;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">${legendHtml}</div>
+      <div style="color:#94a3b8;">พื้นทึบ = อนุมัติแล้ว &nbsp;·&nbsp; เส้นประ ⏳ = รออนุมัติ</div>
+    </div>`;
+}
+
+async function renderLeaveCalendarHR() {
+  const c = document.getElementById('page-content');
+  c.innerHTML = '<div class="log-empty">กำลังโหลดข้อมูล...</div>';
+
+  const leaveTypes = await _ckLoadLeaveTypes();
+  _ckCalDayMap = await _ckFetchLeaveCalMonth(_ckCalYear, _ckCalMonth);
+
+  c.innerHTML = `
+  <div style="max-width:1000px;">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">📅 ปฏิทินการลา (ทั้งบริษัท)</div></div>
+      <p style="font-size:12px;color:#64748b;margin:-4px 0 12px;">คลิกวันที่เพื่อดูรายชื่อพนักงานที่ลาวันนั้น</p>
+      <div id="ck-leave-cal-area">${_ckBuildLeaveCalHtml(_ckCalYear, _ckCalMonth, _ckCalDayMap, leaveTypes)}</div>
+    </div>
+  </div>`;
+}
+
+async function _ckRefreshCalArea() {
+  const leaveTypes = await _ckLoadLeaveTypes();
+  _ckCalDayMap = await _ckFetchLeaveCalMonth(_ckCalYear, _ckCalMonth);
+  const el = document.getElementById('ck-leave-cal-area');
+  if (el) el.innerHTML = _ckBuildLeaveCalHtml(_ckCalYear, _ckCalMonth, _ckCalDayMap, leaveTypes);
+}
+
+async function _ckCalNav(delta) {
+  _ckCalMonth += delta;
+  if (_ckCalMonth < 0)  { _ckCalMonth = 11; _ckCalYear--; }
+  if (_ckCalMonth > 11) { _ckCalMonth = 0;  _ckCalYear++; }
+  await _ckRefreshCalArea();
+}
+
+async function _ckCalToday() {
+  const n = new Date();
+  _ckCalYear = n.getFullYear(); _ckCalMonth = n.getMonth();
+  await _ckRefreshCalArea();
+}
+
+// Popup แสดงรายชื่อผู้ลาของวันที่คลิก — สร้าง/ลบ overlay เองแบบไม่ผูกกับระบบ openModal(id)/closeModal(id) เดิม (ซึ่งต้องมี element id ตายตัวล่วงหน้า)
+function _ckShowLeaveDayDetail(dateStr) {
+  const entries = _ckCalDayMap[dateStr] || [];
+  const rowsHtml = entries.length ? entries.map(r => {
+    const pending = r.status === 'pending';
+    const half = r.half_day ? (r.half_day==='am'?' (½เช้า)':' (½บ่าย)') : '';
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+      <div style="min-width:0;">
+        <span style="font-weight:600;font-size:13px;color:#0f172a;">${escHtml(r.employee_name)}</span>
+        <span style="font-size:11px;color:#94a3b8;margin-left:6px;">${escHtml(r.department||'—')}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">${escHtml(r.type_name)}${half}</span>
+        <div style="font-size:11px;color:${pending?'#92400e':'#16a34a'};font-weight:600;">${pending?'⏳ รออนุมัติ':'✅ อนุมัติแล้ว'}</div>
+      </div>
+    </div>`;
+  }).join('') : `<p style="text-align:center;color:#22c55e;padding:20px 0;font-size:13px;">✅ วันนี้ไม่มีใครลา</p>`;
+
+  const old = document.getElementById('ck-cal-detail-overlay');
+  if (old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ck-cal-detail-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;max-height:80vh;overflow-y:auto;padding:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <span style="font-size:17px;font-weight:700;color:#0f172a;">📅 ผู้ลาวันที่ ${fmtDate(dateStr)}</span>
+        <button onclick="document.getElementById('ck-cal-detail-overlay').remove()" style="width:32px;height:32px;border-radius:50%;background:#f1f5f9;border:none;cursor:pointer;font-size:18px;color:#64748b;">×</button>
+      </div>
+      ${rowsHtml}
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 // คลิกชื่อพนักงานในหน้า "สรุปการลาประจำเดือน" → ไปหน้า "ประวัติการลาทั้งหมด" กรองเฉพาะพนักงานคนนั้น

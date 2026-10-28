@@ -1187,6 +1187,7 @@ function gotoSystem(url) {
 function doLogout() {
   _stopNotifRealtime();
   _stopApproverRealtime();
+  _stopApproverPolling();
   localStorage.removeItem(SESSION_KEY);
   currentUser = null; currentEmp = null; currentMode = null;
   document.getElementById('main-app').style.display    = 'none';
@@ -1408,61 +1409,71 @@ function closeMobileMenu() {
 // ─────────────────────────────────────────────────────────────
 // SECTION 7 — Dashboard
 // ─────────────────────────────────────────────────────────────
-// สร้างการ์ด "📋 สรุปรายละเอียดการลา" (หัวหน้างาน/Admin) — ใช้ร่วมกันทั้งหน้า Dashboard และหน้า "อนุมัติคำขอลา"
+// การ์ด "📅 ปฏิทินการลา" (หัวหน้างาน/Admin) — ใช้ร่วมกันทั้งหน้า Dashboard และหน้า "อนุมัติคำขอลา"
+// เปลี่ยนจากรายการสรุปวันนี้/7 วันข้างหน้า เป็นปฏิทินรายเดือนแบบเดียวกับหน้า "ยื่นคำขอลา" (ทั้งบริษัท) — คลิกวันที่ดูรายชื่อ ไม่เปิดฟอร์มยื่นคำขอ — เปลี่ยน 2026-10-26
+let _tlcYear  = new Date().getFullYear();
+let _tlcMonth = new Date().getMonth();
+let _tlcDayMap = {};
+
 async function _buildTeamLeaveOverviewCard() {
   if (!can('approve')) return '';
-  const todayStr = todayISO();
-  const next7Str = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  _tlcDayMap = await _fetchLeaveCalMonth(_tlcYear, _tlcMonth);
 
-  const [teamLeaveTodayRes, teamLeaveUpcomingRes] = await Promise.all([
-    (()=>{
-      let q = sb.from('leave_requests').select('*').eq('status','approved')
-        .lte('start_date', todayStr).gte('end_date', todayStr)
-        .order('department').order('employee_name');
-      if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
-      return q;
-    })(),
-    (()=>{
-      let q = sb.from('leave_requests').select('*').eq('status','approved')
-        .gt('start_date', todayStr).lte('start_date', next7Str)
-        .order('start_date');
-      if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
-      return q;
-    })()
-  ]);
+  return `
+  <div class="card">
+    <div class="card-hd">
+      <div class="card-title">📅 ปฏิทินการลา (ทั้งบริษัท)</div>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin:-4px 0 12px;">คลิกวันที่เพื่อดูรายชื่อพนักงานที่ลาวันนั้น</p>
+    <div id="team-lv-cal-area">${_buildLeaveCalHtml(_tlcYear, _tlcMonth, _tlcDayMap, {
+      clickFn: 'showLeaveDayDetail', navPrevFn: '_tlcNavMonth(-1)', navNextFn: '_tlcNavMonth(1)', navTodayFn: '_tlcToday()', showAddBtn: false
+    })}</div>
+  </div>`;
+}
 
-  const teamLeaveToday    = teamLeaveTodayRes.data||[];
-  const teamLeaveUpcoming = teamLeaveUpcomingRes.data||[];
-  // จำนวนวันนับจากวันนี้ถึงวันเริ่มลา (สำหรับแสดง "อีก N วัน" ในรายการที่กำลังจะถึงคิว)
-  const _daysUntil = dateStr => Math.round((new Date(dateStr) - new Date(todayStr)) / 86400000);
+async function _tlcNavMonth(delta) {
+  _tlcMonth += delta;
+  if (_tlcMonth < 0)  { _tlcMonth = 11; _tlcYear--; }
+  if (_tlcMonth > 11) { _tlcMonth = 0;  _tlcYear++; }
+  _tlcDayMap = await _fetchLeaveCalMonth(_tlcYear, _tlcMonth);
+  const el = document.getElementById('team-lv-cal-area');
+  if (el) el.innerHTML = _buildLeaveCalHtml(_tlcYear, _tlcMonth, _tlcDayMap, {
+    clickFn: 'showLeaveDayDetail', navPrevFn: '_tlcNavMonth(-1)', navNextFn: '_tlcNavMonth(1)', navTodayFn: '_tlcToday()', showAddBtn: false
+  });
+}
 
-  // แถวสไตล์เดียวกับป็อบอัพแจ้งเตือน (การ์ดรายชื่อ ไม่ใช่ตาราง) — วันนี้: ไม่โชว์วันที่ (คือวันนี้อยู่แล้ว), เร็วๆ นี้: โชว์ "อีก N วัน" + วันที่
-  const _rowHtml = (r, showCountdown) => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid #f1f5f9;">
+async function _tlcToday() {
+  const n = new Date();
+  _tlcYear = n.getFullYear(); _tlcMonth = n.getMonth();
+  _tlcDayMap = await _fetchLeaveCalMonth(_tlcYear, _tlcMonth);
+  const el = document.getElementById('team-lv-cal-area');
+  if (el) el.innerHTML = _buildLeaveCalHtml(_tlcYear, _tlcMonth, _tlcDayMap, {
+    clickFn: 'showLeaveDayDetail', navPrevFn: '_tlcNavMonth(-1)', navNextFn: '_tlcNavMonth(1)', navTodayFn: '_tlcToday()', showAddBtn: false
+  });
+}
+
+// Popup แสดงรายชื่อผู้ลาของวันที่คลิก (ใช้ในการ์ดปฏิทินของ Dashboard/อนุมัติคำขอลา — ดูอย่างเดียว ไม่เปิดฟอร์มยื่นคำขอ) — เพิ่ม 2026-10-26
+function showLeaveDayDetail(dateStr) {
+  const entries = _tlcDayMap[dateStr] || [];
+  const rowsHtml = entries.length ? entries.map(r => {
+    const pending = r.status === 'pending';
+    const half = r.half_day ? (r.half_day==='am'?' (½เช้า)':' (½บ่าย)') : '';
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;">
       <div style="min-width:0;">
         <span style="font-weight:600;font-size:13px;color:#0f172a;">${esc(r.employee_name)}</span>
         <span style="font-size:11px;color:#94a3b8;margin-left:6px;">${esc(r.department||'—')}</span>
       </div>
       <div style="text-align:right;flex-shrink:0;">
-        <span style="color:${typeColor(r.type_code)};font-size:12px;font-weight:600;white-space:nowrap;">${_typeIcon(r.type_code)} ${esc(r.type_name)}</span>
-        <div style="font-size:11px;color:#94a3b8;">
-          ${showCountdown ? `<span style="color:#ea9d0a;font-weight:700;">อีก ${_daysUntil(r.start_date)} วัน</span> · ` : ''}${fmtDate(r.start_date)}${r.start_date!==r.end_date?' – '+fmtDate(r.end_date):''}
-        </div>
+        <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">${esc(r.type_name)}${half}</span>
+        <div style="font-size:11px;color:${pending?'#92400e':'#16a34a'};font-weight:600;">${pending?'⏳ รออนุมัติ':'✅ อนุมัติแล้ว'}</div>
       </div>
     </div>`;
-  const todayHtml    = teamLeaveToday.map(r=>_rowHtml(r,false)).join('');
-  const upcomingHtml = teamLeaveUpcoming.map(r=>_rowHtml(r,true)).join('');
+  }).join('') : `<p style="text-align:center;color:#22c55e;padding:20px 0;font-size:13px;">✅ วันนี้ไม่มีใครลา</p>`;
 
-  return `
-  <div class="card">
-    <div class="card-hd">
-      <div class="card-title">📋 สรุปรายละเอียดการลา</div>
-    </div>
-    <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">📅 วันนี้ลา (${teamLeaveToday.length} คน)</div>
-    ${teamLeaveToday.length ? todayHtml : `<div style="text-align:center;color:#22c55e;padding:10px;font-size:13px;">✅ วันนี้ไม่มีใครลา</div>`}
-    <div style="font-size:12px;font-weight:700;color:#334155;margin:14px 0 6px;">🔜 อีกกี่วันจะถึงคิวลา (ภายใน 7 วันข้างหน้า)</div>
-    ${teamLeaveUpcoming.length ? upcomingHtml : `<div style="text-align:center;color:#94a3b8;padding:10px;font-size:13px;">ไม่มีคำขอลาที่จะถึง</div>`}
-  </div>`;
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">📅 ผู้ลาวันที่ ${fmtDate(dateStr)}</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    ${rowsHtml}`);
 }
 
 async function renderDashboard() {
@@ -1721,11 +1732,18 @@ async function renderNewRequest() {
     _leaveTypes = data||[];
   }
 
-  // โหมดแจ้งแทนพนักงาน (proxy) — เพิ่ม 2026-10-21: ถ้า _proxyEmp ถูกตั้งไว้ (มาจากหน้า "แจ้งแทนพนักงาน") ใช้ข้อมูลพนักงานคนนั้นแทนผู้ใช้ปัจจุบัน
+  // โหมดแจ้งแทนพนักงาน (proxy) ยังใช้ฟอร์มเต็มหน้าแบบเดิม (เลือกพนักงาน+ประเภทคำขอมาจากหน้า "แจ้งแทนพนักงาน" แล้ว ไม่ต้องผ่านปฏิทิน)
+  // โหมดพนักงานยื่นคำขอของตัวเอง เปลี่ยนมาเป็นหน้าปฏิทินการลา — เพิ่ม 2026-10-26
+  if (_proxyEmp) { _renderLeaveReqFullPage(); return; }
+  await _renderLeaveReqCalendarPage();
+}
+
+// สร้าง HTML ส่วนฟอร์ม (เลือกประเภท/วันที่/เหตุผล ฯลฯ) ใช้ร่วมกันทั้งหน้าเต็ม (โหมดแจ้งแทน) และ popup (คลิกวันที่จากปฏิทิน) — แยกออกมา 2026-10-26
+function _leaveReqFieldsHtml(prefillDate) {
   const empId   = _proxyEmp ? _proxyEmp.employee_id : (currentUser?.id||currentEmp?.employee_id||'');
   const empName = _proxyEmp ? _proxyEmp.name         : (currentUser?.full_name||currentEmp?.name||'');
   const dept    = _proxyEmp ? (_proxyEmp.department||'') : (currentUser?.department||currentEmp?.department||'');
-  const today   = todayISO();
+  const dateVal = prefillDate || todayISO();
 
   const typeCardsHtml = _leaveTypes.filter(t=>t.code!=='out').map(t => `
     <div class="type-card" id="tc-${t.type_id}" onclick="selectLeaveType(${t.type_id},'${t.code}','${esc(t.name)}','${t.color}')">
@@ -1740,10 +1758,7 @@ async function renderNewRequest() {
         <div style="font-size:12px;color:#4338ca;"><b>กำลังแจ้งแทนพนักงาน</b> — คำขอนี้จะถูกบันทึกเป็นของ ${esc(empName)} และต้องผ่านการอนุมัติตามปกติ</div>
       </div>` : '';
 
-  document.getElementById('page-content').innerHTML = `
-  <div style="max-width:600px;">
-    <div class="card">
-      <div class="card-hd"><div class="card-title">✏️ ${_proxyEmp?'แจ้งลาแทนพนักงาน':'ยื่นคำขอลา'}</div></div>
+  return `
       ${proxyBanner}
 
       <!-- ผู้ยื่น -->
@@ -1786,11 +1801,11 @@ async function renderNewRequest() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label class="form-label">วันเริ่มลา <span style="color:#ef4444;">*</span></label>
-          <input type="date" id="req-start" class="form-control" value="${today}" onchange="_calcDays()">
+          <input type="date" id="req-start" class="form-control" value="${dateVal}" onchange="_calcDays()">
         </div>
         <div class="form-group">
           <label class="form-label">วันสิ้นสุด <span style="color:#ef4444;">*</span></label>
-          <input type="date" id="req-end"   class="form-control" value="${today}" onchange="_calcDays()">
+          <input type="date" id="req-end"   class="form-control" value="${dateVal}" onchange="_calcDays()">
         </div>
       </div>
 
@@ -1806,16 +1821,214 @@ async function renderNewRequest() {
       </div>
 
       <!-- Error -->
-      <div id="req-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>
+      <div id="req-err" style="color:#ef4444;font-size:12px;margin-bottom:10px;"></div>`;
+}
 
+// หน้าฟอร์มเต็มหน้า (ใช้เฉพาะโหมดแจ้งแทนพนักงาน — proxy) — แยกจาก renderNewRequest() เมื่อ 2026-10-26
+function _renderLeaveReqFullPage() {
+  document.getElementById('page-content').innerHTML = `
+  <div style="max-width:600px;">
+    <div class="card">
+      <div class="card-hd"><div class="card-title">✏️ แจ้งลาแทนพนักงาน</div></div>
+      ${_leaveReqFieldsHtml()}
       <div style="display:flex;gap:10px;">
         <button class="btn btn-primary" onclick="submitRequest()" style="flex:1;justify-content:center;">
           📤 ส่งคำขอ
         </button>
-        <button class="btn btn-outline" onclick="navigateTo('${_proxyEmp?'lv-proxy':'lv-dashboard'}')">ยกเลิก</button>
+        <button class="btn btn-outline" onclick="navigateTo('lv-proxy')">ยกเลิก</button>
       </div>
     </div>
   </div>`;
+
+  _reqTypeId=null; _reqTypeCode=''; _reqTypeName='';
+  _halfDay = '';
+  _certStatus = '';
+}
+
+// ─────────────────────────────────────────────────────────────
+// หน้าปฏิทินการลา (เหมือนระบบจองห้องประชุม) — เพิ่ม 2026-10-26
+// พนักงานเห็นชื่อเพื่อนร่วมงาน "ทั้งบริษัท" ที่ลาในแต่ละวัน (ป้องกันลาทับซ้อนกัน) คลิกวันที่เพื่อยื่นคำขอ
+// ─────────────────────────────────────────────────────────────
+let _lrcYear  = new Date().getFullYear();
+let _lrcMonth = new Date().getMonth();
+let _lrcDayMap = {};
+
+async function _renderLeaveReqCalendarPage() {
+  document.getElementById('page-content').innerHTML = `
+  <div class="card">
+    <div class="card-hd"><div class="card-title">📅 ปฏิทินการลา — ยื่นคำขอลา</div></div>
+    <p style="font-size:12px;color:#64748b;margin:-4px 0 14px;">คลิกวันที่ต้องการเพื่อยื่นคำขอลา — ดูรายชื่อเพื่อนร่วมงานทั้งบริษัทที่ลาในแต่ละวัน เพื่อช่วยกันวางแผนไม่ให้ลาทับซ้อนกัน</p>
+    <div id="lv-req-cal-area"><p style="text-align:center;color:#94a3b8;font-size:12px;padding:20px 0;">กำลังโหลด...</p></div>
+  </div>`;
+  await _loadLeaveReqCalendar();
+}
+
+function _addDaysISO(ds, n) {
+  const [y,m,d] = ds.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate()+n);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+// ดึงข้อมูลคำขอลาของเดือนที่ระบุ แจกแจงเป็นรายวัน — ใช้ร่วมกันทั้งปฏิทินเต็มหน้า (ยื่นคำขอลา) และการ์ดปฏิทินย่อ (Dashboard/อนุมัติคำขอลา) — แยกออกมา 2026-10-26
+async function _fetchLeaveCalMonth(y, m) {
+  if (!_leaveTypes.length) {
+    const { data } = await sb.from('leave_types').select('*').eq('is_active',true).order('sort_order');
+    _leaveTypes = data||[];
+  }
+
+  const monthStart = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const monthEnd   = `${y}-${String(m+1).padStart(2,'0')}-${String(new Date(y,m+1,0).getDate()).padStart(2,'0')}`;
+
+  // ดึงคำขอลาที่คาบเกี่ยวกับเดือนที่กำลังดู — ทั้งบริษัท (ไม่กรองแผนก) สถานะอนุมัติแล้ว+รออนุมัติ เพื่อช่วยป้องกันลาทับซ้อนกัน
+  const { data } = await sb.from('leave_requests')
+    .select('request_id,employee_name,department,type_name,type_code,start_date,end_date,status,half_day')
+    .in('status',['approved','pending'])
+    .lte('start_date', monthEnd)
+    .gte('end_date', monthStart)
+    .order('employee_name');
+
+  const dayMap = {};
+  (data||[]).forEach(r => {
+    let d = r.start_date < monthStart ? monthStart : r.start_date;
+    const endClip = r.end_date > monthEnd ? monthEnd : r.end_date;
+    while (d <= endClip) {
+      (dayMap[d] = dayMap[d]||[]).push(r);
+      d = _addDaysISO(d, 1);
+    }
+  });
+  return dayMap;
+}
+
+async function _loadLeaveReqCalendar() {
+  _lrcDayMap = await _fetchLeaveCalMonth(_lrcYear, _lrcMonth);
+  _renderLeaveReqCalGrid();
+}
+
+// สร้าง HTML ปฏิทิน (nav + กริด + legend) แบบ pure function — ใช้ร่วมกันทั้งปฏิทินเต็มหน้าและการ์ดปฏิทินย่อ — แยกออกมา 2026-10-26
+// opts: { clickFn, navPrevFn, navNextFn, navTodayFn, showAddBtn }
+function _buildLeaveCalHtml(y, m, dayMap, opts) {
+  opts = opts || {};
+  const clickFn    = opts.clickFn    || 'openLeaveRequestModal';
+  const navPrevFn  = opts.navPrevFn  || '_lrcNavMonth(-1)';
+  const navNextFn  = opts.navNextFn  || '_lrcNavMonth(1)';
+  const navTodayFn = opts.navTodayFn || '_lrcToday()';
+  const showAddBtn = opts.showAddBtn !== false;
+
+  // สีตามประเภทการลา — เพิ่ม 2026-10-26: แยกสีพื้นหลังป้ายชื่อตามประเภทการลาจริง (ใช้สีเดียวกับการ์ดเลือกประเภทในฟอร์ม)
+  const typeColorMap = {};
+  _leaveTypes.forEach(t => { typeColorMap[t.code] = t.color || '#3b82f6'; });
+
+  const firstDay     = new Date(y, m, 1).getDay();
+  const daysInMonth  = new Date(y, m+1, 0).getDate();
+  const todayStr     = todayISO();
+
+  let cells = '';
+  for (let i=0; i<firstDay; i++) cells += `<div class="lvc-cell lvc-empty"></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const entries = dayMap[ds] || [];
+    const isToday = ds === todayStr;
+    const isSun   = new Date(y,m,d).getDay() === 0;
+    let cls = 'lvc-cell';
+    if (isToday) cls += ' lvc-today';
+    if (isSun)   cls += ' lvc-sun';
+
+    const maxShow = 3;
+    const shown = entries.slice(0, maxShow);
+    const extra = entries.length - shown.length;
+    const pillsHtml = shown.map(r => {
+      const pending  = r.status === 'pending';
+      const tColor   = typeColorMap[r.type_code] || '#3b82f6';
+      // อนุมัติแล้ว = พื้นสีทึบตามประเภทลา ตัวอักษรขาว / รออนุมัติ = พื้นสีอ่อนโทนเดียวกัน เส้นประ ตัวอักษรสีเข้ม
+      const pillStyle = pending
+        ? `background:color-mix(in srgb, ${tColor} 18%, #fff);color:${tColor};border:1px dashed ${tColor};`
+        : `background:${tColor};color:#fff;border:1px solid ${tColor};`;
+      const half = r.half_day ? (r.half_day==='am'?' (½เช้า)':' (½บ่าย)') : '';
+      const title = `${r.employee_name} — ${r.type_name}${half}${pending?' (รออนุมัติ)':''}${r.department?' · '+r.department:''}`;
+      return `<div class="lvc-pill" style="${pillStyle}" title="${esc(title)}">${pending?'⏳':''}${esc(r.employee_name)}</div>`;
+    }).join('');
+    const moreHtml = extra > 0 ? `<div class="lvc-more">+${extra} คนอื่น</div>` : '';
+
+    cells += `<div class="${cls}" onclick="${clickFn}('${ds}')" title="${esc(clickFn==='openLeaveRequestModal'?`คลิกเพื่อยื่นคำขอลาวันที่ ${d}`:`คลิกเพื่อดูรายชื่อผู้ลาวันที่ ${d}`)}">
+      <span class="lvc-num">${d}</span>
+      <div class="lvc-pills">${pillsHtml}${moreHtml}</div>
+    </div>`;
+  }
+
+  const legendTypesHtml = _leaveTypes.filter(t=>t.code!=='out').map(t => `
+      <span style="display:inline-flex;align-items:center;"><span class="lvc-dot" style="background:${t.color||'#3b82f6'};"></span>${esc(t.name)}</span>`).join('');
+
+  return `
+    <style>
+      .lvc-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+      .lvc-nav-title{font-size:15px;font-weight:700;color:#1e293b;}
+      .lvc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px;}
+      .lvc-hd{text-align:center;font-size:11px;font-weight:700;color:#64748b;padding:4px 0;}
+      .lvc-hd:first-child{color:#ef4444;}
+      .lvc-cell{min-height:80px;border-radius:8px;padding:4px;cursor:pointer;border:1px solid #f1f5f9;background:#fafafa;transition:all .15s;display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+      .lvc-cell:hover{background:#eff6ff;border-color:#93c5fd;}
+      .lvc-empty{background:transparent;border:none;cursor:default;}
+      .lvc-today .lvc-num{background:#3b82f6;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+      .lvc-sun .lvc-num{color:#ef4444;}
+      .lvc-num{font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .lvc-pills{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+      .lvc-pill{font-size:9px;border-radius:4px;padding:1px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+      .lvc-more{font-size:9px;color:#64748b;font-weight:600;padding:1px 4px;}
+      .lvc-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:middle;}
+      @media(max-width:640px){ .lvc-cell{min-height:56px;} .lvc-pill{font-size:8px;} }
+    </style>
+    <div class="lvc-nav">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn btn-sm btn-outline" onclick="${navPrevFn}">‹</button>
+        <span class="lvc-nav-title">${HOL_MONTHS_TH[m]} ${y+543}</span>
+        <button class="btn btn-sm btn-outline" onclick="${navNextFn}">›</button>
+        <button class="btn btn-xs btn-outline" onclick="${navTodayFn}">วันนี้</button>
+      </div>
+      ${showAddBtn ? `<button class="btn btn-sm btn-primary" onclick="openLeaveRequestModal('${todayStr}')">+ ขอลา</button>` : ''}
+    </div>
+    <div class="lvc-grid">
+      ${HOL_DAYS_TH.map((d,i)=>`<div class="lvc-hd" style="${i===0?'color:#ef4444':''}">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:11px;color:#64748b;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">${legendTypesHtml}</div>
+      <div style="color:#94a3b8;">พื้นทึบ = อนุมัติแล้ว &nbsp;·&nbsp; เส้นประ ⏳ = รออนุมัติ</div>
+    </div>`;
+}
+
+function _renderLeaveReqCalGrid() {
+  const el = document.getElementById('lv-req-cal-area');
+  if (!el) return;
+  el.innerHTML = _buildLeaveCalHtml(_lrcYear, _lrcMonth, _lrcDayMap, {
+    clickFn: 'openLeaveRequestModal', navPrevFn: '_lrcNavMonth(-1)', navNextFn: '_lrcNavMonth(1)', navTodayFn: '_lrcToday()', showAddBtn: true
+  });
+}
+
+function _lrcNavMonth(delta) {
+  _lrcMonth += delta;
+  if (_lrcMonth < 0)  { _lrcMonth = 11; _lrcYear--; }
+  if (_lrcMonth > 11) { _lrcMonth = 0;  _lrcYear++; }
+  _loadLeaveReqCalendar();
+}
+
+function _lrcToday() {
+  const n = new Date();
+  _lrcYear = n.getFullYear(); _lrcMonth = n.getMonth();
+  _loadLeaveReqCalendar();
+}
+
+// Popup ยื่นคำขอลา (เปิดจากการคลิกวันที่ในปฏิทิน) — ใช้ openModal/closeModal ที่มีอยู่แล้วในระบบ
+function openLeaveRequestModal(prefillDate) {
+  openModal(`
+    <div class="modal-hd"><span class="modal-title">✏️ ยื่นคำขอลา${prefillDate?' — '+fmtDate(prefillDate):''}</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    ${_leaveReqFieldsHtml(prefillDate)}
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="submitRequest()" style="flex:1;justify-content:center;">
+        📤 ส่งคำขอ
+      </button>
+      <button class="btn btn-outline" onclick="closeModal()">ยกเลิก</button>
+    </div>`);
 
   _reqTypeId=null; _reqTypeCode=''; _reqTypeName='';
   _halfDay = '';
@@ -1958,6 +2171,7 @@ async function submitRequest() {
     navigateTo('lv-proxy'); // กลับไปหน้าแจ้งแทนพนักงาน (เคลียร์ _proxyEmp โดยอัตโนมัติ)
   } else {
     showToast('ส่งคำขอลาเรียบร้อยแล้ว ✅','success');
+    closeModal(); // ปิด popup ปฏิทินการลา (ถ้ายื่นผ่านปฏิทิน) — ไม่มีผลถ้าไม่ได้เปิด popup อยู่ — เพิ่ม 2026-10-26
     navigateTo('lv-my-hist');
   }
 }
@@ -5297,6 +5511,9 @@ async function _bootApp() {
     _updateNotifToggleIcon();
     // สรุปคำขอที่รออนุมัติอยู่แล้ว ณ ตอนเข้าสู่ระบบ — กันกรณีคำขอเข้ามาตอนที่ยังไม่ได้เปิดหน้าเว็บ
     setTimeout(() => _checkApproverPendingSummary(), 800);
+    // สำรอง — เผื่อ Realtime Broadcast หลุดเงียบๆ ระหว่างเปิดแท็บค้างไว้นาน (เช่น เครื่องเข้าโหมดพัก/เครือข่ายสะดุด)
+    // ไม่งั้นคำขอใหม่ที่เข้ามาตอนนั้นจะไม่มีแจ้งเตือนเด้งเลย ต้องกดเข้าเมนูเองถึงจะเห็น — เพิ่ม 2026-10-26 ตามคำขอคุณใหญ่
+    setTimeout(() => _startApproverPolling(), 1500);
   }
 }
 
@@ -5422,6 +5639,66 @@ function _startApproverRealtime() {
 function _stopApproverRealtime() {
   if (_approverNotifChannel) { sb.removeChannel(_approverNotifChannel); _approverNotifChannel = null; }
 }
+
+// ─────────────────────────────────────────────────────────────
+// หัวหน้า/Admin — สำรองเช็คเป็นระยะ (polling) กันพลาดกรณี Realtime Broadcast หลุดเงียบๆ
+// (เช่น แท็บถูกเบราว์เซอร์พักไว้นานจน websocket หลุด แล้วไม่ได้ reconnect เอง — คำขอใหม่ที่เข้ามาช่วงนั้นจะไม่มีแจ้งเตือนเลย
+//  ต้องกดเข้าเมนูเองถึงจะเห็นว่ามีรออนุมัติ) — เพิ่ม 2026-10-26 ตามคำขอคุณใหญ่ (สังเกตปัญหานี้บ่อยกับคำขอโอที)
+// ─────────────────────────────────────────────────────────────
+let _approverPollTimer  = null;
+let _approverLastCounts = { leave: 0, pass: 0, ot: 0 };
+
+function _startApproverPolling() {
+  if (!can('approve')) return;
+  _stopApproverPolling();
+  _syncApproverCounts(true);  // เก็บค่าตั้งต้นไว้เงียบๆ (รอบแรกให้ _checkApproverPendingSummary ที่รันไปแล้วทำหน้าที่แจ้งเตือนแทน)
+  _approverPollTimer = setInterval(() => _syncApproverCounts(false), 120000); // เช็คซ้ำทุก 2 นาที
+}
+
+function _stopApproverPolling() {
+  if (_approverPollTimer) { clearInterval(_approverPollTimer); _approverPollTimer = null; }
+}
+
+// เช็คจำนวนคำขอรออนุมัติ (ลา/Pass/OT) เทียบกับครั้งก่อน — ถ้าจำนวนเพิ่มขึ้น ถือว่ามีคำขอใหม่เข้ามาที่ broadcast อาจพลาดไป
+async function _syncApproverCounts(silent) {
+  if (!can('approve')) return;
+  try {
+    const depts = (!can('admin') && currentUser?.departments?.length) ? currentUser.departments : null;
+    let lq = sb.from('leave_requests').select('request_id', { count: 'exact', head: true }).eq('status','pending');
+    if (depts) lq = lq.in('department', depts);
+    let pq = sb.from('pass_requests').select('pass_id', { count: 'exact', head: true }).eq('status','pending');
+    if (depts) pq = pq.in('department', depts);
+    let oq = sb.from('ot_requests').select('ot_id', { count: 'exact', head: true }).eq('status','pending');
+    if (depts) oq = oq.in('department', depts);
+    const [lRes, pRes, oRes] = await Promise.all([lq, pq, oq]);
+    const counts = { leave: lRes.count||0, pass: pRes.count||0, ot: oRes.count||0 };
+
+    if (!silent) {
+      const diffs = [];
+      if (counts.leave > _approverLastCounts.leave) diffs.push({ kind:'leave', label:'📋 คำขอลา' });
+      if (counts.pass  > _approverLastCounts.pass)  diffs.push({ kind:'pass',  label:'🚪 ขอออกนอกบริเวณ' });
+      if (counts.ot    > _approverLastCounts.ot)    diffs.push({ kind:'ot',    label:'⏱️ คำขอโอที' });
+      diffs.forEach(d => {
+        const n = d.kind==='leave'?counts.leave:d.kind==='pass'?counts.pass:counts.ot;
+        showToast(`🔔 มีคำขอใหม่เข้ามา: ${d.label} (รวมรออนุมัติ ${n} รายการ)`, 'info', 6000);
+        _showDesktopNotification(`🔔 มีคำขอใหม่: ${d.label}`, `รวมรออนุมัติตอนนี้ ${n} รายการ`);
+      });
+      if (diffs.some(d=>d.kind==='leave')) { if (currentPage==='lv-approvals') renderApprovals(); else _refreshApproveBadgeOnly(); }
+      if (diffs.some(d=>d.kind==='pass'))  { if (currentPage==='lv-pass-approve') renderPassApprovals(); else _refreshPassBadgeOnly(); }
+      if (diffs.some(d=>d.kind==='ot'))    { if (currentPage==='lv-ot-approve') renderOtApprovals(); else _refreshOtBadgeOnly(); }
+    }
+    _approverLastCounts = counts;
+  } catch (_) { /* ไม่ขัดการทำงานหลัก */ }
+}
+
+// สลับกลับมาที่แท็บนี้ (จากที่พักไว้นาน) — เชื่อม Realtime channel ใหม่ + เช็คยอดค้างทันที
+// กัน websocket หลุดเงียบๆ ตอนแท็บไม่ active อยู่นาน (สาเหตุหลักที่แจ้งเตือนไม่เด้งบางครั้ง)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && can('approve') && currentUser) {
+    _startApproverRealtime();
+    _syncApproverCounts(false);
+  }
+});
 
 // ─────────────────────────────────────────────────────────────
 // หัวหน้า/Admin — Desktop Notification (เด้งแจ้งเตือนแม้สลับแท็บ/ย่อหน้าต่าง)
