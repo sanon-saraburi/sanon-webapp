@@ -7997,7 +7997,7 @@ const _approvalFilter = { factory: 'all', from: '', to: '' };
 // แผนก/โรงงานที่ user มีสิทธิ์อนุมัติ (admin = ทุกแผนก, manager/supervisor = เฉพาะแผนกตน) — ใช้ helper กลางร่วมกับ fetchPendingApprovalCount
 function getApprovalPlantKeysForUser() {
   if (!currentUser) return [];
-  if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','loader','water'];
+  if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','mobile','loader','water'];
   // สิทธิ์อนุมัติกำหนดรายคนจาก approve-* permissions (admin set ผ่าน permission matrix)
   const allowed = getAllowedMenus(currentUser);
   const APPROVE_KEY_MAP = { 'approve-cde':'cde', 'approve-propel':'propel', 'approve-sanon1':'sanon1', 'approve-sanon2':'sanon2', 'approve-mobile':'mobile', 'approve-loader':'loader', 'approve-water':'water' };

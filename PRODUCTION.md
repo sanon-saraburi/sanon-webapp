@@ -221,6 +221,32 @@ doLogout() → ลบทั้ง _sn_shared_sess + _sn_sess
 
 ## 11. Changelog
 
+### 2026-11-04 — แก้ไข (correction) หน้า "รออนุมัติ" ของ admin ไม่แสดงรายการ Mobile Plant เลย ทั้งที่ badge นับถูกต้อง + พบจุดเสี่ยงเดิมซ้ำอีก 2 จุด (ยังไม่ได้แก้)
+
+**ที่มา:** ผู้ใช้ (admin) สังเกตว่า badge แจ้งเตือน "รออนุมัติ" ขึ้นเลข 1 ทั้งที่กระดิ่ง/เมนูข้าง แต่เปิดเข้าไปในหน้า "รออนุมัติ" แล้วไล่ดูทุก section (น้ำบาดาล ฯลฯ) ไม่เจอรายการที่ว่าเลยสักที่
+
+**Root cause:** ฟังก์ชัน `getApprovalPlantKeysForUser()` (บรรทัด ~7998) ซึ่งกำหนดว่า admin จะเห็น section ไหนบ้างในหน้า "รออนุมัติ" มี hardcode ไว้ว่า
+```js
+if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','loader','water'];
+```
+**ขาด `'mobile'`** — ในขณะที่ตัวนับ badge (`fetchPendingApprovalCount()`) นับ `production_mobile` รวมด้วยถูกต้องอยู่แล้ว (เพิ่มไว้ตั้งแต่ตอนเพิ่ม Mobile Plant) ผลคือ: ถ้ามีรายการรออนุมัติของ Mobile Plant badge จะนับและแจ้งเตือนถูกต้อง แต่ section "Mobile Plant" **ไม่ถูกสร้างขึ้นมาแสดงเลยสำหรับ admin** ทำให้ไม่มีทางกดอนุมัติ/ปฏิเสธรายการนั้นได้จากหน้านี้
+
+**แก้ไข (โค้ด, แก้ไปแล้ว):**
+```js
+// เดิม
+if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','loader','water'];
+// ใหม่
+if (currentUser.role === 'admin') return ['cde','propel','sanon1','sanon2','mobile','loader','water'];
+```
+
+**พบเพิ่มเติม (ยังไม่ได้แก้ — เป็น pattern เดียวกัน แต่ซับซ้อนกว่าเพราะ Mobile Plant มีคอลัมน์ชนิดหินไม่เหมือนโรงงานอื่น ต้องคุยแนวทางก่อน):**
+1. **หน้า "รายงาน" (renderManageReports, บรรทัด ~9157/9247):** checkbox เลือกโรงงานสำหรับสร้างรายงาน/Export CSV/Excel มี hardcode `['cde','propel','sanon1','sanon2']` และ `_sectionLabel`/`_sectionColor` (บรรทัด ~9228-9229) **ไม่มี entry ของ `mobile` เลย** — แปลว่าผู้ใช้ไม่มีทางเลือก Mobile Plant ในหน้ารายงานทั่วไปได้เลยในปัจจุบัน
+2. **ปุ่ม "รายงานผู้บริหาร (.pptx)" → `generateExecutiveReport()` (บรรทัด ~12100):** hardcode `plants = ['cde','propel','sanon1','sanon2']` และสี `PC` เช่นกัน — รายงาน PDF/PPTX ผู้บริหารจึง**ไม่รวมข้อมูล Mobile Plant** ในสรุปภาพรวม/traffic light/trend ใดๆ เลย
+
+**บทเรียนสำคัญ:** นี่คือ pattern เดิมที่เคยบันทึกไว้ใน Section 0A (เพิ่มโรงงานใหม่แล้วมีจุดเก่าตกหล่น) แต่เป็นคนละมิติ — ไม่ใช่ CHECK constraint ของฐานข้อมูล แต่เป็น **array รายชื่อโรงงาน hardcode กระจายอยู่หลายจุดในโค้ด frontend** ที่เขียนไว้ก่อน Mobile Plant จะถูกเพิ่มเข้าระบบ แล้วไม่เคยถูกตามไปอัปเดตให้ครบทุกจุด ครั้งต่อไปถ้าจะเพิ่มโรงงานใหม่อีก ควร grep หาคำว่า `'cde','propel','sanon1','sanon2'` ทั้งไฟล์เพื่อเช็คว่ามีจุดไหนตกหล่นบ้าง (คำสั่งค้นหา: `grep -n "'cde','propel','sanon1','sanon2'" index.html`)
+
+**ไม่ต้องรัน SQL เพิ่ม — เป็นการแก้โค้ดฝั่ง frontend เท่านั้น**
+
 ### 2026-10-19 รอบ 2 — แก้ไข (correction) การ์ด "ยอดขายรวม" ใน Executive Summary ขึ้น 0 บาท เสมอ ทั้งที่มียอดขายจริงในระบบ
 
 **ที่มา:** ผู้ใช้ถามว่าหน้า Executive Summary (dash-executive) ต้องเพิ่มอะไรอีกไหม ระหว่างตรวจสอบโค้ดพบว่าการ์ด "ยอดขายรวม" query คอลัมน์ `amount_baht` จากตาราง `sales` — แต่ตาราง `sales` **ไม่มีคอลัมน์นี้เลย** (คอลัมน์จริงที่เก็บมูลค่าคือ `total_value` ตามที่ใช้ตรงกันทุกจุดอื่นในระบบ เช่น กราฟ Dashboard ยอดขาย, ตารางจัดการยอดขาย, รายงานรายปี) ทำให้ query คืนค่า `null`/undefined เงียบๆ (Supabase ไม่ throw error เมื่อ column ไม่ตรง แค่คืนค่าว่าง) และยอดขายรวมคำนวณได้ 0 เสมอไม่ว่าจะมียอดขายจริงเท่าไหร่ในเดือนนั้น
