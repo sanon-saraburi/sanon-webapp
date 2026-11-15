@@ -3113,7 +3113,9 @@ async function renderPassApprovals() {
     .gte('request_date', today).order('request_date').order('out_time');
   if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { data } = await q.limit(200);
-  const reqs = data||[];
+  // เรียงให้ "รออนุมัติ" ขึ้นก่อนเสมอ (เช่นเดียวกับหน้าอนุมัติ OT) ส่วนสถานะอื่นไหลลงด้านล่าง
+  // ภายในกลุ่มสถานะเดียวกันยังเรียงตามวันที่/เวลาเดิมจาก query (sort แบบ stable จึงรักษาลำดับเดิมไว้)
+  const reqs = (data||[]).sort((a,b) => (a.status==='pending'?0:1) - (b.status==='pending'?0:1));
 
   // Update badge
   const pendingCount = reqs.filter(r=>r.status==='pending').length;
@@ -3732,7 +3734,9 @@ async function renderOtApprovals() {
     .order('ot_date',{ascending:false}).order('start_time',{ascending:false});
   if(!can('admin') && currentUser?.departments?.length) q=q.in('department',currentUser.departments);
   const { data } = await q.limit(200);
-  const reqs = data||[];
+  // เรียงให้ "รออนุมัติ" ขึ้นก่อนเสมอ (ไม่ต้องเลื่อนหา) ส่วน "อนุมัติแล้ว" ไหลลงด้านล่าง
+  // ภายในกลุ่มสถานะเดียวกันยังเรียงตามวันที่ล่าสุดก่อนเหมือนเดิม (sort แบบ stable จึงรักษาลำดับเดิมจาก query ไว้)
+  const reqs = (data||[]).sort((a,b) => (a.status==='pending'?0:1) - (b.status==='pending'?0:1));
 
   const pendingCount = reqs.filter(r=>r.status==='pending').length;
   const badge = document.getElementById('sb-badge-ot');
