@@ -2222,6 +2222,8 @@ function addRepairPartRow(selVal='', qty=1, price=0) {
   row.className = 'border-b align-top';
   row.innerHTML = `
     <td class="px-2 py-1.5">
+      <input type="text" placeholder="🔍 ค้นหาอะไหล่..." oninput="filterRepairPartSelect(this)"
+        class="rp-search w-full border rounded px-2 py-1 text-xs mb-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
       <select onchange="onRepairPartChange(this)" class="rp-select w-full border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-400">
         <option value="">-- เลือกอะไหล่ --</option>
         <option value="freetext" ${isFree?'selected':''}>✏️ ไม่อยู่ในคลัง / พิมพ์ชื่อเอง</option>
@@ -2236,6 +2238,23 @@ function addRepairPartRow(selVal='', qty=1, price=0) {
     <td class="px-2 py-1.5 text-center"><button onclick="this.closest('tr').remove();calcRepairTotal()" class="text-red-400 hover:text-red-600"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></td>`;
   qs('#repair-parts-body')?.appendChild(row);
   refreshIcons();
+}
+
+// กรองตัวเลือกอะไหล่ในดรอปดาวน์ตามคำค้นหา (ชื่อ/รหัส) โดยไม่กระทบค่าที่เลือกไว้เดิม — ซ่อน <option>/<optgroup> ที่ไม่ตรงด้วย attribute "hidden"
+// เพิ่ม 2026-11-18 ตามคำขอคุณใหญ่ — อะไหล่ในคลังมีเยอะ ต้องการค้นหา/กรองเพื่อย่นระยะเวลาเลือก
+function filterRepairPartSelect(searchInput) {
+  const select = searchInput.closest('td')?.querySelector('.rp-select');
+  if (!select) return;
+  const q = searchInput.value.trim().toLowerCase();
+  select.querySelectorAll('optgroup').forEach(group => {
+    let anyVisible = false;
+    group.querySelectorAll('option').forEach(opt => {
+      const match = !q || opt.textContent.toLowerCase().includes(q);
+      opt.hidden = !match;
+      if (match) anyVisible = true;
+    });
+    group.hidden = !anyVisible;
+  });
 }
 
 function onRepairPartChange(sel) {
