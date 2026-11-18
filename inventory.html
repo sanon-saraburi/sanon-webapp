@@ -2357,10 +2357,20 @@ async function receivePo(poId){
 
 async function confirmReceivePo(poId){
   const {data:poData}=await db.from('inventory_po').select('*,inventory_po_items(*)').eq('id',poId).single();
-  const txns=(poData.inventory_po_items||[]).filter(l=>l.item_id&&l.quantity>0).map(l=>({item_id:l.item_id,transaction_type:'receive',quantity:l.quantity,unit_price:l.unit_price||null,total_amount:l.quantity*(l.unit_price||0)||null,factory:poData.factory,doc_no:poData.po_no,note:'รับตาม PO '+poData.po_no,status:'approved',created_by:currentUser.id}));
-  if(txns.length){const {error}=await db.from('inventory_transactions').insert(txns);if(error){showToast('เกิดข้อผิดพลาด: '+error.message,'error');closeModal();return;}}
+  const today=todayISO();
+  const lines=(poData.inventory_po_items||[]).filter(l=>l.item_id&&l.quantity>0);
+  const txns=lines.map(l=>({item_id:l.item_id,transaction_type:'receive',quantity:l.quantity,unit_price:l.unit_price||null,unit_cost:l.unit_price||null,total_amount:l.quantity*(l.unit_price||0)||null,lot_no:genLotNo(today),factory:poData.factory,doc_no:poData.po_no,note:'รับตาม PO '+poData.po_no,status:'approved',created_by:currentUser.id,created_at:today+'T00:00:00'}));
+  if(txns.length){
+    const {error}=await db.from('inventory_transactions').insert(txns);
+    if(error){showToast('เกิดข้อผิดพลาด: '+error.message,'error');closeModal();return;}
+    // สร้างล็อต FIFO คู่กับทุกรายการรับเข้า (เหมือนหน้า "รับวัสดุเข้า" ปกติ) — ป้องกันยอดเพี้ยนแบบเหตุการณ์ 8 ต.ค. 2569
+    // ที่เกิดจาก inventory_stock กับ inventory_lots แยกบัญชีกัน ไม่ผูกกันอัตโนมัติ
+    const lots=txns.map(t=>({item_id:t.item_id,lot_no:t.lot_no,received_date:today,initial_qty:t.quantity,remaining_qty:t.quantity,unit_cost:t.unit_price||0,reference_no:t.doc_no}));
+    const {error:le}=await db.from('inventory_lots').insert(lots);
+    if(le){showToast('รับเข้าสต็อกสำเร็จ แต่สร้างล็อต FIFO ไม่สำเร็จ: '+le.message,'error');}
+  }
   await db.from('inventory_po').update({status:'received'}).eq('id',poId);
-  await loadStockData();closeModal();showToast('รับของเรียบร้อย','success');navigateTo('inv-po');
+  await Promise.all([loadStockData(),loadLots()]);closeModal();showToast('รับของเรียบร้อย','success');navigateTo('inv-po');
 }
 
 async function printPo(poId){
@@ -3470,7 +3480,11 @@ async function settingsTab(tab){
     c.innerHTML=`
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-sm font-semibold text-gray-700">รายการวัสดุ/อะไหล่</h3>
-      <button onclick="openItemModal()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700">+ เพิ่มวัสดุ</button>
+      <div class="flex gap-2">
+        <input type="file" id="items-csv-input" accept=".csv" class="hidden" onchange="handleItemsCsvFile(this)"/>
+        <button onclick="triggerItemsCsvImport()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm hover:bg-gray-50">นำเข้าจาก CSV</button>
+        <button onclick="openItemModal()" class="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700">+ เพิ่มวัสดุ</button>
+      </div>
     </div>
     <div class="flex gap-2 mb-3 flex-wrap">
       <input id="items-search" placeholder="ค้นหารหัส/ชื่อ..." oninput="filterItems()" class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-0"/>
@@ -4009,6 +4023,142 @@ async function saveItem(){
     if(currentPage==='inv-balance') renderBalanceTable();
     else if(currentPage==='inv-qr') renderQRGrid();
     else settingsTab('items');
+  }
+}
+
+/* ─── นำเข้าวัสดุใหม่จาก CSV (สร้างวัสดุ + บันทึก "รับเข้า — ยอดยกมา" ให้อัตโนมัติทีละหลายรายการ) ─── */
+function triggerItemsCsvImport(){
+  const inp=qs('#items-csv-input');
+  if(inp) inp.click();
+}
+
+function handleItemsCsvFile(input){
+  const file=input.files?.[0];
+  if(!file){ return; }
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      let text=String(e.target.result||'');
+      if(text.charCodeAt(0)===0xFEFF) text=text.slice(1); // ตัด BOM ถ้ามี (ไฟล์ CSV จาก Excel/คุณใหญ่)
+      const wb=XLSX.read(text,{type:'string'});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const rawRows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+      parseItemsCsvRows(rawRows);
+    }catch(err){ showToast('อ่านไฟล์ CSV ไม่สำเร็จ: '+err.message,'error'); }
+    finally{ input.value=''; }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// หาค่าจากแถว CSV โดยรองรับชื่อคอลัมน์ได้หลายแบบ (ตรงกับทั้งไฟล์ที่ส่งให้คุณใหญ่ไปก่อนหน้า และชื่อคอลัมน์แบบย่อ)
+function _csvPick(row, keys){
+  for(const k of keys){
+    for(const rk of Object.keys(row)){
+      if(rk.trim()===k) return row[rk];
+    }
+  }
+  return '';
+}
+
+let _csvImportRows=[];
+
+function parseItemsCsvRows(rawRows){
+  const parsed=rawRows.map((row,idx)=>{
+    const name=String(_csvPick(row,['ชื่อวัสดุ','ชื่อ','name','Name'])||'').trim();
+    const qtyRaw=String(_csvPick(row,['จำนวน','qty','Qty'])||'').trim();
+    const priceRaw=String(_csvPick(row,['ราคา/หน่วย (บาท)','ราคา/หน่วย','ราคา','unit_price'])||'').trim();
+    const unit=String(_csvPick(row,['หน่วย','unit'])||'').trim();
+    const category=String(_csvPick(row,['ประเภท','category'])||'').trim();
+    const factoryRaw=String(_csvPick(row,['โรงงาน','factory'])||'').trim();
+    const note=String(_csvPick(row,['หมายเหตุ','note'])||'').trim();
+    const qty=qtyRaw===''?0:parseFloat(qtyRaw);
+    const price=priceRaw===''?0:parseFloat(priceRaw);
+    const errors=[];
+    if(!name) errors.push('ไม่มีชื่อวัสดุ');
+    if(qtyRaw!==''&&isNaN(qty)) errors.push('จำนวนไม่ใช่ตัวเลข');
+    if(priceRaw!==''&&isNaN(price)) errors.push('ราคาไม่ใช่ตัวเลข');
+    return {row:idx+2,name,qty:isNaN(qty)?0:qty,price:isNaN(price)?0:price,unit,category,factoryRaw,note,errors};
+  });
+  if(!parsed.length){ showToast('ไม่พบข้อมูลในไฟล์ CSV','error'); return; }
+  openCsvPreviewModal(parsed);
+}
+
+function openCsvPreviewModal(rows){
+  const validRows=rows.filter(r=>r.errors.length===0);
+  _csvImportRows=validRows;
+  showModal({wide:true,title:'นำเข้าวัสดุใหม่จาก CSV — ตรวจสอบก่อนบันทึก',body:`
+  <div class="space-y-3">
+    <p class="text-sm text-gray-600">พบ ${rows.length} แถว — พร้อมนำเข้า <b class="text-green-600">${validRows.length}</b> แถว${rows.length>validRows.length?`, มีปัญหา <b class="text-red-600">${rows.length-validRows.length}</b> แถว (จะไม่นำเข้า)`:''}</p>
+    <div class="overflow-x-auto tbl-wrap" style="max-height:360px">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 text-gray-500"><tr>
+        <th class="text-left px-2 py-1.5">แถว</th><th class="text-left px-2 py-1.5">ชื่อวัสดุ</th>
+        <th class="text-right px-2 py-1.5">จำนวน</th><th class="text-left px-2 py-1.5">หน่วย</th>
+        <th class="text-right px-2 py-1.5">ราคา/หน่วย</th><th class="text-left px-2 py-1.5">ประเภท</th>
+        <th class="text-left px-2 py-1.5">โรงงาน</th><th class="text-left px-2 py-1.5">สถานะ</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`<tr class="border-t ${r.errors.length?'bg-red-50':''}">
+        <td class="px-2 py-1.5">${r.row}</td><td class="px-2 py-1.5">${escapeHtml(r.name||'-')}</td>
+        <td class="px-2 py-1.5 text-right">${fmtNum(r.qty)}</td><td class="px-2 py-1.5">${escapeHtml(r.unit||'-')}</td>
+        <td class="px-2 py-1.5 text-right">${fmtNum(r.price)}</td><td class="px-2 py-1.5">${escapeHtml(r.category||'-')}</td>
+        <td class="px-2 py-1.5">${escapeHtml(r.factoryRaw||'ทุกโรงงาน')}</td>
+        <td class="px-2 py-1.5">${r.errors.length?`<span class="text-red-600">${escapeHtml(r.errors.join(', '))}</span>`:'<span class="text-green-600">พร้อมนำเข้า</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="text-xs text-amber-600">เมื่อกดยืนยัน ระบบจะสร้างวัสดุใหม่ ${validRows.length} รายการ และบันทึก "รับเข้า — ยอดยกมา" ให้อัตโนมัติสำหรับแถวที่จำนวน &gt; 0 (สร้าง transaction + lot คู่กันเสมอ เหมือนกรอกผ่านฟอร์ม "+ เพิ่มวัสดุ" ทีละรายการ — ไม่กระทบยอดสต็อกของวัสดุเดิมที่มีอยู่แล้ว)</p>
+  </div>`,
+  footer:`<button onclick="closeModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">ยกเลิก</button>
+    <button onclick="runCsvImport()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700" ${validRows.length?'':'disabled'}>ยืนยันนำเข้า ${validRows.length} รายการ</button>`});
+}
+
+async function runCsvImport(){
+  const validRows=_csvImportRows;
+  closeModal();
+  if(!validRows||!validRows.length) return;
+  showToast('กำลังนำเข้า... กรุณารอสักครู่','success');
+  const {data:_maxRow}=await db.from('inventory_items').select('code').order('code',{ascending:false}).limit(1);
+  let lastNum=_maxRow?.[0]?.code?parseInt(_maxRow[0].code.replace('ITM-',''))||0:0;
+  let okCount=0,failCount=0;const failMsgs=[];
+  for(const r of validRows){
+    try{
+      lastNum++;
+      const code='ITM-'+pad4(lastNum);
+      const allowed_factories=r.factoryRaw?r.factoryRaw.split(/[,\/;]/).map(s=>s.trim()).filter(Boolean):null;
+      const payload={name:r.name,category:r.category||null,unit:r.unit||null,unit_price:r.price||null,min_stock:0,status:'active',description:r.note||null,allowed_factories};
+      const {data:newItem,error}=await db.from('inventory_items').insert({...payload,code,created_by:currentUser.id}).select().single();
+      if(error)throw error;
+      if(r.qty>0){
+        const lot_no=genLotNo(todayISO());
+        const _seq=await nextSeq('seq_OPEN');
+        const doc_no=genRunNo('OPEN',_seq);
+        const unitCost=r.price||0;
+        const {error:oe}=await db.from('inventory_transactions').insert({
+          item_id:newItem.id,transaction_type:'receive',quantity:r.qty,
+          unit_price:unitCost,unit_cost:unitCost,total_amount:r.qty*unitCost,
+          lot_no,note:'ยอดยกมา (นำเข้าจาก CSV)'+(r.note?' — '+r.note:''),doc_no,
+          status:'approved',created_by:currentUser.id
+        });
+        if(oe)throw oe;
+        const {error:ole}=await db.from('inventory_lots').insert({
+          item_id:newItem.id,lot_no,received_date:todayISO(),
+          initial_qty:r.qty,remaining_qty:r.qty,
+          unit_cost:unitCost,reference_no:doc_no
+        });
+        if(ole)throw ole;
+      }
+      okCount++;
+    }catch(e){ failCount++; failMsgs.push(`แถว ${r.row} (${r.name}): ${e.message}`); }
+  }
+  _csvImportRows=[];
+  await Promise.all([loadInvItems(),loadStockData(),loadLots()]);
+  settingsTab('items');
+  if(failCount===0){
+    showToast(`นำเข้าสำเร็จ ${okCount} รายการ ✅`,'success');
+  } else {
+    showModal({title:'ผลการนำเข้า CSV',body:`
+      <p class="text-sm mb-2">สำเร็จ <b class="text-green-600">${okCount}</b> รายการ, ล้มเหลว <b class="text-red-600">${failCount}</b> รายการ</p>
+      <div class="bg-red-50 rounded-lg p-3 text-xs space-y-1 max-h-60 overflow-y-auto">${failMsgs.map(m=>`<div>${escapeHtml(m)}</div>`).join('')}</div>`,
+      footer:`<button onclick="closeModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">ปิด</button>`});
   }
 }
 
